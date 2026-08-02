@@ -1,0 +1,35 @@
+{
+  "name": "Folo",
+  "build": {
+    "dockerfile": "../Dockerfile",
+    "context": ".."
+  },
+  "workspaceFolder": "/app",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/app,type=bind,consistency=cached",
+  "mounts": [
+    "source=folo-dev-node-modules,target=/app/node_modules,type=volume",
+    "source=folo-dev-pnpm-store,target=/pnpm,type=volume"
+  ],
+  "forwardPorts": [2233, 2234],
+  "containerEnv": {
+    "VITE_WEB_URL": "http://localhost:2233",
+    "VITE_API_URL": "https://folo-api.1094712.xyz"
+  },
+  "portsAttributes": {
+    "2233": {
+      "label": "Desktop Web (Vite)",
+      "onAutoForward": "notify"
+    },
+    "2234": {
+      "label": "SSR",
+      "onAutoForward": "silent"
+    }
+  },
+  "postCreateCommand": "CI=true pnpm install --frozen-lockfile",
+  "customizations": {
+    "vscode": {
+      "extensions": ["dbaeumer.vscode-eslint", "esbenp.prettier-vscode"]
+    }
+  },
+  "remoteUser": "root"
+}
