@@ -1,7 +1,3 @@
-import type { FirebaseAnalyticsTypes } from "@react-native-firebase/analytics"
-
-import { FirebaseAdapter } from "./adapters"
-import { ProxyAdapter } from "./adapters/proxy"
 import type { TrackerMapper } from "./enums"
 import { TrackerManager } from "./manager"
 import type { Tracker } from "./types"
@@ -35,22 +31,7 @@ class TrackManager extends TrackerManager {
       return Promise.all([...legacyPromises, modernPromise])
     }
   }
-
-  setFirebaseTracker(
-    tracker: Pick<FirebaseAnalyticsTypes.Module, "logEvent" | "setUserId" | "setUserProperties">,
-  ) {
-    const adapter = new FirebaseAdapter({ instance: tracker })
-    this.addAdapter(adapter)
-  }
-
-  setProxyTracker(config: {
-    enabled: boolean
-    sender: (eventName: string, properties: Record<string, unknown>) => Promise<void>
-  }) {
-    const adapter = new ProxyAdapter({ enabled: config.enabled, sender: config.sender })
-    this.addAdapter(adapter)
-  }
 }
 
 export const trackManager = new TrackManager()
-export const improvedTrackManager = trackManager // Alias for backward compatibility
+export const improvedTrackManager = trackManager

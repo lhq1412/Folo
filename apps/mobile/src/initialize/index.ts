@@ -3,7 +3,6 @@ import { hydrateDatabaseToStore } from "@follow/store/hydrate"
 import { whoami } from "@follow/store/user/getters"
 import { userSyncService } from "@follow/store/user/store"
 import { tracker } from "@follow/tracker"
-import { nativeApplicationVersion } from "expo-application"
 
 import { migrateLegacyApiSession } from "../lib/auth-cookie-migration"
 import { settingSyncQueue } from "../modules/settings/sync-queue"
@@ -30,7 +29,6 @@ const runWhenIdle = (callback: () => void) => {
   setTimeout(callback, 0)
 }
 
-/* eslint-disable no-console */
 export const initializeApp = async () => {
   console.log(`Initialize...`)
 
@@ -46,12 +44,9 @@ export const initializeApp = async () => {
   initializeDayjs()
 
   await apm("hydrateSettings", hydrateSettings)
-  let dataHydratedTime = Date.now()
   await apm("hydrateDatabaseToStore", () => {
     return hydrateDatabaseToStore()
   })
-
-  dataHydratedTime = Date.now() - dataHydratedTime
   await apm("hydrateQueryClient", hydrateQueryClient)
   await apm("initializeAppCheck", initializeAppCheck)
   runWhenIdle(() => {
@@ -76,15 +71,6 @@ export const initializeApp = async () => {
     })
   })
   const loadingTime = Date.now() - now
-  tracker.appInit({
-    rn: true,
-    loading_time: loadingTime,
-    version: nativeApplicationVersion!,
-    data_hydrated_time: dataHydratedTime,
-    electron: false,
-    using_indexed_db: true,
-  })
-
   initBackgroundTask()
   console.log(`Initialize done,`, `${loadingTime}ms`)
 }
