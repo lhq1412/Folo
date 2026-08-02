@@ -1,7 +1,0 @@
-# SPA fallback — static files are served before these rules apply.
-/assets/*              /assets/:splat              200
-/vendor/*              /vendor/:splat              200
-/locales/*             /locales/:splat             200
-/sw.js                 /sw.js                      200
-/manifest.webmanifest  /manifest.webmanifest       200
-/*                     /index.html                 200
