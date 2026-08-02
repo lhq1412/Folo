@@ -2,7 +2,6 @@ import { improvedTrackManager } from "./track-manager"
 import { TrackerPoints } from "./tracker-points"
 
 export const setFirebaseTracker = improvedTrackManager.setFirebaseTracker.bind(improvedTrackManager)
-export const setPostHogTracker = improvedTrackManager.setPostHogTracker.bind(improvedTrackManager)
 export const setProxyTracker = improvedTrackManager.setProxyTracker.bind(improvedTrackManager)
 
 export const tracker = new TrackerPoints()
@@ -12,8 +11,6 @@ export {
   FirebaseAdapter,
   type FirebaseAdapterConfig,
   type IdentifyPayload,
-  PostHogAdapter,
-  type PostHogAdapterConfig,
   ProxyAdapter,
   type TrackerAdapter,
   type TrackPayload,

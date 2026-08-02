@@ -16,9 +16,6 @@ export const DEFAULT_VALUES = {
     INBOXES_EMAIL: "@follow.re",
     FIREBASE_CONFIG: FIREBASE_CONFIG_DEFAULT,
     RECAPTCHA_V3_SITE_KEY: "6LeGa3csAAAAALi_WqhlWoaGaqd_kke4HRGvNE0C",
-
-    POSTHOG_KEY: "phc_EZGEvBt830JgBHTiwpHqJAEbWnbv63m5UpreojwEWNL",
-    POSTHOG_HOST: "https://us.posthog.com",
   },
   DEV: {
     API_URL: "https://api.dev.follow.is",
@@ -31,8 +28,6 @@ export const DEFAULT_VALUES = {
     OTA_URL: "https://ota.folo.is",
     WEB_URL: "https://staging.follow.is",
     INBOXES_EMAIL: "@follow.re",
-    POSTHOG_KEY: "phc_EZGEvBt830JgBHTiwpHqJAEbWnbv63m5UpreojwEWNL",
-    POSTHOG_HOST: "https://us.posthog.com",
   },
   LOCAL: {
     API_URL: "http://localhost:3000",

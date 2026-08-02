@@ -1,8 +1,6 @@
 import type { FirebaseAnalyticsTypes } from "@react-native-firebase/analytics"
-import type { PostHog } from "posthog-js"
-import type PostHogReactNative from "posthog-react-native"
 
-import { FirebaseAdapter, PostHogAdapter } from "./adapters"
+import { FirebaseAdapter } from "./adapters"
 import { ProxyAdapter } from "./adapters/proxy"
 import type { TrackerMapper } from "./enums"
 import { TrackerManager } from "./manager"
@@ -42,11 +40,6 @@ class TrackManager extends TrackerManager {
     tracker: Pick<FirebaseAnalyticsTypes.Module, "logEvent" | "setUserId" | "setUserProperties">,
   ) {
     const adapter = new FirebaseAdapter({ instance: tracker })
-    this.addAdapter(adapter)
-  }
-
-  setPostHogTracker(posthog: PostHog | PostHogReactNative) {
-    const adapter = new PostHogAdapter({ instance: posthog })
     this.addAdapter(adapter)
   }
 

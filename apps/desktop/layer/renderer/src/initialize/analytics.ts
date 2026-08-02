@@ -1,8 +1,6 @@
-import { env } from "@follow/shared/env.desktop"
-import { setFirebaseTracker, setPostHogTracker, tracker } from "@follow/tracker"
+import { setFirebaseTracker, tracker } from "@follow/tracker"
 import { captureAttributionFromURL, getAttributionForAnalytics } from "@follow/utils"
 import type { AuthSessionResponse } from "@follow-app/client-sdk"
-import posthog from "posthog-js"
 
 import { QUERY_PERSIST_KEY } from "~/constants/app"
 
@@ -24,19 +22,6 @@ export const initAnalytics = async () => {
   })
 
   setFirebaseTracker(ga4)
-
-  setPostHogTracker(
-    posthog.init(env.VITE_POSTHOG_KEY, {
-      api_host: env.VITE_POSTHOG_HOST,
-      person_profiles: "identified_only",
-      defaults: "2025-05-24",
-      capture_exceptions: {
-        capture_unhandled_errors: true,
-        capture_unhandled_rejections: true,
-        capture_console_errors: false,
-      },
-    }),
-  )
 
   let session: AuthSessionResponse | undefined
   try {

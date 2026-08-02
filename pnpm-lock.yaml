@@ -1303,9 +1303,6 @@ importers:
       ofetch:
         specifier: 1.5.1
         version: 1.5.1
-      posthog-react-native:
-        specifier: 4.34.0
-        version: 4.34.0(expo-application@55.0.14(expo@55.0.15))(expo-device@55.0.15(expo@55.0.15))(expo-file-system@55.0.16(expo@55.0.15)(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(bufferutil@4.1.0)(react@19.2.0)))(expo-localization@55.0.13(expo@55.0.15)(react@19.2.0))(react-native-device-info@15.0.1(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(bufferutil@4.1.0)(react@19.2.0)))(react-native-safe-area-context@5.6.2(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(bufferutil@4.1.0)(react@19.2.0))(react@19.2.0))(react-native-svg@15.15.3(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(bufferutil@4.1.0)(react@19.2.0))(react@19.2.0))
       qrcode:
         specifier: 1.5.4
         version: 1.5.4
@@ -2319,13 +2316,6 @@ importers:
         version: 5.0.11(@types/react@19.2.14)(immer@11.1.4)(react@19.2.0)(use-sync-external-store@1.6.0(react@19.2.0))
 
   packages/internal/tracker:
-    dependencies:
-      posthog-js:
-        specifier: 1.255.0
-        version: 1.255.0
-      posthog-react-native:
-        specifier: 4.34.0
-        version: 4.34.0(expo-application@55.0.14(expo@55.0.15))(expo-device@55.0.15(expo@55.0.15))(expo-file-system@55.0.16(expo@55.0.15)(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(bufferutil@4.1.0)(react@19.2.0)))(expo-localization@55.0.13(expo@55.0.15)(react@19.2.0))(react-native-device-info@15.0.1(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(bufferutil@4.1.0)(react@19.2.0)))(react-native-safe-area-context@5.6.2(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(bufferutil@4.1.0)(react@19.2.0))(react@19.2.0))(react-native-svg@15.15.3(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(bufferutil@4.1.0)(react@19.2.0))(react@19.2.0))
     devDependencies:
       '@follow-app/client-sdk':
         specifier: 0.3.95
