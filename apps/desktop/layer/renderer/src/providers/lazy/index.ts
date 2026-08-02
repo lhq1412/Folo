@@ -25,6 +25,12 @@ const LazyReloadPrompt = lazy(() =>
 
 const LazyPWAPromptImport = lazy(() => import("react-ios-pwa-prompt"))
 
+const LazyPWAInstallPromptImport = lazy(() =>
+  import("~/components/common/PWAInstallPrompt").then((module) => ({
+    default: module.PWAInstallPrompt,
+  })),
+)
+
 const LazyPWAPrompt = () => {
   const [show, setShow] = useState(true)
   if (!show) return null
@@ -43,10 +49,15 @@ const LazyPWAPrompt = () => {
   )
 }
 
+const LazyPWAInstallPrompt = () => {
+  return createElement(Suspense, null, createElement(LazyPWAInstallPromptImport))
+}
+
 export {
   LazyContextMenuProvider,
   LazyExtensionExposeProvider,
   LazyPopoverProvider,
+  LazyPWAInstallPrompt,
   LazyPWAPrompt,
   LazyReloadPrompt,
 }

@@ -3,5 +3,6 @@ export { ExtensionExposeProvider as LazyExtensionExposeProvider } from "../exten
 export { ExternalJumpInProvider as LazyExternalJumpInProvider } from "../external-jump-in-provider"
 export const LazyReloadPrompt = () => null
 export const LazyPWAPrompt = () => null
+export const LazyPWAInstallPrompt = () => null
 
 export { PopoverProvider as LazyPopoverProvider } from "../popover-provider"

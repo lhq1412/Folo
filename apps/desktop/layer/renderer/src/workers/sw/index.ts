@@ -1,12 +1,29 @@
 /// <reference lib="webworker" />
 import { CacheableResponsePlugin } from "workbox-cacheable-response"
 import { ExpirationPlugin } from "workbox-expiration"
-import { registerRoute } from "workbox-routing"
+import {
+  cleanupOutdatedCaches,
+  createHandlerBoundToURL,
+  precacheAndRoute,
+} from "workbox-precaching"
+import { NavigationRoute, registerRoute } from "workbox-routing"
 import { CacheFirst } from "workbox-strategies"
 
 import { registerPusher } from "./pusher"
 
-declare let self: ServiceWorkerGlobalScope
+declare let self: ServiceWorkerGlobalScope & {
+  __WB_MANIFEST: Array<{ revision?: string | null; url: string }>
+}
+
+precacheAndRoute(self.__WB_MANIFEST)
+cleanupOutdatedCaches()
+
+const navigationHandler = createHandlerBoundToURL("/index.html")
+registerRoute(
+  new NavigationRoute(navigationHandler, {
+    denylist: [/^\/api\//, /\/[^/?][^./?]*\.[^/]+$/],
+  }),
+)
 
 registerPusher(self)
 

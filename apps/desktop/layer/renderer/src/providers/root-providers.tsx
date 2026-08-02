@@ -27,6 +27,7 @@ import {
   LazyExtensionExposeProvider,
   LazyExternalJumpInProvider,
   LazyPopoverProvider,
+  LazyPWAInstallPrompt,
   LazyPWAPrompt,
   LazyReloadPrompt,
 } from "./lazy/index"
@@ -65,6 +66,7 @@ export const RootProviders: FC<PropsWithChildren> = ({ children }) => (
                     <LazyExternalJumpInProvider />
                     <LazyReloadPrompt />
                     {!IN_ELECTRON && <LazyPWAPrompt />}
+                    {!IN_ELECTRON && <LazyPWAInstallPrompt />}
                   </Suspense>
                   {/* <FocusableGuardProvider /> */}
                 </ModalStackProvider>

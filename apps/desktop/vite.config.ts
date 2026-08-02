@@ -181,9 +181,16 @@ export default ({ mode }) => {
           },
 
           manifest: {
-            theme_color: "#000000",
+            id: typedEnv.VITE_WEB_URL || "https://app.folo.is",
             name: "Folo",
+            short_name: "Folo",
+            description:
+              "Folo organizes content into one timeline, keeping you updated on what matters, noise-free.",
+            start_url: "/",
+            scope: "/",
             display: "standalone",
+            orientation: "portrait-primary",
+            theme_color: "#ffffff",
             background_color: "#ffffff",
             icons: [
               {
@@ -211,7 +218,7 @@ export default ({ mode }) => {
           },
 
           devOptions: {
-            enabled: false,
+            enabled: process.env.PWA_DEV === "1",
             navigateFallback: "index.html",
             suppressWarnings: true,
             type: "module",
