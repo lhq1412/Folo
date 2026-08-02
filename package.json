@@ -11,6 +11,9 @@
     "url": "https://github.com/RSSNext/follow",
     "type": "git"
   },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "build:packages": "turbo run build --filter=\"./packages/**/*\"",
     "build:web": "turbo run Folo#build:web",
