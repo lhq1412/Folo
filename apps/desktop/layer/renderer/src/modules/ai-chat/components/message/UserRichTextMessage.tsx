@@ -96,7 +96,7 @@ const ListenableContentChangedPlugin = ({ state }: { state: string }) => {
   const [editor] = useLexicalComposerContext()
   React.useEffect(() => {
     const editorState = editor.getEditorState()
-    let timeoutId: number | null = null
+    let timeoutId: ReturnType<typeof setTimeout> | null = null
 
     editorState.read(() => {
       const text = editorState.toJSON()
