@@ -1,0 +1,5 @@
+# Cloudflare Worker — API CORS proxy
+# Deploy: wrangler deploy
+name = "folo-api-proxy"
+main = "../snippet.js"
+compatibility_date = "2024-08-01"
