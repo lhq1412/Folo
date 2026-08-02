@@ -50,7 +50,7 @@ jobs:
         run: pnpm install
 
       - name: Build desktop web (SPA)
-        run: pnpm --filter Folo build:web:pages
+        run: pnpm --filter Folo run build:web:pages
 
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
