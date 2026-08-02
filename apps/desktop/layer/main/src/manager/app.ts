@@ -10,6 +10,7 @@ import { WindowManager } from "~/manager/window"
 
 import { getIconPath } from "../helper"
 import { initializeIpcServices } from "../ipc"
+import { saveMediaToEagle } from "../ipc/services/integration"
 import { checkAndCleanCodeCache, clearCacheCronJob } from "../lib/cleaner"
 import { getSessionTokenFromCookies, syncSessionToCliConfig } from "../lib/cli-session-sync"
 import { t } from "../lib/i18n"
@@ -107,32 +108,26 @@ class AppManagerStatic {
     const persistentIds = store.get(persistentIdsKey)
 
     const instance = new PushReceiver({
-      debug: true,
+      debug: false,
       firebase: JSON.parse(env.VITE_FIREBASE_CONFIG),
       persistentIds: persistentIds || [],
       credentials: credentials || undefined,
       bundleId: "is.follow",
       chromeId: "is.follow",
     })
-    logger.info(
-      `PushReceiver initialized with credentials ${JSON.stringify(credentials)} and firebase config ${
-        env.VITE_FIREBASE_CONFIG
-      }`,
-    )
+    logger.info("PushReceiver initialized")
 
     instance.onReady(() => {
       logger.info("PushReceiver ready")
     })
 
     instance.onCredentialsChanged(({ newCredentials }) => {
-      logger.info(`PushReceiver credentials changed to ${newCredentials?.fcm?.token}`)
+      logger.info("PushReceiver credentials changed")
       updateNotificationsToken(newCredentials)
     })
 
     instance.onNotification((notification) => {
-      logger.info(
-        `PushReceiver received notification: ${JSON.stringify(notification.message.data)}`,
-      )
+      logger.info("PushReceiver received notification")
       const { data } = notification.message
       if (!data) {
         return
@@ -166,11 +161,10 @@ class AppManagerStatic {
 
     try {
       await instance.connect()
-    } catch (error) {
-      logger.error(`PushReceiver error: ${error instanceof Error ? error.stack : error}`)
+      logger.info("PushReceiver connected")
+    } catch {
+      logger.error("PushReceiver connection failed")
     }
-
-    logger.info("PushReceiver connected")
   }
 
   private contextMenuDisposer?: () => void
@@ -213,6 +207,19 @@ class AppManagerStatic {
 
       prepend: (_defaultActions, params) => {
         return [
+          {
+            label: t("contextMenu.saveMediaToEagle"),
+            visible:
+              params.mediaType === "image" &&
+              params.srcURL !== "" &&
+              !!store.get("eagleContextMenuEnabled"),
+            click: () => {
+              void saveMediaToEagle({
+                url: params.pageURL || params.srcURL,
+                mediaUrls: [params.srcURL],
+              })
+            },
+          },
           {
             label: t("contextMenu.openImageInBrowser"),
             visible: params.mediaType === "image",

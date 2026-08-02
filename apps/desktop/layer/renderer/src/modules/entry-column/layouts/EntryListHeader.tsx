@@ -45,7 +45,8 @@ import { SwitchToMasonryButton } from "./buttons/SwitchToMasonryButton"
 export const EntryListHeader: FC<{
   refetch: () => void
   isRefreshing: boolean
-}> = ({ refetch, isRefreshing }) => {
+  onBeforeRefresh?: () => void
+}> = ({ refetch, isRefreshing, onBeforeRefresh }) => {
   const routerParams = useRouteParams()
   const { t } = useTranslation()
 
@@ -203,7 +204,8 @@ export const EntryListHeader: FC<{
                 <ActionButton
                   tooltip="Refresh"
                   onClick={() => {
-                    refreshFeed()
+                    onBeforeRefresh?.()
+                    void refreshFeed()
                   }}
                 >
                   <RotatingRefreshIcon isRefreshing={isPending} />

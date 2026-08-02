@@ -2,17 +2,18 @@ import { existsSync } from "node:fs"
 import fsp from "node:fs/promises"
 
 import { shell } from "electron"
-import type { IpcContext } from "electron-ipc-decorator"
 import { IpcMethod, IpcService } from "electron-ipc-decorator"
 import path from "pathe"
 
 import { store } from "~/lib/store"
 import { logger } from "~/logger"
 
+import { createObsidianFrontmatter } from "./obsidian-frontmatter"
+
 // Taken from https://github.com/rollup/rollup/blob/4f69d33af3b2ec9320c43c9e6c65ea23a02bdde3/src/utils/sanitizeFileName.ts
 // https://datatracker.ietf.org/doc/html/rfc2396
 // eslint-disable-next-line no-control-regex
-const INVALID_CHAR_REGEX = /[\u0000-\u001F"#$%&*+,:;<=>?[\]^`{|}\u007F]/g
+const INVALID_CHAR_REGEX = /[\u0000-\u001F"#$%&*+,:;<=>?[\]^`{|}\u007F/\\]/g
 const DRIVE_LETTER_REGEX = /^[a-z]:/i
 
 function sanitizeFileName(name: string): string {
@@ -28,6 +29,10 @@ function sanitizeFileName(name: string): string {
 interface SaveToEagleInput {
   url: string
   mediaUrls: string[]
+}
+
+interface SetEagleContextMenuEnabledInput {
+  enabled: boolean
 }
 
 interface LoginToQBittorrentInput {
@@ -53,24 +58,79 @@ interface CustomFetchInput {
   timeout?: number
 }
 
+export async function saveMediaToEagle(input: SaveToEagleInput): Promise<any> {
+  try {
+    const res = await fetch("http://localhost:41595/api/item/addFromURLs", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        items: input.mediaUrls?.map((media) => ({
+          url: media,
+          website: input.url,
+          headers: {
+            referer: input.url,
+          },
+        })),
+      }),
+    })
+    return await res.json()
+  } catch {
+    return null
+  }
+}
+
+// Allowlist of URL scheme protocols that `openURLScheme` is permitted to hand
+// off to `shell.openExternal`. The list intentionally covers the integrations
+// shipped in the UI (Obsidian, Bear, Drafts, Things, Notion, DEVONthink) plus
+// generic web/mail schemes, while excluding dangerous protocols such as
+// `file:`, `smb:`, `ms-msdt:`, `search-ms:`, `jar:`, `res:`, `javascript:`,
+// `data:`, `vbscript:`, which have known abuse chains when invoked from
+// untrusted content.
+const ALLOWED_URL_SCHEME_PROTOCOLS = new Set<string>([
+  "http",
+  "https",
+  "mailto",
+  "obsidian",
+  "bear",
+  "drafts",
+  "things",
+  "notion",
+  "x-devonthink",
+])
+
+function isAllowedURLSchemeProtocol(protocol: string): boolean {
+  return ALLOWED_URL_SCHEME_PROTOCOLS.has(protocol)
+}
+
 export class IntegrationService extends IpcService {
   static override readonly groupName = "integration"
 
   @IpcMethod()
-  async saveToObsidian(
-    context: IpcContext,
-    input: {
-      url: string
-      title: string
-      content: string
-      author: string
-      publishedAt: string
-      vaultPath: string
-      description?: string
-    },
-  ) {
+  async saveToObsidian(input: {
+    url: string
+    title: string
+    content: string
+    author: string
+    publishedAt: string
+    vaultPath: string
+    description?: string
+    feedTitle?: string
+    feedUrl?: string
+  }) {
     try {
-      const { url, title, content, author, publishedAt, vaultPath, description } = input
+      const {
+        url,
+        title,
+        content,
+        author,
+        publishedAt,
+        vaultPath,
+        description,
+        feedTitle,
+        feedUrl,
+      } = input
 
       const fileName = `${sanitizeFileName(title || publishedAt)
         .trim()
@@ -83,13 +143,17 @@ export class IntegrationService extends IpcService {
 
       await fsp.mkdir(path.dirname(filePath), { recursive: true })
 
-      const yamlEscape = (s: string) => `"${s.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`
+      const frontmatter = createObsidianFrontmatter({
+        url,
+        author,
+        publishedAt,
+        description,
+        tags: ["folo"],
+        feedTitle,
+        feedUrl,
+      })
 
-      const markdown = `---
-url: ${yamlEscape(url)}
-author: ${yamlEscape(author)}
-publishedAt: ${yamlEscape(publishedAt)}${description ? `\ndescription: ${yamlEscape(description)}` : ""}
----
+      const markdown = `${frontmatter}
 
 # ${title}
 
@@ -106,36 +170,22 @@ ${content}
   }
 
   @IpcMethod()
-  async saveToEagle(context: IpcContext, input: SaveToEagleInput): Promise<any> {
-    try {
-      const res = await fetch("http://localhost:41595/api/item/addFromURLs", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          items: input.mediaUrls?.map((media) => ({
-            url: media,
-            website: input.url,
-            headers: {
-              referer: input.url,
-            },
-          })),
-        }),
-      })
-      return await res.json()
-    } catch {
-      return null
-    }
+  async saveToEagle(input: SaveToEagleInput): Promise<any> {
+    return saveMediaToEagle(input)
   }
 
   @IpcMethod()
-  async loginToQBittorrent(context: IpcContext, input: LoginToQBittorrentInput) {
+  setEagleContextMenuEnabled(input: SetEagleContextMenuEnabledInput): void {
+    store.set("eagleContextMenuEnabled", input.enabled)
+  }
+
+  @IpcMethod()
+  async loginToQBittorrent(input: LoginToQBittorrentInput) {
     const { host, username, password } = input
 
     const existingSID = store.get("qbittorrentSID")
     if (existingSID) {
-      const errorMessage = await this.checkQBittorrentAuth(context, { host })
+      const errorMessage = await this.checkQBittorrentAuth({ host })
       if (!errorMessage) {
         return
       }
@@ -163,7 +213,7 @@ ${content}
     return
   }
 
-  async checkQBittorrentAuth(context: IpcContext, input: CheckQBittorrentAuthInput) {
+  async checkQBittorrentAuth(input: CheckQBittorrentAuthInput) {
     const { host } = input
     const sid = store.get("qbittorrentSID")
     if (!sid) {
@@ -183,7 +233,7 @@ ${content}
   }
 
   @IpcMethod()
-  async addMagnet(context: IpcContext, input: AddMagnetInput) {
+  async addMagnet(input: AddMagnetInput) {
     const { host, urls } = input
     const sid = store.get("qbittorrentSID")
     if (!sid) {
@@ -204,12 +254,11 @@ ${content}
       return `Failed to add magnet links: ${text}`
     }
 
-    // eslint-disable-next-line no-console
     console.log(`Added magnet links to qBittorrent: ${urls.join(", ")}`)
   }
 
   @IpcMethod()
-  async customFetch(context: IpcContext, input: CustomFetchInput) {
+  async customFetch(input: CustomFetchInput) {
     const requestId = Math.random().toString(36).slice(2, 8)
     const { url, method, headers, body, timeout = 10_000 } = input
 
@@ -352,13 +401,34 @@ ${content}
   }
 
   @IpcMethod()
-  async openURLScheme(context: IpcContext, scheme: string) {
+  async openURLScheme(scheme: string) {
     const requestId = Math.random().toString(36).slice(2, 8)
 
     try {
-      // Validate URL scheme format
-      if (!scheme.includes("://")) {
+      // Parse and validate the protocol up-front. `shell.openExternal` will
+      // happily dispatch any scheme the OS has registered a handler for,
+      // including `file://`, `smb://`, `ms-msdt:`, `search-ms:`, `jar:`,
+      // `res:`, etc. Several of those have well-documented exploit chains
+      // (NTLM credential theft over SMB, MSDT/Follina RCE on Windows,
+      // local-file disclosure via file://). The Electron docs explicitly
+      // warn against passing untrusted URLs to `shell.openExternal`, so we
+      // enforce a strict allowlist of schemes that the integrations UI is
+      // intended to support.
+      let protocol: string
+      try {
+        protocol = new URL(scheme).protocol.replace(/:$/, "").toLowerCase()
+      } catch {
         throw new Error("Invalid URL scheme format. Must include protocol (e.g., 'app://')")
+      }
+
+      if (!protocol) {
+        throw new Error("Invalid URL scheme format. Must include protocol (e.g., 'app://')")
+      }
+
+      if (!isAllowedURLSchemeProtocol(protocol)) {
+        throw new Error(
+          `URL scheme "${protocol}://" is not allowed. Allowed schemes: ${[...ALLOWED_URL_SCHEME_PROTOCOLS].sort().join(", ")}.`,
+        )
       }
 
       // Log URL scheme execution (mask sensitive data)
@@ -373,7 +443,7 @@ ${content}
 
       logger.info(`[URLScheme:${requestId}] Opening URL scheme`, {
         scheme: safeScheme,
-        protocol: scheme.split("://")[0],
+        protocol,
       })
 
       // Use Electron's shell.openExternal to open URL scheme

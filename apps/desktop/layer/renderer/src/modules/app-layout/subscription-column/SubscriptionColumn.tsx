@@ -152,7 +152,6 @@ const FeedResponsiveResizerContainer = ({
   }, [feedColumnShow, isMobileViewport])
 
   const when = useGlobalFocusableScopeSelector(
-    // eslint-disable-next-line @eslint-react/hooks-extra/no-unnecessary-use-callback
     React.useCallback((activeScope) => !activeScope.or(...FloatingLayerScope), []),
   )
 

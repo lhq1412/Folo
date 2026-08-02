@@ -15,6 +15,7 @@ next-env.d.ts
 # Sentry Config File
 .env.sentry-build-plugin
 .vercel
+.vinext
 stats.html
 
 electron.vite.config.*.mjs
@@ -37,8 +38,11 @@ apps/desktop/resources/cli
 
 .wrangler
 
-# Local agent artifacts
-.codex/
+# Local agent artifacts, except the shared Codex environment
+.codex/*
+!.codex/environments/
+.codex/environments/*
+!.codex/environments/environment.toml
 
 # E2E outputs
 /apps/desktop/e2e/playwright-report/

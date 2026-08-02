@@ -24,7 +24,7 @@ jobs:
       VITE_FIREBASE_CONFIG: ${{ vars.VITE_FIREBASE_CONFIG }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           lfs: true
 
@@ -32,7 +32,7 @@ jobs:
         run: git lfs checkout
 
       - name: Cache turbo build setup
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: .turbo
           key: ${{ runner.os }}-turbo-${{ github.sha }}
@@ -42,13 +42,13 @@ jobs:
       - uses: pnpm/action-setup@v6
 
       - name: Use Node.js LTS
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: lts/*
           cache: "pnpm"
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile --child-concurrency=1
 
       - name: Resolve deployment target
         id: target
@@ -92,7 +92,7 @@ jobs:
 
       - name: Deploy SSR Worker to Cloudflare (dev)
         if: steps.target.outputs.environment == 'dev'
-        uses: cloudflare/wrangler-action@v3
+        uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -101,7 +101,7 @@ jobs:
 
       - name: Deploy SSR Worker to Cloudflare (prod)
         if: steps.target.outputs.environment == 'prod'
-        uses: cloudflare/wrangler-action@v3
+        uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
