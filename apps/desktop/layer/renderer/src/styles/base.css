@@ -29,6 +29,18 @@ html[data-viewport="desktop"] #root {
   overscroll-behavior: none;
 }
 
+html[data-viewport="mobile"] body,
+html[data-viewport="mobile"] #root {
+  min-height: 100svh;
+}
+
+@media (display-mode: standalone) {
+  html[data-build-type="web"] body,
+  html[data-build-type="web"] #root {
+    min-height: 100svh;
+  }
+}
+
 body,
 #root {
   @apply h-auto lg:h-screen;

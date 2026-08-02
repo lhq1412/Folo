@@ -1,3 +1,4 @@
+import { useMobile } from "@follow/components/hooks/useMobile.js"
 import { ActionButton, MotionButtonBase } from "@follow/components/ui/button/index.js"
 import { DividerVertical } from "@follow/components/ui/divider/index.js"
 import { RotatingRefreshIcon } from "@follow/components/ui/loading/index.jsx"
@@ -18,12 +19,13 @@ import { useNavigate } from "react-router"
 
 import { previewBackPath } from "~/atoms/preview"
 import { useGeneralSettingKey } from "~/atoms/settings/general"
-import { useSubscriptionColumnShow } from "~/atoms/sidebar"
+import { useSubscriptionColumnShow, useSubscriptionColumnTempShow } from "~/atoms/sidebar"
 import { ROUTE_ENTRY_PENDING } from "~/constants"
 import { useFeature } from "~/hooks/biz/useFeature"
 import { useFollow } from "~/hooks/biz/useFollow"
 import { getRouteParams, useRouteParams } from "~/hooks/biz/useRouteParams"
 import { useLoginModal } from "~/hooks/common"
+import { openSubscriptionSidebar } from "~/lib/mobile-sidebar"
 import { useSendAIShortcut } from "~/modules/ai-chat/hooks/useSendAIShortcut"
 import { COMMAND_ID } from "~/modules/command/commands/id"
 import { useRunCommandFn } from "~/modules/command/hooks/use-command"
@@ -57,14 +59,27 @@ export const EntryListHeader: FC<{
 
   const headerTitle = useFeedHeaderTitle()
   const feedIcon = useFeedHeaderIcon()
+  const feedColumnShow = useSubscriptionColumnShow()
+  const feedColumnTempShow = useSubscriptionColumnTempShow()
+  const isMobileViewport = useMobile()
+  const subscriptionSidebarOpen = feedColumnShow || feedColumnTempShow
 
   const titleInfo = !!headerTitle && (
     <div
       className={clsx(
         "flex min-w-0 items-center break-all text-lg font-bold leading-tight",
-        "-ml-3",
+        isMobileViewport ? "gap-2" : "-ml-3",
       )}
     >
+      {isMobileViewport && !subscriptionSidebarOpen && (
+        <ActionButton
+          tooltip={t("app.toggle_sidebar")}
+          className="shrink-0"
+          onClick={() => openSubscriptionSidebar()}
+        >
+          <i className="i-mgc-layout-leftbar-open-cute-re text-text-secondary" />
+        </ActionButton>
+      )}
       {feedIcon && <FeedIcon target={feedIcon} fallback size={20} className="mr-4" />}
       <EllipsisHorizontalTextWithTooltip className="inline-block !w-auto max-w-full">
         {headerTitle}
@@ -88,7 +103,6 @@ export const EntryListHeader: FC<{
     [FeedViewType.Notifications]: "pl-6",
   }
 
-  const feedColumnShow = useSubscriptionColumnShow()
   const toggleUnreadOnlyShortcut = useCommandShortcut(COMMAND_ID.timeline.unreadOnly)
   const runCmdFn = useRunCommandFn()
 
@@ -139,6 +153,7 @@ export const EntryListHeader: FC<{
     <div
       className={cn(
         "flex w-full flex-col pr-2.5 pt-2 @[700px]:pr-3 @[1024px]:pr-4",
+        "max-lg:pt-[calc(0.5rem+env(safe-area-inset-top,0px))]",
         !feedColumnShow && "macos:mt-4 macos:pt-margin-macos-traffic-light-y",
         titleStyleBasedView[view],
         isPreview

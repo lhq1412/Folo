@@ -17,6 +17,7 @@ import { appLog } from "../lib/log"
 import { initAnalytics } from "./analytics"
 import { registerHistoryStack } from "./history"
 import { doMigration } from "./migrates"
+import { initializeMobileLayout } from "./mobile-layout"
 import { initializeSettings } from "./settings"
 
 declare global {
@@ -79,6 +80,7 @@ export const initializeApp = async () => {
   enableMapSet()
 
   apm("initializeSettings", initializeSettings)
+  apm("initializeMobileLayout", initializeMobileLayout)
 
   await apm("i18n", initI18n)
   await apm("initAnalytics", initAnalytics)

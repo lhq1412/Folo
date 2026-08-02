@@ -1,6 +1,7 @@
 import type { DragEndEvent } from "@dnd-kit/core"
 import { DndContext, PointerSensor, pointerWithin, useSensor, useSensors } from "@dnd-kit/core"
 import { useGlobalFocusableScopeSelector } from "@follow/components/common/Focusable/hooks.js"
+import { useMobile } from "@follow/components/hooks/useMobile.js"
 import { PanelSplitter } from "@follow/components/ui/divider/PanelSplitter.js"
 import { Kbd } from "@follow/components/ui/kbd/Kbd.js"
 import type { FeedViewType } from "@follow/constants"
@@ -21,9 +22,15 @@ import {
   useSubscriptionColumnShow,
   useSubscriptionColumnTempShow,
 } from "~/atoms/sidebar"
+import { MobileSubscriptionDrawerBackdrop } from "~/components/common/MobileSubscriptionDrawerBackdrop"
 import { FloatingLayerScope } from "~/constants"
 import { useBatchUpdateSubscription } from "~/hooks/biz/useSubscriptionActions"
 import { useI18n } from "~/hooks/common"
+import {
+  closeSubscriptionSidebar,
+  isMobileSubscriptionDrawerOpen,
+  MOBILE_SUBSCRIPTION_DRAWER_WIDTH,
+} from "~/lib/mobile-sidebar"
 import { COMMAND_ID } from "~/modules/command/commands/id"
 import { useCommandBinding } from "~/modules/command/hooks/use-command-binding"
 import { CornerPlayer } from "~/modules/player/corner-player"
@@ -98,11 +105,18 @@ const FeedResponsiveResizerContainer = ({
     },
   })
 
+  const isMobileViewport = useMobile()
   const feedColumnShow = useSubscriptionColumnShow()
   const feedColumnTempShow = useSubscriptionColumnTempShow()
+  const mobileDrawerOpen = isMobileSubscriptionDrawerOpen(feedColumnShow, feedColumnTempShow)
+  const sidebarWidth = isMobileViewport ? MOBILE_SUBSCRIPTION_DRAWER_WIDTH : position
   const t = useI18n()
 
   useEffect(() => {
+    if (isMobileViewport) {
+      return
+    }
+
     if (feedColumnShow) {
       setSubscriptionColumnTempShow(false)
       return
@@ -135,7 +149,7 @@ const FeedResponsiveResizerContainer = ({
     return () => {
       document.removeEventListener("mousemove", handler)
     }
-  }, [feedColumnShow])
+  }, [feedColumnShow, isMobileViewport])
 
   const when = useGlobalFocusableScopeSelector(
     // eslint-disable-next-line @eslint-react/hooks-extra/no-unnecessary-use-callback
@@ -166,19 +180,26 @@ const FeedResponsiveResizerContainer = ({
 
   return (
     <>
+      <MobileSubscriptionDrawerBackdrop
+        open={mobileDrawerOpen}
+        onClose={closeSubscriptionSidebar}
+      />
+
       <div
         data-hide-in-print
         className={cn(
           "shrink-0 overflow-hidden",
           "absolute inset-y-0 z-[2]",
-          feedColumnTempShow && !feedColumnShow && "shadow-drawer-to-right z-[12]",
+          (feedColumnTempShow && !feedColumnShow) || mobileDrawerOpen
+            ? "shadow-drawer-to-right z-[12]"
+            : "",
           !feedColumnShow && !feedColumnTempShow ? "-translate-x-full" : "",
           !isDragging ? "duration-200" : "",
         )}
         style={{
-          width: `${position}px`,
+          width: `${sidebarWidth}px`,
           // @ts-expect-error
-          "--fo-feed-col-w": `${position}px`,
+          "--fo-feed-col-w": `${sidebarWidth}px`,
         }}
       >
         <Slot className={!feedColumnShow ? "!bg-sidebar" : ""}>{children}</Slot>
@@ -188,11 +209,11 @@ const FeedResponsiveResizerContainer = ({
         data-hide-in-print
         className={!isDragging ? "duration-200" : ""}
         style={{
-          width: feedColumnShow ? `${position}px` : 0,
+          width: isMobileViewport ? 0 : feedColumnShow ? `${position}px` : 0,
         }}
       />
 
-      {delayShowSplitter && (
+      {delayShowSplitter && !isMobileViewport && (
         <PanelSplitter
           isDragging={isDragging}
           cursor={separatorCursor}

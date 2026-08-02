@@ -123,6 +123,7 @@ export function SubscriptionColumn({
       className={cn(
         !feedColumnShow && ELECTRON_BUILD && "bg-material-opaque",
         "relative flex h-full flex-col pt-2.5",
+        "max-lg:pt-[calc(0.625rem+env(safe-area-inset-top,0px))]",
         className,
       )}
       ref={focusableContainerRef}

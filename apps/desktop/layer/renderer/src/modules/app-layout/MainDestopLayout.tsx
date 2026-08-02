@@ -180,7 +180,7 @@ export function MainDestopLayout() {
 
         <main
           ref={setMainContainerElement}
-          className="flex min-w-0 flex-1 bg-theme-background pt-[calc(var(--fo-window-padding-top)_-10px)] !outline-none"
+          className="flex min-w-0 flex-1 bg-theme-background pt-[calc(var(--fo-window-padding-top)_-10px)] !outline-none max-lg:pt-[env(safe-area-inset-top,0px)]"
           // NOTE: tabIndex for main element can get by `document.activeElement`
           tabIndex={-1}
         >

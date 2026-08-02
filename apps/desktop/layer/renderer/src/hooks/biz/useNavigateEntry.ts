@@ -19,6 +19,7 @@ import {
   ROUTE_FEED_IN_LIST,
   ROUTE_FEED_PENDING,
 } from "~/constants"
+import { closeSubscriptionSidebar } from "~/lib/mobile-sidebar"
 
 import { getTimelineIdByView, useRouteParamsSelector } from "./useRouteParams"
 
@@ -41,6 +42,9 @@ export const useNavigateEntry = () => {
   return useCallback(
     (options: NavigateEntryOptions) => {
       navigateEntry(options)
+      if (isMobile) {
+        closeSubscriptionSidebar()
+      }
       if (isMobile && sheetContext) {
         sheetContext.dismiss()
       }

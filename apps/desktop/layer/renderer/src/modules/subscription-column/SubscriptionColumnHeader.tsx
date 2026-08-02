@@ -1,3 +1,4 @@
+import { useMobile } from "@follow/components/hooks/useMobile.js"
 import { Folo } from "@follow/components/icons/folo.js"
 import { Logo } from "@follow/components/icons/logo.jsx"
 import { ActionButton } from "@follow/components/ui/button/index.js"
@@ -10,7 +11,7 @@ import { useTranslation } from "react-i18next"
 import { useLocation, useNavigate } from "react-router"
 import { toast } from "sonner"
 
-import { setTimelineColumnShow, useSubscriptionColumnShow } from "~/atoms/sidebar"
+import { useSubscriptionColumnShow, useSubscriptionColumnTempShow } from "~/atoms/sidebar"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,6 +23,7 @@ import { useRouteParamsSelector } from "~/hooks/biz/useRouteParams"
 import { useI18n } from "~/hooks/common"
 import { useContextMenu } from "~/hooks/common/useContextMenu"
 import { copyToClipboard } from "~/lib/clipboard"
+import { toggleSubscriptionSidebar } from "~/lib/mobile-sidebar"
 import { ProfileButton } from "~/modules/user/ProfileButton"
 
 export const SubscriptionColumnHeader = memo(() => {
@@ -76,15 +78,18 @@ export const SubscriptionColumnHeader = memo(() => {
 
 const LayoutActionButton = () => {
   const feedColumnShow = useSubscriptionColumnShow()
+  const feedColumnTempShow = useSubscriptionColumnTempShow()
+  const isMobileViewport = useMobile()
+  const subscriptionSidebarOpen = feedColumnShow || feedColumnTempShow
 
-  const [animation, setAnimation] = useState({ width: !feedColumnShow ? "auto" : 0 })
+  const [animation, setAnimation] = useState({ width: !subscriptionSidebarOpen ? "auto" : 0 })
   useEffect(() => {
-    setAnimation({ width: !feedColumnShow ? "auto" : 0 })
-  }, [feedColumnShow])
+    setAnimation({ width: !subscriptionSidebarOpen ? "auto" : 0 })
+  }, [subscriptionSidebarOpen])
 
   const t = useI18n()
 
-  if (feedColumnShow) return null
+  if (subscriptionSidebarOpen && !isMobileViewport) return null
 
   return (
     <m.div initial={animation} animate={animation} className="overflow-hidden">
@@ -93,7 +98,7 @@ const LayoutActionButton = () => {
         icon={
           <i
             className={cn(
-              !feedColumnShow
+              !subscriptionSidebarOpen
                 ? "i-mgc-layout-leftbar-open-cute-re"
                 : "i-mgc-layout-leftbar-close-cute-re",
               "text-text-secondary",
@@ -101,7 +106,7 @@ const LayoutActionButton = () => {
           />
         }
         onClick={() => {
-          setTimelineColumnShow(!feedColumnShow)
+          toggleSubscriptionSidebar(feedColumnShow, feedColumnTempShow)
         }}
       />
     </m.div>

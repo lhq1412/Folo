@@ -1,7 +1,8 @@
 import { EventBus } from "@follow/utils/event-bus"
 import { useTranslation } from "react-i18next"
 
-import { setTimelineColumnShow } from "~/atoms/sidebar"
+import { getSubscriptionColumnShow, getSubscriptionColumnTempShow } from "~/atoms/sidebar"
+import { toggleSubscriptionSidebar } from "~/lib/mobile-sidebar"
 
 import { useRegisterCommandEffect } from "../hooks/use-register-command"
 import type { Command, CommandCategory } from "../types"
@@ -30,7 +31,7 @@ export const useRegisterLayoutCommands = () => {
       },
       category,
       run: () => {
-        setTimelineColumnShow((show) => !show)
+        toggleSubscriptionSidebar(getSubscriptionColumnShow(), getSubscriptionColumnTempShow())
       },
     },
     {
