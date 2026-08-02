@@ -4,7 +4,6 @@ import { DEV, ELECTRON_BUILD } from "@follow/shared/constants"
 import { hydrateDatabaseToStore } from "@follow/store/hydrate"
 import { whoami } from "@follow/store/user/getters"
 import { userSyncService } from "@follow/store/user/store"
-import { tracker } from "@follow/tracker"
 import { repository } from "@pkg"
 import { enableMapSet } from "immer"
 
@@ -14,7 +13,6 @@ import { settingSyncQueue } from "~/modules/settings/helper/sync-queue"
 import { ElectronCloseEvent, ElectronShowEvent } from "~/providers/invalidate-query-provider"
 
 import { appLog } from "../lib/log"
-import { initAnalytics } from "./analytics"
 import { registerHistoryStack } from "./history"
 import { doMigration } from "./migrates"
 import { initializeMobileLayout } from "./mobile-layout"
@@ -83,7 +81,6 @@ export const initializeApp = async () => {
   apm("initializeMobileLayout", initializeMobileLayout)
 
   await apm("i18n", initI18n)
-  await apm("initAnalytics", initAnalytics)
 
   void apm("setting sync", async () => {
     await settingSyncQueue.init()
@@ -96,10 +93,6 @@ export const initializeApp = async () => {
     await settingSyncQueue.syncLocal()
   }).catch((error) => {
     appLog("setting sync failed", error)
-    void tracker.manager.captureException(error, {
-      module: "setting_sync",
-      stage: "bootstrap",
-    })
   })
 
   const loadingTime = Date.now() - now

@@ -2,11 +2,9 @@ import { initializeDB } from "@follow/database/db"
 import { hydrateDatabaseToStore } from "@follow/store/hydrate"
 import { whoami } from "@follow/store/user/getters"
 import { userSyncService } from "@follow/store/user/store"
-import { tracker } from "@follow/tracker"
 
 import { migrateLegacyApiSession } from "../lib/auth-cookie-migration"
 import { settingSyncQueue } from "../modules/settings/sync-queue"
-import { initAnalytics } from "./analytics"
 import { initializeAppCheck } from "./app-check"
 import { initBackgroundTask } from "./background"
 import { initializeDayjs } from "./dayjs"
@@ -52,7 +50,6 @@ export const initializeApp = async () => {
   runWhenIdle(() => {
     apm("initializePlayer", initializePlayer)
   })
-  await initAnalytics()
 
   void apm("setting sync", async () => {
     await settingSyncQueue.init()
@@ -65,10 +62,6 @@ export const initializeApp = async () => {
     await settingSyncQueue.syncLocal()
   }).catch((error) => {
     console.error("setting sync failed", error)
-    void tracker.manager.captureException(error, {
-      module: "setting_sync",
-      stage: "bootstrap",
-    })
   })
   const loadingTime = Date.now() - now
   initBackgroundTask()

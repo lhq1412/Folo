@@ -1,4 +1,3 @@
-import { wrapCreateBrowserRouterV7 } from "@sentry/react"
 import * as React from "react"
 import { createBrowserRouter, createHashRouter } from "react-router"
 
@@ -12,10 +11,7 @@ declare global {
     __DEBUG_PROXY__: boolean
   }
 }
-let routerCreator = window["__DEBUG_PROXY__"] ? createHashRouter : createBrowserRouter
-if (window.SENTRY_RELEASE) {
-  routerCreator = wrapCreateBrowserRouterV7(routerCreator)
-}
+const routerCreator = window["__DEBUG_PROXY__"] ? createHashRouter : createBrowserRouter
 
 export const router = routerCreator([
   {

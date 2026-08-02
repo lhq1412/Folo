@@ -1,17 +1,8 @@
-import type { TrackerMapper } from "./enums"
 import { TrackerManager } from "./manager"
 import type { Tracker } from "./types"
 
 class TrackManager extends TrackerManager {
   private trackFns: Tracker[] = []
-
-  constructor() {
-    super({
-      enableBatchProcessing: false,
-      enableErrorRetry: true,
-      maxRetries: 2,
-    })
-  }
 
   setTrackFn(fn: Tracker) {
     this.trackFns.push(fn)
@@ -22,13 +13,12 @@ class TrackManager extends TrackerManager {
   }
 
   getTrackFn(): Tracker {
-    if (this.trackFns.length === 0 && this.getEnabledAdapters().length === 0) {
-      console.error("[Tracker warn]: Track function not set")
-    }
     return (code, properties) => {
-      const legacyPromises = this.trackFns.map((fn) => fn(code, properties))
-      const modernPromise = this.track(code as TrackerMapper, properties)
-      return Promise.all([...legacyPromises, modernPromise])
+      if (this.trackFns.length === 0) {
+        return Promise.resolve()
+      }
+
+      return Promise.all(this.trackFns.map((fn) => fn(code, properties)))
     }
   }
 }
