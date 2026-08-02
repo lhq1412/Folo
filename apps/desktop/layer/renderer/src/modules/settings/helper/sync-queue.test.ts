@@ -27,14 +27,6 @@ vi.mock("@follow/store/user/getters", () => ({
   whoami: whoamiMock,
 }))
 
-vi.mock("@follow/tracker", () => ({
-  tracker: {
-    manager: {
-      captureException: vi.fn(),
-    },
-  },
-}))
-
 vi.mock("~/lib/api-client", () => ({
   followClient: {
     api: {

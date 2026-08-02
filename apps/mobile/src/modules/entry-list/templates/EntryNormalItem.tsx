@@ -1,10 +1,10 @@
 import { FeedViewType } from "@follow/constants"
+import { appEvents } from "@follow/shared/app-events"
 import { getEntry } from "@follow/store/entry/getter"
 import { useEntry } from "@follow/store/entry/hooks"
 import { getInboxFrom } from "@follow/store/entry/utils"
 import { useFeedById } from "@follow/store/feed/hooks"
 import { useEntryTranslation } from "@follow/store/translation/hooks"
-import { tracker } from "@follow/tracker"
 import { cn, formatEstimatedMins, formatTimeToSeconds } from "@follow/utils"
 import { useVideoPlayer, VideoView } from "expo-video"
 import { memo, useCallback, useMemo, useRef, useState } from "react"
@@ -72,10 +72,7 @@ export const EntryNormalItem = memo(
       if (entry) {
         const fullEntry = getEntry(entryId)
         WebViewManager.setEntry(fullEntry)
-        tracker.navigateEntry({
-          feedId: entry.feedId!,
-          entryId: entry.id,
-        })
+        appEvents.emitNavigateEntry()
         navigation.pushControllerView(EntryDetailScreen, {
           entryId,
           entryIds: extraData.entryIds ?? [],

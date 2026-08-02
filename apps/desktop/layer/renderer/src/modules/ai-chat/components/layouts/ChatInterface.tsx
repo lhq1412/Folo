@@ -8,7 +8,6 @@ import { isFreeRole } from "@follow/constants"
 import { getCategoryFeedIds } from "@follow/store/subscription/getter"
 import { usePrefetchSummary } from "@follow/store/summary/hooks"
 import { useUserRole } from "@follow/store/user/hooks"
-import { tracker } from "@follow/tracker"
 import { detectIsEditableElement, nextFrame } from "@follow/utils"
 import type { ConfigResponse } from "@follow-app/client-sdk"
 import type { EditorState } from "lexical"
@@ -195,7 +194,6 @@ const ChatInterfaceContent = ({ centerInputOnEmpty, visualOffsetY }: ChatInterfa
       id: messageId,
     }
     chatActions.sendMessage(sendMessage)
-    tracker.aiChatMessageSent()
 
     // Clear draft message after sending
     clearDraft()
@@ -229,7 +227,6 @@ const ChatInterfaceContent = ({ centerInputOnEmpty, visualOffsetY }: ChatInterfa
 
     chatActions.popMessage()
     void chatActions.sendMessage(retryMessage)
-    tracker.aiChatMessageSent()
 
     nextFrame(() => {
       handleScrollPositioning()

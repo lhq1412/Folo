@@ -7,7 +7,6 @@ import {
 } from "@follow/components/ui/lexical-rich-editor/utils.js"
 import { ScrollArea } from "@follow/components/ui/scroll-area/ScrollArea.js"
 import { useIsDark } from "@follow/hooks"
-import { tracker } from "@follow/tracker"
 import { nextFrame } from "@follow/utils"
 import { cn } from "@follow/utils/utils"
 import { AnimatePresence } from "framer-motion"
@@ -401,7 +400,6 @@ function AIChatInterface({ inputRef }: AIChatInterfaceProps) {
       role: "user",
       id: nanoid(),
     })
-    tracker.aiChatMessageSent()
 
     nextFrame(() => {
       // Calculate and adjust scroll positioning immediately

@@ -1,5 +1,4 @@
 import { userSyncService } from "@follow/store/user/store"
-import { tracker } from "@follow/tracker"
 import * as AppleAuthentication from "expo-apple-authentication"
 import { useColorScheme } from "nativewind"
 import { useState } from "react"
@@ -108,11 +107,7 @@ export function SocialLogin({ onPressEmail }: { isRegister: boolean; onPressEmai
                   })
                   return !!session?.user
                 },
-                trackLogin: () => {
-                  tracker.userLogin({
-                    type: "social",
-                  })
-                },
+                trackLogin: () => {},
                 onError: (error) => {
                   console.error(error)
                 },

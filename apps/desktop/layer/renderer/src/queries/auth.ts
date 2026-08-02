@@ -1,7 +1,6 @@
 import { IN_ELECTRON } from "@follow/shared/constants"
 import { useWhoami, whoamiQueryKey } from "@follow/store/user/hooks"
 import { userSyncService } from "@follow/store/user/store"
-import { tracker } from "@follow/tracker"
 import { clearStorage } from "@follow/utils/ns"
 import type { FetchError } from "ofetch"
 import { useEffect } from "react"
@@ -207,8 +206,6 @@ export const signOut = async () => {
 
     // Clear local storage
     clearStorage()
-    // Sign out
-    await tracker.manager.clear()
   }
 
   window.location.reload()

@@ -17,7 +17,6 @@
     "@fastify/middie": "9.3.3",
     "@fastify/request-context": "7.0.0",
     "@follow-app/client-sdk": "catalog:",
-    "@follow/tracker": "workspace:*",
     "@fontsource/sn-pro": "5.2.6",
     "@radix-ui/react-avatar": "1.2.2",
     "@resvg/resvg-js": "2.6.2",

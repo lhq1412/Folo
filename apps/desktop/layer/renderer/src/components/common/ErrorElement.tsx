@@ -1,5 +1,4 @@
 import { Button } from "@follow/components/ui/button/index.js"
-import { tracker } from "@follow/tracker"
 import { useEffect, useRef } from "react"
 import { isRouteErrorResponse, useNavigate, useRouteError } from "react-router"
 import { toast } from "sonner"
@@ -27,9 +26,6 @@ export function ErrorElement() {
 
   useEffect(() => {
     console.error("Error handled by React Router default ErrorBoundary:", error)
-    void tracker.manager.captureException(error, {
-      source: "desktop_router_error_element",
-    })
   }, [error])
 
   const reloadRef = useRef(false)

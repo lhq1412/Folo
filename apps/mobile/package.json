@@ -38,7 +38,6 @@
     "@follow/models": "workspace:*",
     "@follow/shared": "workspace:*",
     "@follow/store": "workspace:*",
-    "@follow/tracker": "workspace:*",
     "@follow/types": "workspace:*",
     "@follow/utils": "workspace:*",
     "@gorhom/portal": "1.0.14",

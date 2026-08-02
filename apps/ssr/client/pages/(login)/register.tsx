@@ -14,7 +14,6 @@ import {
 } from "@follow/components/ui/form/index.jsx"
 import { Input } from "@follow/components/ui/input/index.js"
 import { useIsDark } from "@follow/hooks"
-import { tracker } from "@follow/tracker"
 import { cn } from "@follow/utils/utils"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useState } from "react"
@@ -78,9 +77,6 @@ function RegisterForm() {
         },
         {
           onSuccess() {
-            tracker.register({
-              type: "email",
-            })
             navigate("/login")
           },
           onError(context) {

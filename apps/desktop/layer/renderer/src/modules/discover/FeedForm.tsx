@@ -26,7 +26,6 @@ import { useCategories, useSubscriptionByFeedId } from "@follow/store/subscripti
 import { subscriptionSyncService } from "@follow/store/subscription/store"
 import { whoami } from "@follow/store/user/getters"
 import { useIsLoggedIn, useUserRole } from "@follow/store/user/hooks"
-import { tracker } from "@follow/tracker"
 import { cn } from "@follow/utils/utils"
 import type { FeedAnalyticsModel, ParsedEntry } from "@follow-app/client-sdk"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -109,16 +108,6 @@ export const FeedForm: Component<{
 
   const isInModal = useIsInModal()
   const placeholderRef = useRef<HTMLDivElement | null>(null)
-
-  useEffect(() => {
-    if (!feedQuery.isLoading) {
-      tracker.subscribeModalOpened({
-        feedId: id,
-        feedUrl: feedQuery.data?.feed.url || url,
-        isError: feedQuery.isError,
-      })
-    }
-  }, [feedQuery.data?.feed.url, feedQuery.isError, feedQuery.isLoading, id, url])
 
   return (
     <div

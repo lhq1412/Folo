@@ -6,7 +6,6 @@ import { useEntry } from "@follow/store/entry/hooks"
 import { useFeedById } from "@follow/store/feed/hooks"
 import { useListById } from "@follow/store/list/hooks"
 import { useSubscriptionByFeedId } from "@follow/store/subscription/hooks"
-import { tracker } from "@follow/tracker"
 import { EventBus } from "@follow/utils/event-bus"
 import { cn } from "@follow/utils/utils"
 import * as Slider from "@radix-ui/react-slider"
@@ -71,36 +70,6 @@ export const CornerPlayer = ({ className, ...rest }: ControlButtonProps) => {
   )
 }
 
-const usePlayerTracker = () => {
-  const playerOpenAt = useState(Date.now)[0]
-  const show = useAudioPlayerAtomSelector((v) => v.show)
-
-  useEffect(() => {
-    const handler = () => {
-      const playerState = getAudioPlayerAtomValue()
-
-      tracker.playerOpenDuration({
-        duration: Date.now() - playerOpenAt,
-        status: playerState.status,
-        trigger: "beforeunload",
-      })
-    }
-
-    window.addEventListener("beforeunload", handler)
-    return () => window.removeEventListener("beforeunload", handler)
-  }, [playerOpenAt])
-
-  useEffect(() => {
-    if (!show) {
-      const playerState = getAudioPlayerAtomValue()
-      tracker.playerOpenDuration({
-        duration: Date.now() - playerOpenAt,
-        status: playerState.status,
-        trigger: "manual",
-      })
-    }
-  }, [playerOpenAt, show])
-}
 const CornerPlayerImpl = ({ hideControls, rounded }: ControlButtonProps) => {
   const isMobile = useMobile()
 
@@ -170,7 +139,6 @@ const CornerPlayerImpl = ({ hideControls, rounded }: ControlButtonProps) => {
   }, [])
 
   const navigateToEntry = useNavigateEntry()
-  usePlayerTracker()
 
   const navigateOptions = useMemo<NavigateEntryOptions | null>(() => {
     if (!entry) return null

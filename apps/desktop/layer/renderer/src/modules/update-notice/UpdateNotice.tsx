@@ -1,5 +1,4 @@
 import { Spring } from "@follow/components/constants/spring.js"
-import { tracker } from "@follow/tracker"
 import { cn } from "@follow/utils/utils"
 import { m } from "motion/react"
 import { useMemo, useRef } from "react"
@@ -16,9 +15,6 @@ export const UpdateNotice = () => {
   const handleClick = useRef(() => {
     const status = getUpdaterStatus()
     if (!status) return
-    tracker.updateRestart({
-      type: status.type,
-    })
     switch (status.type) {
       case "app": {
         ipcServices?.app.quitAndInstall()

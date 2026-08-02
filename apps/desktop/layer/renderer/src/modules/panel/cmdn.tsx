@@ -1,6 +1,5 @@
 import { Form, FormControl, FormField, FormItem } from "@follow/components/ui/form/index.jsx"
 import { useRegisterGlobalContext } from "@follow/shared/bridge"
-import { tracker } from "@follow/tracker"
 import { EventBus } from "@follow/utils/event-bus"
 import { cn } from "@follow/utils/utils"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -13,7 +12,6 @@ import { z } from "zod"
 import { m } from "~/components/common/Motion"
 import { PlainModal } from "~/components/ui/modal/stacked/custom-modal"
 import { useModalStack } from "~/components/ui/modal/stacked/hooks"
-import { getRouteParams } from "~/hooks/biz/useRouteParams"
 import { ipcServices } from "~/lib/client"
 
 import { COMMAND_ID } from "../command/commands/id"
@@ -44,13 +42,6 @@ const CmdNPanel = () => {
 
   const handleSubmit = () => {
     const { url } = form.getValues()
-
-    const defaultView = getRouteParams().view
-
-    tracker.quickAddFeed({
-      type: "url",
-      defaultView: Number(defaultView),
-    })
 
     present({
       title: t("feed_form.add_feed"),

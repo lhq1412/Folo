@@ -2,9 +2,9 @@ import { getReadonlyRoute, getStableRouterNavigate } from "@follow/components/at
 import { useMobile } from "@follow/components/hooks/useMobile.js"
 import { useSheetContext } from "@follow/components/ui/sheet/context.js"
 import type { FeedViewType } from "@follow/constants"
+import { appEvents } from "@follow/shared/app-events"
 import { getEntry } from "@follow/store/entry/getter"
 import { getSubscriptionByFeedId } from "@follow/store/subscription/getter"
-import { tracker } from "@follow/tracker"
 import { useCallback } from "react"
 import { toast } from "sonner"
 
@@ -126,11 +126,7 @@ export const navigateEntry = (options: NavigateEntryOptions) => {
     setPreviewBackPath(backPath)
   }
 
-  tracker.navigateEntry({
-    feedId: parsedOptions.feedId,
-    entryId: parsedOptions.entryId,
-    timelineId: parsedOptions.timelineId,
-  })
+  appEvents.emitNavigateEntry()
 
   disableShowAISummaryOnce()
   disableShowAITranslationOnce()

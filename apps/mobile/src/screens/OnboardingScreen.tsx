@@ -1,6 +1,5 @@
 import { isNewUserQueryKey } from "@follow/store/user/constants"
-import { tracker } from "@follow/tracker"
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Pressable, View } from "react-native"
 import Animated, { FadeInRight, FadeOutLeft } from "react-native-reanimated"
@@ -30,16 +29,8 @@ export const OnboardingScreen: NavigationControllerView = () => {
   const handleNext = useCallback(() => {
     if (currentStep < totalSteps) {
       setCurrentStep(currentStep + 1)
-      tracker.onBoarding({
-        step: currentStep,
-        done: false,
-      })
     } else {
       // Complete onboarding
-      tracker.onBoarding({
-        step: currentStep,
-        done: true,
-      })
       void markOnboardingFinished()
       queryClient
         .invalidateQueries({
@@ -50,12 +41,7 @@ export const OnboardingScreen: NavigationControllerView = () => {
         })
     }
   }, [currentStep, navigation, totalSteps])
-  useEffect(() => {
-    tracker.onBoarding({
-      step: 0,
-      done: false,
-    })
-  }, [])
+
   return (
     <View
       className="flex-1 bg-system-grouped-background px-6"

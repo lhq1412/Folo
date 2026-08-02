@@ -5,7 +5,6 @@ import type {
 } from "@follow/shared/settings/interface"
 import type { EntryModel } from "@follow/store/entry/types"
 import { getSummary } from "@follow/store/summary/getters"
-import { tracker } from "@follow/tracker"
 import { toast } from "sonner"
 
 import { getActionLanguage } from "~/atoms/settings/general"
@@ -199,12 +198,6 @@ export class CustomIntegrationManager {
     }
 
     try {
-      // Track integration usage
-      tracker.integration({
-        type: "custom",
-        event: "save",
-      })
-
       // Build placeholder context
       const context = await this.buildPlaceholderContext(entry)
 

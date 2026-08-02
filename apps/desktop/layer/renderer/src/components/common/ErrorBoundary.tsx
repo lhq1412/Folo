@@ -1,4 +1,3 @@
-import { tracker } from "@follow/tracker"
 import type { PropsWithChildren, ReactNode } from "react"
 import type { FallbackProps } from "react-error-boundary"
 import { ErrorBoundary as ReactErrorBoundary } from "react-error-boundary"
@@ -32,11 +31,6 @@ export const ErrorBoundary = ({
     if (beforeCapture?.(info, error) === false) {
       return
     }
-
-    void tracker.manager.captureException(error, {
-      source: "desktop_error_boundary",
-      component_stack: info.componentStack,
-    })
   }
 
   return (

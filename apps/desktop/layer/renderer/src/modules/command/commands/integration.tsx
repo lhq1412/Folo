@@ -13,7 +13,6 @@ import { getEntry } from "@follow/store/entry/getter"
 import type { EntryModel } from "@follow/store/entry/types"
 import { getFeedById } from "@follow/store/feed/getter"
 import { getSummary } from "@follow/store/summary/getters"
-import { tracker } from "@follow/tracker"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import type { FetchError } from "ofetch"
 import { ofetch } from "ofetch"
@@ -145,10 +144,6 @@ const useRegisterReadwiseCommands = () => {
               return
             }
             try {
-              tracker.integration({
-                type: "readwise",
-                event: "save",
-              })
               const data = await ofetch("https://readwise.io/api/v3/save/", {
                 method: "POST",
                 headers: {
@@ -217,10 +212,6 @@ const useRegisterInstapaperCommands = () => {
             }
 
             try {
-              tracker.integration({
-                type: "instapaper",
-                event: "save",
-              })
               const data = await ofetch("https://www.instapaper.com/api/add", {
                 query: {
                   url: entry.url,
@@ -312,10 +303,6 @@ const useRegisterObsidianCommands = () => {
             }
             const markdownContent = await getEntryContentAsMarkdown(entry)
             const feed = getFeedById(entry.feedId)
-            tracker.integration({
-              type: "obsidian",
-              event: "save",
-            })
             saveToObsidian.mutate({
               url: entry.url || "",
               title: entry.title || "",
@@ -424,10 +411,6 @@ const useRegisterReadeckCommands = () => {
               return
             }
             try {
-              tracker.integration({
-                type: "readeck",
-                event: "save",
-              })
               const data = new FormData()
               if (entry.url) {
                 data.set("url", entry.url)
@@ -493,11 +476,6 @@ const useRegisterCuboxCommands = () => {
               return
             }
             try {
-              tracker.integration({
-                type: "cubox",
-                event: "save",
-              })
-
               const selectedText = window.getSelection()?.toString() || ""
 
               const requestBody =
@@ -588,11 +566,6 @@ const useRegisterZoteroCommands = () => {
               return
             }
             try {
-              tracker.integration({
-                type: "zotero",
-                event: "save",
-              })
-
               const requestBody = buildZoteroWebpageRequestBody(entry)
 
               const response = await ofetch(`https://api.zotero.org/users/${zoteroUserID}/items`, {
@@ -743,11 +716,6 @@ const useRegisterQBittorrentCommands = () => {
               return
             }
             try {
-              tracker.integration({
-                type: "qbittorrent",
-                event: "save",
-              })
-
               const urls = extractQBittorrentUrls(entry)
               if (!urls) {
                 toast.error(t("entry_actions.no_bittorrent_urls_found"))

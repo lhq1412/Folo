@@ -1,5 +1,4 @@
 import { feedSyncServices } from "@follow/store/feed/store"
-import { tracker } from "@follow/tracker"
 import { formatXml } from "@follow/utils/utils"
 import { useMutation } from "@tanstack/react-query"
 import { useRef } from "react"
@@ -63,11 +62,7 @@ export const useClaimFeedMutation = (feedId: string) =>
     async onError(err) {
       toastFetchError(err)
     },
-    onSuccess() {
-      tracker.feedClaimed({
-        feedId,
-      })
-    },
+    onSuccess() {},
   })
 
 export const useRefreshFeedMutation = (feedId?: string) =>

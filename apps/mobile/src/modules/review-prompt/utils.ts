@@ -1,6 +1,5 @@
 import type { ReviewPromptState } from "@follow/shared/review-prompt"
 import { normalizeReviewPromptState, recordReviewPromptOutcome } from "@follow/shared/review-prompt"
-import { tracker } from "@follow/tracker"
 import { nativeApplicationVersion, nativeBuildVersion } from "expo-application"
 import * as StoreReview from "expo-store-review"
 import { Linking } from "react-native"
@@ -141,13 +140,13 @@ export const isMobileNativeReviewAvailable = async (distribution: MobileReviewDi
 
 export const requestMobileNativeReview = async ({
   appVersion,
-  distribution,
-  platform,
-  score,
-  source,
+  distribution: _distribution,
+  platform: _platform,
+  score: _score,
+  source: _source,
   state,
   storageKey,
-  trackPositive = false,
+  trackPositive: _trackPositive = false,
 }: {
   appVersion: string
   distribution: MobileReviewDistribution
@@ -161,19 +160,15 @@ export const requestMobileNativeReview = async ({
   const nextState = recordReviewPromptOutcome(state, "native_request", new Date(), appVersion)
   writeMobileReviewPromptState(storageKey, nextState)
 
-  if (trackPositive) {
-    tracker.reviewPromptPositive({ distribution, platform, source })
-  }
-  tracker.reviewPromptNativeRequested({ distribution, platform, score, source })
   await StoreReview.requestReview()
   return nextState
 }
 
 export const openMobileStoreReview = async ({
   appVersion,
-  distribution,
-  platform,
-  source,
+  distribution: _distribution,
+  platform: _platform,
+  source: _source,
   state,
   storageKey,
   target,
@@ -198,8 +193,6 @@ export const openMobileStoreReview = async ({
   )
   writeMobileReviewPromptState(storageKey, nextState)
 
-  tracker.reviewPromptPositive({ distribution, platform, source })
-  tracker.reviewPromptStoreOpened({ distribution, platform, source })
   await openStoreUrl(target)
 
   return nextState
@@ -207,9 +200,9 @@ export const openMobileStoreReview = async ({
 
 export const persistMobileNegativeFeedback = ({
   appVersion,
-  distribution,
-  platform,
-  source,
+  distribution: _distribution,
+  platform: _platform,
+  source: _source,
   state,
   storageKey,
 }: {
@@ -222,9 +215,6 @@ export const persistMobileNegativeFeedback = ({
 }) => {
   const nextState = recordReviewPromptOutcome(state, "negative_feedback", new Date(), appVersion)
   writeMobileReviewPromptState(storageKey, nextState)
-
-  tracker.reviewPromptNegative({ distribution, platform, source })
-  tracker.reviewPromptFeedbackOpened({ distribution, platform, source })
 
   return nextState
 }

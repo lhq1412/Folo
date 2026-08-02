@@ -1,5 +1,6 @@
 import { sheetStackAtom } from "@follow/components/ui/sheet/context.js"
 import { UserRole } from "@follow/constants"
+import { appEvents } from "@follow/shared/app-events"
 import {
   getReviewPromptEligibility,
   recordReviewPromptActiveDay,
@@ -10,7 +11,6 @@ import {
 } from "@follow/shared/review-prompt"
 import { useAllFeedSubscription, useAllListSubscription } from "@follow/store/subscription/hooks"
 import { useUserRole } from "@follow/store/user/hooks"
-import { tracker, TrackerMapper, trackManager } from "@follow/tracker"
 import { useAtomValue } from "jotai"
 import { useEffect, useMemo, useRef } from "react"
 import { useTranslation } from "react-i18next"
@@ -123,22 +123,19 @@ export const ReviewPromptProvider = () => {
       return
     }
 
-    return trackManager.setTrackFn((code) => {
-      switch (code) {
-        case TrackerMapper.NavigateEntry: {
-          updateReviewState((state) => recordReviewPromptEntryOpen(state))
-          break
-        }
-        case TrackerMapper.Subscribe: {
-          updateReviewState((state) =>
-            recordReviewPromptSubscriptionAdded(state, subscriptionCountRef.current),
-          )
-          break
-        }
-      }
-
-      return Promise.resolve()
+    const unsubNavigate = appEvents.onNavigateEntry(() => {
+      updateReviewState((state) => recordReviewPromptEntryOpen(state))
     })
+    const unsubSubscribe = appEvents.onSubscribe(() => {
+      updateReviewState((state) =>
+        recordReviewPromptSubscriptionAdded(state, subscriptionCountRef.current),
+      )
+    })
+
+    return () => {
+      unsubNavigate()
+      unsubSubscribe()
+    }
   }, [updateReviewState, userId])
 
   const isRouteBlocked = useMemo(
@@ -163,7 +160,6 @@ export const ReviewPromptProvider = () => {
         }
 
         lastActionRef.current = null
-        tracker.reviewPromptShown({ distribution, platform, score, source })
 
         present({
           canClose: true,
@@ -313,12 +309,6 @@ export const ReviewPromptProvider = () => {
       hasAttemptedInSessionRef.current = true
       lastActionRef.current = null
 
-      tracker.reviewPromptEligible({
-        distribution,
-        platform,
-        score: latestEligibility.score,
-        source: "auto",
-      })
       presentReviewPrompt({ source: "auto", score: latestEligibility.score })
     }, REVIEW_PROMPT_QUIET_WINDOW_MS)
 

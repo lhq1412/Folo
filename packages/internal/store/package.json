@@ -111,7 +111,6 @@
     "@follow/database": "workspace:*",
     "@follow/models": "workspace:*",
     "@follow/shared": "workspace:*",
-    "@follow/tracker": "workspace:*",
     "@follow/utils": "workspace:*",
     "@tanstack/react-query": "5.101.2",
     "@yornaath/batshit": "0.14.0",

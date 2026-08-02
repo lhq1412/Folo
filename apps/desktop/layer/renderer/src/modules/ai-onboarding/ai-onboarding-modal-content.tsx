@@ -1,4 +1,3 @@
-import { tracker } from "@follow/tracker"
 import { useAtomValue } from "jotai"
 import { useEffect, useMemo } from "react"
 
@@ -11,13 +10,6 @@ import { stepAtom } from "./store"
 
 export function AiOnboardingModalContent({ onClose }: { onClose: () => void }) {
   const step = useAtomValue(stepAtom)
-
-  useEffect(() => {
-    tracker.onBoarding({
-      stepV2: step,
-      done: step === "finish",
-    })
-  }, [step])
 
   useEffect(() => {
     if (step !== "finish") return

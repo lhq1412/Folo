@@ -6,7 +6,6 @@ import {
   toAppearanceSpotlightPayload,
 } from "@follow/shared/spotlight"
 import { whoami } from "@follow/store/user/getters"
-import { tracker } from "@follow/tracker"
 import { EventBus } from "@follow/utils/event-bus"
 import { getStorageNS } from "@follow/utils/ns"
 import { isEmptyObject, sleep } from "@follow/utils/utils"
@@ -238,10 +237,7 @@ class SettingSyncQueue {
   }
 
   private reportSyncError(stage: "flush" | "syncLocal", error: unknown) {
-    void tracker.manager.captureException(error, {
-      module: "setting_sync",
-      stage,
-    })
+    console.error(`Setting sync error (${stage}):`, error)
   }
 
   private disposers: (() => void)[] = []

@@ -2,7 +2,6 @@ import { isFreeRole } from "@follow/constants"
 import { useEntry, usePrefetchEntryDetail } from "@follow/store/entry/hooks"
 import { useEntryTranslation, usePrefetchEntryTranslation } from "@follow/store/translation/hooks"
 import { useUserRole } from "@follow/store/user/hooks"
-import { tracker } from "@follow/tracker"
 import { createElement, useCallback, useMemo } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
@@ -24,9 +23,6 @@ export const useGalleryModal = () => {
         toast.error("Invalid feed id")
         return
       }
-      tracker.entryContentHeaderImageGalleryClick({
-        feedId: entryId,
-      })
       present({
         title: t("entry_actions.image_gallery"),
         content: () => createElement(ImageGalleryContent, { entryId }),

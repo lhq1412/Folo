@@ -4,7 +4,6 @@ import {
   normalizeReviewPromptState,
   recordReviewPromptOutcome,
 } from "@follow/shared/review-prompt"
-import { tracker } from "@follow/tracker"
 import { getStorageNS } from "@follow/utils/ns"
 
 import { ipcServices } from "~/lib/client"
@@ -151,39 +150,13 @@ export const clearDesktopReviewPromptState = (storageKey: string | null) => {
   window.localStorage.removeItem(storageKey)
 }
 
-export const trackDesktopReviewOutcome = ({
-  distribution,
-  outcome,
-  platform,
-  score,
-  source,
-}: {
+export const trackDesktopReviewOutcome = (_args: {
   distribution: DesktopReviewDistribution
   outcome: ReviewPromptOutcome
   platform: string
   score?: number
   source: "auto" | "manual"
-}) => {
-  switch (outcome) {
-    case "dismissed": {
-      tracker.reviewPromptDismissed({ distribution, platform, source })
-      return
-    }
-    case "negative_feedback": {
-      tracker.reviewPromptNegative({ distribution, platform, source })
-      tracker.reviewPromptFeedbackOpened({ distribution, platform, source })
-      return
-    }
-    case "positive_store_redirect": {
-      tracker.reviewPromptPositive({ distribution, platform, source })
-      tracker.reviewPromptStoreOpened({ distribution, platform, source })
-      return
-    }
-    case "native_request": {
-      tracker.reviewPromptNativeRequested({ distribution, platform, score, source })
-    }
-  }
-}
+}) => {}
 
 export const persistDesktopReviewOutcome = ({
   appVersion,

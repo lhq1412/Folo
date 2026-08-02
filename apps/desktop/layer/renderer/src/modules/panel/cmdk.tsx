@@ -14,7 +14,6 @@ import { useInputComposition } from "@follow/hooks"
 import { getFeedById } from "@follow/store/feed/getter"
 import { getSubscriptionByFeedId } from "@follow/store/subscription/getter"
 import { getUnreadById } from "@follow/store/unread/getters"
-import { tracker } from "@follow/tracker"
 import { clsx, cn } from "@follow/utils/utils"
 import { Command } from "cmdk"
 import type { FC } from "react"
@@ -46,8 +45,6 @@ export const SearchCmdK: React.FC = () => {
   )
   React.useEffect(() => {
     if (!open) return
-
-    tracker.searchOpen()
 
     // Refresh data
     setPage(0)

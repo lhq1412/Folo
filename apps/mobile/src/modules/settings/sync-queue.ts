@@ -6,7 +6,6 @@ import {
   toAppearanceSpotlightPayload,
 } from "@follow/shared/spotlight"
 import { whoami } from "@follow/store/user/getters"
-import { tracker } from "@follow/tracker"
 import { isEmptyObject, jotaiStore, sleep } from "@follow/utils"
 import { EventBus } from "@follow/utils/event-bus"
 import type { SettingsTab } from "@follow-app/client-sdk"
@@ -225,10 +224,7 @@ class SettingSyncQueue {
   }
 
   private reportSyncError(stage: "flush" | "syncLocal", error: unknown) {
-    void tracker.manager.captureException(error, {
-      module: "setting_sync",
-      stage,
-    })
+    console.error(`Setting sync error (${stage}):`, error)
   }
 
   private async clearQueueAndPersist(ownerUserId: string | null) {
@@ -557,7 +553,6 @@ class SettingSyncQueue {
 
     if (!remoteSettings) return
     if (__DEV__) {
-      // eslint-disable-next-line no-console
       console.log("remote settings:", remoteSettings)
     }
 

@@ -1,6 +1,6 @@
 import { FeedViewType } from "@follow/constants"
 import { SubscriptionService } from "@follow/database/services/subscription"
-import { tracker } from "@follow/tracker"
+import { appEvents } from "@follow/shared/app-events"
 import { omit } from "es-toolkit"
 
 import { api } from "../../context"
@@ -285,7 +285,7 @@ class SubscriptionSyncService {
 
     if (data.feed) {
       feedActions.upsertMany([data.feed as any])
-      tracker.subscribe({ feedId: data.feed.id, view: subscription.view })
+      appEvents.emitSubscribe()
     }
 
     if (data.list) {
@@ -298,7 +298,7 @@ class SubscriptionSyncService {
           purchaseAmount: null,
         },
       ])
-      tracker.subscribe({ listId: data.list.id, view: subscription.view })
+      appEvents.emitSubscribe()
     }
 
     if (data.unread) {

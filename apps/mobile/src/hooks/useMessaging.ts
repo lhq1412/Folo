@@ -1,7 +1,6 @@
 import { useHasNotificationActions } from "@follow/store/action/hooks"
 import { ROUTE_FEED_IN_INBOX } from "@follow/store/constants/app"
 import { useWhoami } from "@follow/store/user/hooks"
-import { tracker } from "@follow/tracker"
 import { getApp } from "@react-native-firebase/app"
 import type { FirebaseMessagingTypes } from "@react-native-firebase/messaging"
 import { getMessaging } from "@react-native-firebase/messaging"
@@ -51,11 +50,6 @@ export function useUpdateMessagingToken() {
     retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 4_000),
     onError: (error) => {
       console.error("Failed to register push notifications", error)
-      void tracker.manager.captureException(error, {
-        module: "push_notifications",
-        stage: "token_registration",
-        platform: Platform.OS,
-      })
     },
   })
 

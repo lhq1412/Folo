@@ -1,5 +1,4 @@
 import { userSyncService } from "@follow/store/user/store"
-import { tracker } from "@follow/tracker"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useMutation } from "@tanstack/react-query"
 import i18next from "i18next"
@@ -34,13 +33,7 @@ async function onSubmit(values: FormValue) {
   return signInWithEmail(values)
 }
 
-async function signInWithEmail(
-  values: FormValue,
-  options: {
-    trackLogin?: boolean
-  } = {},
-) {
-  const { trackLogin = true } = options
+async function signInWithEmail(values: FormValue) {
   const result = formSchema.safeParse(values)
   if (!result.success) {
     const issue = result.error.issues[0]
@@ -74,11 +67,6 @@ async function signInWithEmail(
 
   await userSyncService.whoami()
 
-  if (trackLogin) {
-    tracker.userLogin({
-      type: "email",
-    })
-  }
   return true
 }
 
@@ -224,15 +212,10 @@ export function EmailSignUp() {
       }
 
       if (!getCookie()) {
-        const signedIn = await signInWithEmail(
-          {
-            email: values.email,
-            password: values.password,
-          },
-          {
-            trackLogin: false,
-          },
-        )
+        const signedIn = await signInWithEmail({
+          email: values.email,
+          password: values.password,
+        })
 
         if (!signedIn) {
           return
@@ -240,9 +223,6 @@ export function EmailSignUp() {
       }
 
       toast.success(i18next.t("login.sign_up_successful"))
-      tracker.register({
-        type: "email",
-      })
       Navigation.rootNavigation.back()
     },
   })

@@ -1,11 +1,11 @@
 import { FeedViewType } from "@follow/constants"
 import type { MediaModel } from "@follow/database/schemas/types"
+import { appEvents } from "@follow/shared/app-events"
 import { useEntry } from "@follow/store/entry/hooks"
 import { useFeedById } from "@follow/store/feed/hooks"
 import { useEntryTranslation } from "@follow/store/translation/hooks"
 import { unreadSyncService } from "@follow/store/unread/store"
 import { useIsLoggedIn } from "@follow/store/user/hooks"
-import { tracker } from "@follow/tracker"
 import type { ImageSource } from "expo-image"
 import { memo, useCallback } from "react"
 import { Pressable, View } from "react-native"
@@ -61,10 +61,7 @@ export const EntrySocialItem = memo(
       if (isLoggedIn) {
         unreadSyncService.markEntryAsRead(entryId)
       }
-      tracker.navigateEntry({
-        feedId: entry?.feedId ?? "",
-        entryId,
-      })
+      appEvents.emitNavigateEntry()
       navigation.pushControllerView(EntryDetailScreen, {
         entryId,
         entryIds: extraData.entryIds ?? [],

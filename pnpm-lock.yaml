@@ -507,9 +507,6 @@ importers:
       '@follow/store':
         specifier: workspace:*
         version: link:../../../../packages/internal/store
-      '@follow/tracker':
-        specifier: workspace:*
-        version: link:../../../../packages/internal/tracker
       '@fontsource/sn-pro':
         specifier: 5.2.6
         version: 5.2.6
@@ -1106,9 +1103,6 @@ importers:
       '@follow/store':
         specifier: workspace:*
         version: link:../../packages/internal/store
-      '@follow/tracker':
-        specifier: workspace:*
-        version: link:../../packages/internal/tracker
       '@follow/types':
         specifier: workspace:*
         version: link:../../packages/internal/types
@@ -1606,9 +1600,6 @@ importers:
       '@follow-app/client-sdk':
         specifier: 0.3.95
         version: 0.3.95(8ff470c259fec971c8c1514261b062b1)
-      '@follow/tracker':
-        specifier: workspace:*
-        version: link:../../packages/internal/tracker
       '@fontsource/sn-pro':
         specifier: 5.2.6
         version: 5.2.6
@@ -2291,9 +2282,6 @@ importers:
       '@follow/shared':
         specifier: workspace:*
         version: link:../shared
-      '@follow/tracker':
-        specifier: workspace:*
-        version: link:../tracker
       '@follow/utils':
         specifier: workspace:*
         version: link:../utils

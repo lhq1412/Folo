@@ -1,6 +1,5 @@
 import { isMobile } from "@follow/components/hooks/useMobile.js"
 import { IN_ELECTRON } from "@follow/shared/constants"
-import { tracker } from "@follow/tracker"
 import { nextFrame } from "@follow/utils"
 import { cn, getOS } from "@follow/utils/utils"
 import { useEffect, useLayoutEffect, useRef } from "react"
@@ -50,7 +49,6 @@ const AppLayer = () => {
 
   useEffect(() => {
     const doneTime = Math.trunc(performance.now())
-    tracker.uiRenderInit(doneTime)
     appLog("App is ready", `${doneTime}ms`)
     applyAfterReadyCallbacks()
 

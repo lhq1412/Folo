@@ -1,4 +1,5 @@
 import { UserRole } from "@follow/constants"
+import { appEvents } from "@follow/shared/app-events"
 import {
   getReviewPromptEligibility,
   recordReviewPromptActiveDay,
@@ -9,7 +10,6 @@ import {
 } from "@follow/shared/review-prompt"
 import { useAllFeedSubscription, useAllListSubscription } from "@follow/store/subscription/hooks"
 import { useUserRole } from "@follow/store/user/hooks"
-import { tracker, TrackerMapper, trackManager } from "@follow/tracker"
 import { nativeApplicationVersion } from "expo-application"
 import { useAtomValue } from "jotai"
 import { useEffect, useMemo, useRef, useState } from "react"
@@ -129,22 +129,19 @@ export const ReviewPromptProvider = () => {
       return
     }
 
-    return trackManager.setTrackFn((code) => {
-      switch (code) {
-        case TrackerMapper.NavigateEntry: {
-          updateReviewState((state) => recordReviewPromptEntryOpen(state))
-          break
-        }
-        case TrackerMapper.Subscribe: {
-          updateReviewState((state) =>
-            recordReviewPromptSubscriptionAdded(state, subscriptionCountRef.current),
-          )
-          break
-        }
-      }
-
-      return Promise.resolve()
+    const unsubNavigate = appEvents.onNavigateEntry(() => {
+      updateReviewState((state) => recordReviewPromptEntryOpen(state))
     })
+    const unsubSubscribe = appEvents.onSubscribe(() => {
+      updateReviewState((state) =>
+        recordReviewPromptSubscriptionAdded(state, subscriptionCountRef.current),
+      )
+    })
+
+    return () => {
+      unsubNavigate()
+      unsubSubscribe()
+    }
   }, [updateReviewState, userId])
 
   const activeRoute = routes.at(-1) ?? null
@@ -172,7 +169,6 @@ export const ReviewPromptProvider = () => {
         return
       }
 
-      tracker.reviewPromptShown({ distribution, platform, source: "manual" })
       const nextState = await requestMobileNativeReview({
         appVersion: nativeApplicationVersion ?? "unknown",
         distribution,
@@ -255,19 +251,6 @@ export const ReviewPromptProvider = () => {
           isHandlingPromptRef.current = false
           return
         }
-
-        tracker.reviewPromptEligible({
-          distribution,
-          platform,
-          score: latestEligibility.score,
-          source: "auto",
-        })
-        tracker.reviewPromptShown({
-          distribution,
-          platform,
-          score: latestEligibility.score,
-          source: "auto",
-        })
 
         const nextState = await requestMobileNativeReview({
           appVersion: nativeApplicationVersion ?? "unknown",
