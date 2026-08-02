@@ -26,7 +26,7 @@
     "bump": "vv --minor",
     "dedupe:locales": "eslint --fix locales/**/*.json",
     "depcheck": "npx depcheck --quiet",
-    "deploy:web:pages": "pnpm run build:web:pages && wrangler pages deploy out/web --project-name folo-web-mobile",
+    "deploy:web:pages": "pnpm run build:web:pages && wrangler deploy --config wrangler.personal.jsonc",
     "dev": "turbo run @follow/web#dev @follow/ssr#dev",
     "dev:debug": "export DEBUG=true && vite --debug",
     "dev:electron": "electron-vite dev",

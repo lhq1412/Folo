@@ -52,9 +52,10 @@ jobs:
       - name: Build desktop web (SPA)
         run: pnpm --filter Folo run build:web:pages
 
-      - name: Deploy to Cloudflare Pages
+      - name: Deploy to Cloudflare Workers
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy apps/desktop/out/web --project-name=folo-web-mobile
+          workingDirectory: apps/desktop
+          command: deploy --config wrangler.personal.jsonc

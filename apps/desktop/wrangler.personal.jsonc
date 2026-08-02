@@ -1,0 +1,10 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "folo-web-mobile",
+  "compatibility_date": "2026-02-01",
+  "assets": {
+    "directory": "./out/web",
+    "not_found_handling": "single-page-application",
+  },
+  "workers_dev": true,
+}
