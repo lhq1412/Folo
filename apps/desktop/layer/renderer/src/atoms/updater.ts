@@ -3,20 +3,23 @@ import { atom } from "jotai"
 
 import { createAtomHooks } from "~/lib/jotai"
 
-export type UpdaterStatus = "ready"
+export type UpdaterStatus = "ready" | "deferred" | "updating" | "failed"
 type UpdaterStatusKind = "app" | "renderer" | "pwa" | "distribution"
 
 type BaseUpdaterStatus<T extends UpdaterStatusKind> = {
   type: T
   status: UpdaterStatus
-  finishUpdate?: () => void
+  finishUpdate?: () => void | Promise<void>
 }
 
 type AppUpdaterStatus = BaseUpdaterStatus<"app">
 
 type RendererUpdaterStatus = BaseUpdaterStatus<"renderer">
 
-type PwaUpdaterStatus = BaseUpdaterStatus<"pwa">
+type PwaUpdaterStatus = BaseUpdaterStatus<"pwa"> & {
+  deferUpdate?: () => void
+  error?: string
+}
 
 type DistributionUpdaterStatus = BaseUpdaterStatus<"distribution"> & {
   distribution: DesktopUpdateDistribution

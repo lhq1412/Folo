@@ -26,9 +26,9 @@ import { InvalidateQueryProvider } from "./invalidate-query-provider"
 import {
   LazyContextMenuProvider,
   LazyExternalJumpInProvider,
+  LazyOfflineStatusBanner,
   LazyPopoverProvider,
   LazyPWAInstallPrompt,
-  LazyPWAPrompt,
   LazyReloadPrompt,
 } from "./lazy/index"
 import { ServerConfigsProvider } from "./server-configs-provider"
@@ -65,7 +65,7 @@ export const RootProviders: FC<PropsWithChildren> = ({ children }) => (
                     <LazyPopoverProvider />
                     <LazyExternalJumpInProvider />
                     <LazyReloadPrompt />
-                    {!IN_ELECTRON && <LazyPWAPrompt />}
+                    {!IN_ELECTRON && <LazyOfflineStatusBanner />}
                     {!IN_ELECTRON && <LazyPWAInstallPrompt />}
                   </Suspense>
                   {/* <FocusableGuardProvider /> */}

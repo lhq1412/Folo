@@ -17,6 +17,7 @@ import {
 import { ipcServices } from "~/lib/client"
 import { clearAuthSessionToken, getAuthSessionToken } from "~/lib/client-session"
 import { defineQuery } from "~/lib/defineQuery"
+import { clearPwaRuntimeCaches } from "~/lib/pwa/cache-config"
 import { clearLocalPersistStoreData } from "~/store/utils/clear"
 
 const sessionCookieRefreshInterval = 1000 * 60 * 60 * 12
@@ -206,6 +207,10 @@ export const signOut = async () => {
 
     // Clear local storage
     clearStorage()
+
+    if (!IN_ELECTRON) {
+      await clearPwaRuntimeCaches()
+    }
   }
 
   window.location.reload()

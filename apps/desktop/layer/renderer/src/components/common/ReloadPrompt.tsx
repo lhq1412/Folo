@@ -1,70 +1,198 @@
-import { useEffect } from "react"
+import i18n from "i18next"
+import { useEffect, useRef } from "react"
 import { useRegisterSW } from "virtual:pwa-register/react"
 
 import { setUpdaterStatus } from "~/atoms/updater"
+import { detectUnsavedWork } from "~/lib/pwa/unsaved-work-guard"
+import type { PwaUpdateBroadcastMessage } from "~/lib/pwa/update-coordinator"
+import {
+  broadcastPwaUpdateMessage,
+  clearDeferredPwaUpdateForSession,
+  createPwaUpdateChannel,
+  deferPwaUpdateForSession,
+  isPwaUpdateDeferredForSession,
+  registerPeriodicServiceWorkerCheck,
+} from "~/lib/pwa/update-coordinator"
 
-// check for updates every hour
-const period = 60 * 60 * 1000
+const UPDATE_CHECK_PERIOD_MS = 60 * 60 * 1000
+let pwaUpdateStarted = false
 
 export function ReloadPrompt() {
+  const updateServiceWorkerRef = useRef<((reloadPage?: boolean) => Promise<void>) | null>(null)
+
   const {
     needRefresh: [needRefresh],
     updateServiceWorker,
   } = useRegisterSW({
     onRegisterError(error) {
       console.error("[PWA] Service worker registration failed:", error)
+      setUpdaterStatus({
+        type: "pwa",
+        status: "failed",
+        error: error instanceof Error ? error.message : String(error),
+      })
     },
-    onRegisteredSW(swUrl, r) {
-      if (period <= 0) return
-      if (r?.active?.state === "activated") {
-        registerPeriodicSync(period, swUrl, r)
-      } else if (r?.installing) {
-        r.installing.addEventListener("statechange", (e) => {
-          const sw = e.target as ServiceWorker
-          if (sw.state === "activated") registerPeriodicSync(period, swUrl, r)
-        })
+    onRegisteredSW(swUrl, registration) {
+      if (!registration) {
+        return
       }
+
+      if (registration.active?.state === "activated") {
+        registerPeriodicServiceWorkerCheck(UPDATE_CHECK_PERIOD_MS, swUrl, registration)
+        return
+      }
+
+      registration.installing?.addEventListener("statechange", (event) => {
+        const worker = event.target as ServiceWorker
+        if (worker.state === "activated") {
+          registerPeriodicServiceWorkerCheck(UPDATE_CHECK_PERIOD_MS, swUrl, registration)
+        }
+      })
     },
   })
 
+  updateServiceWorkerRef.current = updateServiceWorker
+
   useEffect(() => {
-    if (needRefresh) {
+    const channel = createPwaUpdateChannel()
+    if (!channel) {
+      return
+    }
+
+    const handleMessage = (event: MessageEvent<PwaUpdateBroadcastMessage>) => {
+      if (event.data.type === "update-started") {
+        setUpdaterStatus({
+          type: "pwa",
+          status: "updating",
+        })
+      }
+
+      if (event.data.type === "update-failed") {
+        setUpdaterStatus({
+          type: "pwa",
+          status: "failed",
+          error: event.data.error,
+        })
+      }
+    }
+
+    channel.addEventListener("message", handleMessage)
+    return () => {
+      channel.removeEventListener("message", handleMessage)
+      channel.close()
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!needRefresh || pwaUpdateStarted) {
+      return
+    }
+
+    if (isPwaUpdateDeferredForSession()) {
       setUpdaterStatus({
         type: "pwa",
-        status: "ready",
-        finishUpdate: () => {
-          updateServiceWorker(true)
+        status: "deferred",
+        finishUpdate: async () => {
+          await performPwaUpdate(updateServiceWorkerRef.current)
+        },
+        deferUpdate: () => {
+          deferPwaUpdateForSession()
+          setUpdaterStatus({
+            type: "pwa",
+            status: "deferred",
+            finishUpdate: async () => {
+              await performPwaUpdate(updateServiceWorkerRef.current)
+            },
+            deferUpdate: () => {
+              deferPwaUpdateForSession()
+            },
+          })
         },
       })
+      return
     }
-  }, [needRefresh, updateServiceWorker])
+
+    setUpdaterStatus({
+      type: "pwa",
+      status: "ready",
+      finishUpdate: async () => {
+        await performPwaUpdate(updateServiceWorkerRef.current)
+      },
+      deferUpdate: () => {
+        deferPwaUpdateForSession()
+        setUpdaterStatus({
+          type: "pwa",
+          status: "deferred",
+          finishUpdate: async () => {
+            await performPwaUpdate(updateServiceWorkerRef.current)
+          },
+          deferUpdate: () => {
+            deferPwaUpdateForSession()
+          },
+        })
+      },
+    })
+  }, [needRefresh])
 
   return null
 }
 
-/**
- * This function will register a periodic sync check every hour, you can modify the interval as needed.
- */
-function registerPeriodicSync(period: number, swUrl: string, r: ServiceWorkerRegistration) {
-  if (period <= 0) return
+async function performPwaUpdate(
+  updateServiceWorker: ((reloadPage?: boolean) => Promise<void>) | null,
+): Promise<void> {
+  if (!updateServiceWorker || pwaUpdateStarted) {
+    return
+  }
 
-  setInterval(async () => {
-    if ("onLine" in navigator && !navigator.onLine) return
-
-    try {
-      const resp = await fetch(swUrl, {
-        cache: "no-store",
-        headers: {
-          cache: "no-store",
-          "cache-control": "no-cache",
+  const unsavedWork = detectUnsavedWork()
+  if (unsavedWork.hasUnsavedWork) {
+    const confirmed = window.confirm(i18n.t("app.pwa.update_unsaved_confirm"))
+    if (!confirmed) {
+      deferPwaUpdateForSession()
+      setUpdaterStatus({
+        type: "pwa",
+        status: "deferred",
+        finishUpdate: async () => {
+          await performPwaUpdate(updateServiceWorker)
+        },
+        deferUpdate: () => {
+          deferPwaUpdateForSession()
         },
       })
-
-      if (resp?.status === 200) {
-        await r.update()
-      }
-    } catch (error) {
-      console.error("[PWA] Service worker update check failed:", error)
+      return
     }
-  }, period)
+  }
+
+  pwaUpdateStarted = true
+  clearDeferredPwaUpdateForSession()
+  broadcastPwaUpdateMessage({ type: "update-started" })
+
+  setUpdaterStatus({
+    type: "pwa",
+    status: "updating",
+  })
+
+  try {
+    await updateServiceWorker(true)
+    broadcastPwaUpdateMessage({ type: "update-completed" })
+  } catch (error) {
+    pwaUpdateStarted = false
+    const message = error instanceof Error ? error.message : String(error)
+    broadcastPwaUpdateMessage({ type: "update-failed", error: message })
+    setUpdaterStatus({
+      type: "pwa",
+      status: "failed",
+      error: message,
+      finishUpdate: async () => {
+        await performPwaUpdate(updateServiceWorker)
+      },
+      deferUpdate: () => {
+        deferPwaUpdateForSession()
+        setUpdaterStatus({
+          type: "pwa",
+          status: "deferred",
+        })
+      },
+    })
+  }
 }

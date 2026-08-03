@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs"
+import { existsSync, readFileSync, statSync } from "node:fs"
 
 import { join } from "pathe"
 import type { Plugin, ResolvedConfig } from "vite"
@@ -10,6 +10,32 @@ import {
   assertPrecacheManifestSnapshot,
   consumePrecacheManifestSnapshot,
 } from "./precache-manifest-snapshot"
+
+export function reportPrecacheManifestStats({
+  precacheManifest,
+  outDir,
+}: {
+  outDir: string
+  precacheManifest: PrecacheManifestEntry[]
+}): void {
+  const fileSizes = precacheManifest
+    .map((entry) => {
+      const filePath = join(outDir, entry.url.replace(/^\//, ""))
+      if (!existsSync(filePath)) {
+        return null
+      }
+
+      return statSync(filePath).size
+    })
+    .filter((size): size is number => size !== null)
+
+  const totalBytes = fileSizes.reduce((sum, size) => sum + size, 0)
+  const largestBytes = fileSizes.length > 0 ? Math.max(...fileSizes) : 0
+
+  console.info(
+    `[PWA] Precache manifest: ${precacheManifest.length} entries, ${totalBytes} bytes total, largest asset ${largestBytes} bytes.`,
+  )
+}
 
 export function assertServiceWorkerFileExists(swPath: string): void {
   if (!existsSync(swPath)) {
@@ -52,6 +78,7 @@ export function validateServiceWorkerManifestPlugin(): Plugin {
       const precacheManifest = consumePrecacheManifestSnapshot()
 
       assertServiceWorkerBuild({ swContent, precacheManifest })
+      reportPrecacheManifestStats({ precacheManifest, outDir: config.build.outDir })
     },
   }
 }
