@@ -23,7 +23,7 @@ import { useRouteParamsSelector } from "~/hooks/biz/useRouteParams"
 import { useI18n } from "~/hooks/common"
 import { useContextMenu } from "~/hooks/common/useContextMenu"
 import { copyToClipboard } from "~/lib/clipboard"
-import { toggleSubscriptionSidebar } from "~/lib/mobile-sidebar"
+import { MOBILE_SUBSCRIPTION_DRAWER_ID, toggleSubscriptionSidebar } from "~/lib/mobile-sidebar"
 import { ProfileButton } from "~/modules/user/ProfileButton"
 
 export const SubscriptionColumnHeader = memo(() => {
@@ -95,6 +95,8 @@ const LayoutActionButton = () => {
     <m.div initial={animation} animate={animation} className="overflow-hidden">
       <ActionButton
         tooltip={t("app.toggle_sidebar")}
+        aria-expanded={subscriptionSidebarOpen}
+        aria-controls={isMobileViewport ? MOBILE_SUBSCRIPTION_DRAWER_ID : undefined}
         icon={
           <i
             className={cn(

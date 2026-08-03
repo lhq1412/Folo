@@ -27,9 +27,13 @@ import { FloatingLayerScope } from "~/constants"
 import { useBatchUpdateSubscription } from "~/hooks/biz/useSubscriptionActions"
 import { useI18n } from "~/hooks/common"
 import {
+  useMobileSubscriptionDrawerA11y,
+  useMobileSubscriptionDrawerInert,
+} from "~/hooks/common/useMobileSubscriptionDrawerA11y"
+import {
   closeSubscriptionSidebar,
   isMobileSubscriptionDrawerOpen,
-  MOBILE_SUBSCRIPTION_DRAWER_WIDTH,
+  MOBILE_SUBSCRIPTION_DRAWER_ID,
 } from "~/lib/mobile-sidebar"
 import { COMMAND_ID } from "~/modules/command/commands/id"
 import { useCommandBinding } from "~/modules/command/hooks/use-command-binding"
@@ -109,8 +113,18 @@ const FeedResponsiveResizerContainer = ({
   const feedColumnShow = useSubscriptionColumnShow()
   const feedColumnTempShow = useSubscriptionColumnTempShow()
   const mobileDrawerOpen = isMobileSubscriptionDrawerOpen(feedColumnShow, feedColumnTempShow)
-  const sidebarWidth = isMobileViewport ? MOBILE_SUBSCRIPTION_DRAWER_WIDTH : position
+  const drawerRef = useRef<HTMLDivElement>(null)
   const t = useI18n()
+
+  useMobileSubscriptionDrawerA11y({
+    open: mobileDrawerOpen,
+    onClose: closeSubscriptionSidebar,
+    drawerRef,
+  })
+  useMobileSubscriptionDrawerInert({
+    open: mobileDrawerOpen,
+    enabled: isMobileViewport,
+  })
 
   useEffect(() => {
     if (isMobileViewport) {
@@ -185,10 +199,18 @@ const FeedResponsiveResizerContainer = ({
       />
 
       <div
+        ref={drawerRef}
+        id={isMobileViewport ? MOBILE_SUBSCRIPTION_DRAWER_ID : undefined}
+        role={isMobileViewport && mobileDrawerOpen ? "dialog" : undefined}
+        aria-modal={isMobileViewport && mobileDrawerOpen ? true : undefined}
+        aria-label={
+          isMobileViewport && mobileDrawerOpen ? t("app.subscription_drawer_label") : undefined
+        }
         data-hide-in-print
         className={cn(
           "shrink-0 overflow-hidden",
           "absolute inset-y-0 z-[2]",
+          isMobileViewport && "w-[min(82vw,320px)] max-lg:pb-[env(safe-area-inset-bottom,0px)]",
           (feedColumnTempShow && !feedColumnShow) || mobileDrawerOpen
             ? "shadow-drawer-to-right z-[12]"
             : "",
@@ -196,9 +218,9 @@ const FeedResponsiveResizerContainer = ({
           !isDragging ? "duration-200" : "",
         )}
         style={{
-          width: `${sidebarWidth}px`,
+          width: isMobileViewport ? undefined : `${position}px`,
           // @ts-expect-error
-          "--fo-feed-col-w": `${sidebarWidth}px`,
+          "--fo-feed-col-w": isMobileViewport ? "min(82vw, 320px)" : `${position}px`,
         }}
       >
         <Slot className={!feedColumnShow ? "!bg-sidebar" : ""}>{children}</Slot>

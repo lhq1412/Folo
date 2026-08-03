@@ -34,6 +34,7 @@
   "app.pwa.install_button": "安装",
   "app.pwa.install_description": "安装 Folo，获得更流畅的全屏阅读体验。",
   "app.pwa.install_title": "安装 Folo",
+  "app.subscription_drawer_label": "订阅",
   "app.toggle_sidebar": "切换侧边栏",
   "discover.any_url_or_keyword": "任意链接或关键词",
   "discover.default_option": "（默认）",

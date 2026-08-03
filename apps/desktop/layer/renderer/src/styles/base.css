@@ -32,18 +32,20 @@ html[data-viewport="desktop"] #root {
 html[data-viewport="mobile"] body,
 html[data-viewport="mobile"] #root {
   min-height: 100svh;
+  min-height: 100dvh;
 }
 
 @media (display-mode: standalone) {
   html[data-build-type="web"] body,
   html[data-build-type="web"] #root {
     min-height: 100svh;
+    min-height: 100dvh;
   }
 }
 
 body,
 #root {
-  @apply h-auto lg:h-screen;
+  @apply h-auto min-h-dvh lg:h-screen lg:min-h-0;
   @apply cursor-default;
   @apply select-none;
   /* @apply bg-white; */

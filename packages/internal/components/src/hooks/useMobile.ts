@@ -1,10 +1,16 @@
+import { getIsMobileViewport } from "../constants/viewport"
 import { useViewport } from "./useViewport"
 
+export {
+  DESKTOP_MIN_WIDTH_PX,
+  getIsMobileViewport,
+  MOBILE_MAX_WIDTH_PX,
+} from "../constants/viewport"
+
 export const useMobile = () => {
-  return useViewport((v) => v.w < 1024 && v.w !== 0)
+  return useViewport((v) => getIsMobileViewport(v.w))
 }
 
 export const isMobile = () => {
-  const w = window.innerWidth
-  return w < 1024 && w !== 0
+  return getIsMobileViewport()
 }

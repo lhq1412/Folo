@@ -2,9 +2,15 @@ import { isMobile } from "@follow/components/hooks/useMobile.js"
 
 import { setSubscriptionColumnTempShow, setTimelineColumnShow } from "~/atoms/sidebar"
 
-export const MOBILE_SUBSCRIPTION_DRAWER_WIDTH = 280
+export const MOBILE_SUBSCRIPTION_DRAWER_ID = "mobile-subscription-drawer"
 
 export const MOBILE_LAYOUT_INIT_KEY = "follow:mobile-layout-initialized"
+
+let subscriptionDrawerTrigger: HTMLElement | null = null
+
+export function getSubscriptionDrawerTrigger() {
+  return subscriptionDrawerTrigger
+}
 
 export function isMobileSubscriptionDrawerOpen(
   feedColumnShow: boolean,
@@ -14,6 +20,10 @@ export function isMobileSubscriptionDrawerOpen(
 }
 
 export function openSubscriptionSidebar() {
+  if (document.activeElement instanceof HTMLElement) {
+    subscriptionDrawerTrigger = document.activeElement
+  }
+
   if (isMobile()) {
     setSubscriptionColumnTempShow(true)
     return

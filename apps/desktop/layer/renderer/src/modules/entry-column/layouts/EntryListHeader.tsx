@@ -25,7 +25,7 @@ import { useFeature } from "~/hooks/biz/useFeature"
 import { useFollow } from "~/hooks/biz/useFollow"
 import { getRouteParams, useRouteParams } from "~/hooks/biz/useRouteParams"
 import { useLoginModal } from "~/hooks/common"
-import { openSubscriptionSidebar } from "~/lib/mobile-sidebar"
+import { MOBILE_SUBSCRIPTION_DRAWER_ID, openSubscriptionSidebar } from "~/lib/mobile-sidebar"
 import { useSendAIShortcut } from "~/modules/ai-chat/hooks/useSendAIShortcut"
 import { COMMAND_ID } from "~/modules/command/commands/id"
 import { useRunCommandFn } from "~/modules/command/hooks/use-command"
@@ -76,6 +76,8 @@ export const EntryListHeader: FC<{
         <ActionButton
           tooltip={t("app.toggle_sidebar")}
           className="shrink-0"
+          aria-expanded={false}
+          aria-controls={MOBILE_SUBSCRIPTION_DRAWER_ID}
           onClick={() => openSubscriptionSidebar()}
         >
           <i className="i-mgc-layout-leftbar-open-cute-re text-text-secondary" />
