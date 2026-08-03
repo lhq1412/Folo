@@ -213,6 +213,6 @@ pnpm --dir apps/desktop/layer/main exec vitest run src/updater/api.test.ts src/u
 pnpm --dir apps/desktop/layer/main typecheck
 pnpm --filter @follow/mobile exec vitest run src/modules/ota/__tests__/client.test.ts src/modules/ota/__tests__/store.test.ts src/modules/ota/__tests__/provider.test.ts
 pnpm --filter @follow/mobile typecheck
-pnpm exec prettier --check .github/workflows/publish-ota.yml .github/workflows/tag.yml .github/scripts/trigger-ota-sync.mjs .github/scripts/trigger-ota-sync.test.ts
+pnpm exec prettier --check .github/workflows/lint.yml .github/scripts/trigger-ota-sync.mjs .github/scripts/trigger-ota-sync.test.ts
 pnpm exec prettier --check .github/scripts/build-ota-release.mjs .github/scripts/build-ota-release.test.ts
 ```

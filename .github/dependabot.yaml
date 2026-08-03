@@ -7,7 +7,7 @@ updates:
       day: friday
       time: "12:00"
       timezone: Asia/Singapore
-    target-branch: dev
+    target-branch: web-mobile-pwa
     ignore:
       - dependency-name: "@shopify/flash-list"
         versions: [">1.7.3"]
@@ -60,5 +60,5 @@ updates:
     directory: /
     schedule:
       interval: daily
-    target-branch: dev
+    target-branch: web-mobile-pwa
     open-pull-requests-limit: 100
