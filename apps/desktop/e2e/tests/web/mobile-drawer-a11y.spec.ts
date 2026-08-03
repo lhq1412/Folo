@@ -107,21 +107,43 @@ test.describe("mobile subscription drawer a11y", () => {
 
     expect(focusableCount).toBeGreaterThanOrEqual(2)
 
+    await drawer.evaluate((element, selector) => {
+      const nodes = [...element.querySelectorAll<HTMLElement>(selector)].filter(
+        (node) => !node.hasAttribute("disabled") && node.tabIndex !== -1,
+      )
+      nodes.at(-1)?.focus()
+    }, focusableSelector)
+    await page.keyboard.press("Tab")
+    await expect(drawer).toHaveAttribute("aria-modal", "true")
+    expect(await drawer.evaluate((element) => element.contains(document.activeElement))).toBe(true)
+
+    await drawer.evaluate((element, selector) => {
+      const nodes = [...element.querySelectorAll<HTMLElement>(selector)].filter(
+        (node) => !node.hasAttribute("disabled") && node.tabIndex !== -1,
+      )
+      nodes[0]?.focus()
+    }, focusableSelector)
+    await page.keyboard.press("Shift+Tab")
+    await expect(drawer).toHaveAttribute("aria-modal", "true")
+    expect(await drawer.evaluate((element) => element.contains(document.activeElement))).toBe(true)
+
     for (let index = 0; index < focusableCount + 2; index += 1) {
       await page.keyboard.press("Tab")
       await expect(drawer).toHaveAttribute("aria-modal", "true")
-
-      const isInsideDrawer = await drawer.evaluate((element) =>
-        element.contains(document.activeElement),
+      expect(await drawer.evaluate((element) => element.contains(document.activeElement))).toBe(
+        true,
       )
-      expect(isInsideDrawer).toBe(true)
     }
   })
 
   test("closes the drawer after navigating from inside the drawer", async ({ page }) => {
     const drawer = page.locator("#mobile-subscription-drawer")
+    const main = page.locator("main")
     const entryTrigger = page.locator(
       '[data-testid="mobile-subscription-drawer-entry-trigger"]:visible',
+    )
+    const articlesTab = page.locator(
+      '#mobile-subscription-drawer [data-testid="timeline-tab-articles"]',
     )
     const videosTab = page.locator(
       '#mobile-subscription-drawer [data-testid="timeline-tab-videos"]',
@@ -129,13 +151,19 @@ test.describe("mobile subscription drawer a11y", () => {
 
     await openMobileSubscriptionDrawerFromEntry(page)
     await expect(drawer).toHaveAttribute("aria-modal", "true")
+    await expect(main).toHaveAttribute("inert", "")
+    await expect(articlesTab).toHaveAttribute("aria-pressed", "true")
     await expect(videosTab).toBeVisible()
 
     await videosTab.click()
 
-    await expect(drawer).toHaveAttribute("aria-hidden", "true")
-    await expect(entryTrigger).toBeVisible()
     await expect(page).toHaveURL(/\/timeline\/videos\//)
+    await expect(videosTab).toHaveAttribute("aria-pressed", "true")
+    await expect(drawer).toHaveAttribute("aria-hidden", "true")
+    await expect(drawer).not.toHaveAttribute("aria-modal", "true")
+    await expect(main).not.toHaveAttribute("inert", "")
+    await expect(main).not.toHaveAttribute("aria-hidden", "true")
+    await expect(entryTrigger).toBeVisible()
   })
 
   test("isolates page content while the drawer is open", async ({ page }) => {
