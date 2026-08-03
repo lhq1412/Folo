@@ -41,13 +41,21 @@ export const MOBILE_DRAWER_TIMELINE_ROUTE = "/timeline/articles/all/pending"
 
 export const resolveMobileDrawerTestAccount = (): TestAccount | null => {
   const email = process.env.FOLO_E2E_ACCOUNT_EMAIL
-  if (!email) {
+  const password = process.env.FOLO_E2E_PASSWORD
+
+  if (!email && !password) {
     return null
+  }
+
+  if (!email || !password) {
+    throw new Error(
+      "FOLO_E2E_ACCOUNT_EMAIL and FOLO_E2E_PASSWORD must be configured together for fixed-account mobile drawer E2E.",
+    )
   }
 
   return {
     email,
-    password: process.env.FOLO_E2E_PASSWORD ?? "Password123!",
+    password,
   }
 }
 

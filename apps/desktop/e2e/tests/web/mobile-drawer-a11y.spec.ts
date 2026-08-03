@@ -118,6 +118,26 @@ test.describe("mobile subscription drawer a11y", () => {
     }
   })
 
+  test("closes the drawer after navigating from inside the drawer", async ({ page }) => {
+    const drawer = page.locator("#mobile-subscription-drawer")
+    const entryTrigger = page.locator(
+      '[data-testid="mobile-subscription-drawer-entry-trigger"]:visible',
+    )
+    const videosTab = page.locator(
+      '#mobile-subscription-drawer [data-testid="timeline-tab-videos"]',
+    )
+
+    await openMobileSubscriptionDrawerFromEntry(page)
+    await expect(drawer).toHaveAttribute("aria-modal", "true")
+    await expect(videosTab).toBeVisible()
+
+    await videosTab.click()
+
+    await expect(drawer).toHaveAttribute("aria-hidden", "true")
+    await expect(entryTrigger).toBeVisible()
+    await expect(page).toHaveURL(/\/timeline\/videos\//)
+  })
+
   test("isolates page content while the drawer is open", async ({ page }) => {
     const drawer = page.locator("#mobile-subscription-drawer")
     const main = page.locator("main")
