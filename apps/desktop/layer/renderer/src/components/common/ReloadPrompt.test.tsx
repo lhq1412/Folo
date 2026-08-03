@@ -3,12 +3,24 @@ import type { Root } from "react-dom/client"
 import { createRoot } from "react-dom/client"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
+import type { UpdaterStatusAtom } from "~/atoms/updater"
 import { setUpdaterStatus } from "~/atoms/updater"
+import {
+  isPwaUpdateDeferredForSession,
+  resetPwaUpdateCoordinatorForTests,
+} from "~/lib/pwa/update-coordinator"
 
 import { ReloadPrompt } from "./ReloadPrompt"
 
 const mockUseRegisterSW = vi.fn()
 const mockUpdateServiceWorker = vi.fn(async () => {})
+
+const WAITING_SW_URL = "https://example.com/sw-v2.js"
+const SHARED_UPDATE_ID = `sw:${WAITING_SW_URL}`
+
+const mockRegistration = {
+  waiting: { scriptURL: WAITING_SW_URL },
+} as ServiceWorkerRegistration
 
 vi.mock("virtual:pwa-register/react", () => ({
   useRegisterSW: (options: {
@@ -56,7 +68,7 @@ class MockBroadcastChannel {
   }
 }
 
-const renderReloadPrompt = async () => {
+const renderReloadPrompt = async (options?: { needRefresh?: boolean }) => {
   const container = document.createElement("div")
   document.body.append(container)
 
@@ -65,42 +77,66 @@ const renderReloadPrompt = async () => {
     root.render(<ReloadPrompt />)
   })
 
+  if (options?.needRefresh) {
+    await act(async () => {
+      root.render(<ReloadPrompt />)
+    })
+  }
+
   return { container, root }
 }
 
+const getPwaStatusCalls = () => {
+  const statuses: Extract<UpdaterStatusAtom, { type: "pwa" }>[] = []
+
+  for (const call of vi.mocked(setUpdaterStatus).mock.calls) {
+    const status = call[0]
+    if (status && typeof status === "object" && status.type === "pwa") {
+      statuses.push(status)
+    }
+  }
+
+  return statuses
+}
+
 describe("ReloadPrompt cross-tab updates", () => {
-  let root: Root | null = null
+  const roots: Root[] = []
 
   beforeEach(() => {
-    sessionStorage.clear()
+    resetPwaUpdateCoordinatorForTests()
+    localStorage.clear()
     MockBroadcastChannel.channels.clear()
     vi.stubGlobal("BroadcastChannel", MockBroadcastChannel)
     vi.clearAllMocks()
 
-    mockUseRegisterSW.mockImplementation(() => ({
-      needRefresh: [false],
-      updateServiceWorker: mockUpdateServiceWorker,
-    }))
+    mockUseRegisterSW.mockImplementation((options) => {
+      options?.onRegisteredSW?.(WAITING_SW_URL, mockRegistration)
+      return {
+        needRefresh: [false],
+        updateServiceWorker: mockUpdateServiceWorker,
+      }
+    })
   })
 
   afterEach(async () => {
-    if (root) {
+    for (const root of roots.splice(0)) {
       await act(async () => {
-        root?.unmount()
+        root.unmount()
       })
-      root = null
     }
 
-    sessionStorage.clear()
+    resetPwaUpdateCoordinatorForTests()
+    localStorage.clear()
     MockBroadcastChannel.channels.clear()
     vi.unstubAllGlobals()
   })
 
   it("accepts update-started messages in a second tab context", async () => {
-    ;({ root } = await renderReloadPrompt())
+    const { root } = await renderReloadPrompt()
+    roots.push(root)
 
     const receiver = new MockBroadcastChannel("folo-pwa-update-v1")
-    receiver.postMessage({ type: "update-started", updateId: "shared-update-id" })
+    receiver.postMessage({ type: "update-started", updateId: SHARED_UPDATE_ID })
 
     expect(setUpdaterStatus).toHaveBeenCalledWith({
       type: "pwa",
@@ -111,27 +147,97 @@ describe("ReloadPrompt cross-tab updates", () => {
   })
 
   it("binds retry actions after update-failed in a second tab context", async () => {
-    ;({ root } = await renderReloadPrompt())
+    const { root } = await renderReloadPrompt()
+    roots.push(root)
 
     const receiver = new MockBroadcastChannel("folo-pwa-update-v1")
     receiver.postMessage({
       type: "update-failed",
-      updateId: "shared-update-id",
+      updateId: SHARED_UPDATE_ID,
       error: "network",
     })
 
-    const lastCall = vi.mocked(setUpdaterStatus).mock.calls.at(-1)?.[0]
+    const lastCall = getPwaStatusCalls().at(-1)
     expect(lastCall).toMatchObject({
       type: "pwa",
       status: "failed",
       error: "network",
     })
+    expect(typeof lastCall?.finishUpdate).toBe("function")
 
-    if (!lastCall || typeof lastCall === "function" || lastCall.type !== "pwa") {
-      throw new Error("Expected PWA updater status")
-    }
+    receiver.close()
+  })
 
-    expect(typeof lastCall.finishUpdate).toBe("function")
+  it("uses the same update id when two instances detect needRefresh", async () => {
+    mockUseRegisterSW.mockImplementation((options) => {
+      options?.onRegisteredSW?.(WAITING_SW_URL, mockRegistration)
+      return {
+        needRefresh: [true],
+        updateServiceWorker: mockUpdateServiceWorker,
+      }
+    })
+
+    const first = await renderReloadPrompt()
+    const second = await renderReloadPrompt()
+    roots.push(first.root, second.root)
+
+    await act(async () => {})
+
+    const updateIds = getPwaStatusCalls()
+      .map((status) => status.status)
+      .filter((status) => status === "ready" || status === "deferred")
+
+    expect(getPwaStatusCalls().length).toBeGreaterThanOrEqual(2)
+    expect(localStorage.getItem("folo-pwa-active-update-id-v1")).toBe(SHARED_UPDATE_ID)
+    expect(updateIds.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it("persists deferred state when another tab clicks later", async () => {
+    mockUseRegisterSW.mockImplementation((options) => {
+      options?.onRegisteredSW?.(WAITING_SW_URL, mockRegistration)
+      return {
+        needRefresh: [true],
+        updateServiceWorker: mockUpdateServiceWorker,
+      }
+    })
+
+    const { root } = await renderReloadPrompt()
+    roots.push(root)
+    await act(async () => {})
+
+    const receiver = new MockBroadcastChannel("folo-pwa-update-v1")
+    receiver.postMessage({ type: "deferred", updateId: SHARED_UPDATE_ID })
+
+    expect(isPwaUpdateDeferredForSession(SHARED_UPDATE_ID)).toBe(true)
+    expect(getPwaStatusCalls().at(-1)).toMatchObject({
+      type: "pwa",
+      status: "deferred",
+    })
+
+    receiver.close()
+  })
+
+  it("accepts update-started from the tab that initiated the shared update batch", async () => {
+    mockUseRegisterSW.mockImplementation((options) => {
+      options?.onRegisteredSW?.(WAITING_SW_URL, mockRegistration)
+      return {
+        needRefresh: [true],
+        updateServiceWorker: mockUpdateServiceWorker,
+      }
+    })
+
+    const first = await renderReloadPrompt()
+    const second = await renderReloadPrompt()
+    roots.push(first.root, second.root)
+    await act(async () => {})
+
+    const receiver = new MockBroadcastChannel("folo-pwa-update-v1")
+    receiver.postMessage({ type: "update-started", updateId: SHARED_UPDATE_ID })
+
+    expect(setUpdaterStatus).toHaveBeenCalledWith({
+      type: "pwa",
+      status: "updating",
+    })
 
     receiver.close()
   })

@@ -8,7 +8,6 @@ import { detectUnsavedWork } from "~/lib/pwa/unsaved-work-guard"
 import type { PwaUpdateBroadcastMessage } from "~/lib/pwa/update-coordinator"
 import {
   acceptPwaUpdateId,
-  beginPwaUpdateCycle,
   broadcastPwaUpdateMessage,
   clearActivePwaUpdateId,
   clearDeferredPwaUpdateForSession,
@@ -17,6 +16,7 @@ import {
   getCurrentPwaUpdateId,
   isPwaUpdateDeferredForSession,
   registerPeriodicServiceWorkerCheck,
+  resolvePwaUpdateId,
 } from "~/lib/pwa/update-coordinator"
 
 const UPDATE_CHECK_PERIOD_MS = 60 * 60 * 1000
@@ -24,6 +24,7 @@ let pwaUpdateStarted = false
 
 export function ReloadPrompt() {
   const updateServiceWorkerRef = useRef<((reloadPage?: boolean) => Promise<void>) | null>(null)
+  const registrationRef = useRef<ServiceWorkerRegistration | null>(null)
   const cleanupPeriodicCheckRef = useRef<(() => void) | null>(null)
   const cleanupWorkerListenerRef = useRef<(() => void) | null>(null)
   const currentUpdateIdRef = useRef<string | null>(null)
@@ -41,6 +42,7 @@ export function ReloadPrompt() {
       })
     },
     onRegisteredSW(swUrl, registration) {
+      registrationRef.current = registration ?? null
       if (!registration) {
         return
       }
@@ -100,6 +102,7 @@ export function ReloadPrompt() {
 
       switch (message.type) {
         case "deferred": {
+          deferPwaUpdateForSession(message.updateId)
           setUpdaterStatus(
             createPwaUpdaterStatus("deferred", finishUpdate, { updateId: message.updateId }),
           )
@@ -154,20 +157,36 @@ export function ReloadPrompt() {
       return
     }
 
-    const updateId = getCurrentPwaUpdateId() ?? beginPwaUpdateCycle()
-    currentUpdateIdRef.current = updateId
+    let cancelled = false
 
-    const finishUpdate = async () => {
-      await performPwaUpdate(updateServiceWorkerRef.current, updateId)
+    const applyNeedRefresh = async () => {
+      const registration =
+        registrationRef.current ?? (await navigator.serviceWorker?.getRegistration()) ?? null
+      if (cancelled) {
+        return
+      }
+
+      const updateId = resolvePwaUpdateId(registration)
+      currentUpdateIdRef.current = updateId
+
+      const finishUpdate = async () => {
+        await performPwaUpdate(updateServiceWorkerRef.current, updateId)
+      }
+
+      setUpdaterStatus(
+        createPwaUpdaterStatus(
+          isPwaUpdateDeferredForSession(updateId) ? "deferred" : "ready",
+          finishUpdate,
+          { updateId },
+        ),
+      )
     }
 
-    setUpdaterStatus(
-      createPwaUpdaterStatus(
-        isPwaUpdateDeferredForSession(updateId) ? "deferred" : "ready",
-        finishUpdate,
-        { updateId },
-      ),
-    )
+    void applyNeedRefresh()
+
+    return () => {
+      cancelled = true
+    }
   }, [needRefresh])
 
   return null

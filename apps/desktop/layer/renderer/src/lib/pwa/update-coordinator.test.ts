@@ -10,6 +10,7 @@ import {
   isMatchingPwaUpdateId,
   isPwaUpdateDeferredForSession,
   resetPwaUpdateCoordinatorForTests,
+  resolvePwaUpdateId,
 } from "./update-coordinator"
 
 class MockBroadcastChannel {
@@ -45,6 +46,11 @@ class MockBroadcastChannel {
     MockBroadcastChannel.channels.get(this.name)?.delete(this)
   }
 }
+
+const createRegistration = (scriptUrl: string) =>
+  ({
+    waiting: { scriptURL: scriptUrl },
+  }) as ServiceWorkerRegistration
 
 describe("update-coordinator", () => {
   beforeEach(() => {
@@ -83,15 +89,35 @@ describe("update-coordinator", () => {
   })
 
   it("rejects conflicting update ids from another batch", () => {
-    beginPwaUpdateCycle()
+    resolvePwaUpdateId(createRegistration("https://example.com/sw-a.js"))
 
-    expect(acceptPwaUpdateId("different-update-id")).toBe(false)
+    expect(acceptPwaUpdateId("sw:https://example.com/sw-b.js")).toBe(false)
   })
 
   it("reuses persisted update ids when a tab later detects needRefresh", () => {
     acceptPwaUpdateId("remote-update-id")
 
     expect(beginPwaUpdateCycle()).toBe("remote-update-id")
+  })
+
+  it("converges multiple tabs to the same waiting worker update id", () => {
+    const registration = createRegistration("https://example.com/sw-v2.js")
+
+    const firstTabUpdateId = resolvePwaUpdateId(registration)
+    const secondTabUpdateId = resolvePwaUpdateId(registration)
+
+    expect(firstTabUpdateId).toBe("sw:https://example.com/sw-v2.js")
+    expect(secondTabUpdateId).toBe(firstTabUpdateId)
+  })
+
+  it("shares fallback update ids across tabs via localStorage", () => {
+    const firstTabUpdateId = beginPwaUpdateCycle()
+    resetPwaUpdateCoordinatorForTests()
+    localStorage.setItem("folo-pwa-active-update-id-v1", firstTabUpdateId)
+
+    const secondTabUpdateId = beginPwaUpdateCycle()
+
+    expect(secondTabUpdateId).toBe(firstTabUpdateId)
   })
 
   it("broadcasts deferred decisions across tabs", () => {

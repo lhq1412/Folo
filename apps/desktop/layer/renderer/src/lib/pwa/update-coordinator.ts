@@ -11,12 +11,27 @@ export type PwaUpdateBroadcastMessage =
 let currentPwaUpdateId: string | null = null
 
 function readPersistedPwaUpdateId(): string | null {
-  return sessionStorage.getItem(PWA_ACTIVE_UPDATE_ID_KEY)
+  return localStorage.getItem(PWA_ACTIVE_UPDATE_ID_KEY)
 }
 
 function persistPwaUpdateId(updateId: string): void {
   currentPwaUpdateId = updateId
-  sessionStorage.setItem(PWA_ACTIVE_UPDATE_ID_KEY, updateId)
+  localStorage.setItem(PWA_ACTIVE_UPDATE_ID_KEY, updateId)
+}
+
+export function createPwaUpdateIdFromWaitingWorker(scriptUrl: string): string {
+  return `sw:${scriptUrl}`
+}
+
+export function resolvePwaUpdateId(registration?: ServiceWorkerRegistration | null): string {
+  const waitingScriptUrl = registration?.waiting?.scriptURL
+  if (waitingScriptUrl) {
+    const updateId = createPwaUpdateIdFromWaitingWorker(waitingScriptUrl)
+    persistPwaUpdateId(updateId)
+    return updateId
+  }
+
+  return beginPwaUpdateCycle()
 }
 
 export function beginPwaUpdateCycle(): string {
@@ -51,21 +66,21 @@ export function isMatchingPwaUpdateId(updateId: string): boolean {
 
 export function clearActivePwaUpdateId(): void {
   currentPwaUpdateId = null
-  sessionStorage.removeItem(PWA_ACTIVE_UPDATE_ID_KEY)
+  localStorage.removeItem(PWA_ACTIVE_UPDATE_ID_KEY)
 }
 
 export function resetPwaUpdateCoordinatorForTests(): void {
   currentPwaUpdateId = null
-  sessionStorage.removeItem(PWA_ACTIVE_UPDATE_ID_KEY)
-  sessionStorage.removeItem(PWA_UPDATE_DEFERRED_KEY)
+  localStorage.removeItem(PWA_ACTIVE_UPDATE_ID_KEY)
+  localStorage.removeItem(PWA_UPDATE_DEFERRED_KEY)
 }
 
 export function deferPwaUpdateForSession(updateId?: string): void {
-  sessionStorage.setItem(PWA_UPDATE_DEFERRED_KEY, updateId ?? "1")
+  localStorage.setItem(PWA_UPDATE_DEFERRED_KEY, updateId ?? "1")
 }
 
 export function isPwaUpdateDeferredForSession(updateId?: string | null): boolean {
-  const stored = sessionStorage.getItem(PWA_UPDATE_DEFERRED_KEY)
+  const stored = localStorage.getItem(PWA_UPDATE_DEFERRED_KEY)
   if (!stored) {
     return false
   }
@@ -78,7 +93,7 @@ export function isPwaUpdateDeferredForSession(updateId?: string | null): boolean
 }
 
 export function clearDeferredPwaUpdateForSession(): void {
-  sessionStorage.removeItem(PWA_UPDATE_DEFERRED_KEY)
+  localStorage.removeItem(PWA_UPDATE_DEFERRED_KEY)
 }
 
 export function createPwaUpdateChannel(): BroadcastChannel | null {
