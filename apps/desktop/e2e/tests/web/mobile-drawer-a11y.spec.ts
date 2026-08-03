@@ -60,6 +60,42 @@ test.describe("mobile subscription drawer a11y", () => {
     await expect(entryTrigger).toBeFocused()
   })
 
+  test("traps focus inside the drawer while it is open", async ({ page }) => {
+    await openWebApp(page, env)
+
+    const entryTrigger = page.locator(
+      '[data-testid="mobile-subscription-drawer-entry-trigger"]:visible',
+    )
+    const drawer = page.locator("#mobile-subscription-drawer")
+
+    const hasEntryTrigger = await entryTrigger.isVisible().catch(() => false)
+    test.skip(
+      !hasEntryTrigger,
+      "Requires authenticated timeline view with mobile entry header trigger",
+    )
+
+    await entryTrigger.click()
+    await expect(drawer).toHaveAttribute("aria-modal", "true")
+    await expect(drawer).not.toHaveAttribute("aria-hidden", "true")
+
+    const focusableCount = await drawer.evaluate((element) => {
+      const selector =
+        'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      return [...element.querySelectorAll<HTMLElement>(selector)].filter(
+        (node) => !node.hasAttribute("disabled") && node.tabIndex !== -1,
+      ).length
+    })
+    test.skip(focusableCount < 2, "Requires at least two focusable controls inside the drawer")
+
+    for (let index = 0; index < focusableCount + 2; index += 1) {
+      await page.keyboard.press("Tab")
+      const isInsideDrawer = await drawer.evaluate((element) =>
+        element.contains(document.activeElement),
+      )
+      expect(isInsideDrawer).toBe(true)
+    }
+  })
+
   test("keeps closed drawer controls out of the tab order", async ({ page }) => {
     await openWebApp(page, env)
 
