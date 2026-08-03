@@ -35,6 +35,18 @@ export default defineConfig({
   },
   projects: [
     {
+      name: "web-mobile",
+      testMatch: /tests\/web\/mobile-drawer-a11y\.spec\.ts/,
+      use: {
+        ...devices["Pixel 7"],
+        channel: "chromium",
+        ignoreHTTPSErrors: true,
+        launchOptions: {
+          args: ["--disable-web-security"],
+        },
+      },
+    },
+    {
       name: "web",
       testMatch: /tests\/web\/.*\.spec\.ts/,
       use: {

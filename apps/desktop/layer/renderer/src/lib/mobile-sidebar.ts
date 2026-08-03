@@ -4,12 +4,44 @@ import { setSubscriptionColumnTempShow, setTimelineColumnShow } from "~/atoms/si
 
 export const MOBILE_SUBSCRIPTION_DRAWER_ID = "mobile-subscription-drawer"
 
+export const MOBILE_SUBSCRIPTION_DRAWER_ENTRY_TRIGGER_ID =
+  "mobile-subscription-drawer-entry-trigger"
+
+export const MOBILE_SUBSCRIPTION_DRAWER_HEADER_TRIGGER_ID =
+  "mobile-subscription-drawer-header-trigger"
+
+export type MobileSubscriptionDrawerOpenerId =
+  | typeof MOBILE_SUBSCRIPTION_DRAWER_ENTRY_TRIGGER_ID
+  | typeof MOBILE_SUBSCRIPTION_DRAWER_HEADER_TRIGGER_ID
+
+export const MOBILE_SUBSCRIPTION_DRAWER_TRANSITION_MS = 200
+
 export const MOBILE_LAYOUT_INIT_KEY = "follow:mobile-layout-initialized"
 
-let subscriptionDrawerTrigger: HTMLElement | null = null
+let subscriptionDrawerOpenerId: MobileSubscriptionDrawerOpenerId | null = null
 
-export function getSubscriptionDrawerTrigger() {
-  return subscriptionDrawerTrigger
+export function getSubscriptionDrawerOpenerId() {
+  return subscriptionDrawerOpenerId
+}
+
+export function setSubscriptionDrawerOpener(openerId: MobileSubscriptionDrawerOpenerId) {
+  subscriptionDrawerOpenerId = openerId
+}
+
+export function focusSubscriptionDrawerOpener(
+  openerId: MobileSubscriptionDrawerOpenerId | null = subscriptionDrawerOpenerId,
+) {
+  if (!openerId) {
+    return false
+  }
+
+  const element = document.getElementById(openerId)
+  if (!(element instanceof HTMLElement)) {
+    return false
+  }
+
+  element.focus()
+  return true
 }
 
 export function isMobileSubscriptionDrawerOpen(
@@ -19,9 +51,16 @@ export function isMobileSubscriptionDrawerOpen(
   return isMobile() && (feedColumnShow || feedColumnTempShow)
 }
 
-export function openSubscriptionSidebar() {
-  if (document.activeElement instanceof HTMLElement) {
-    subscriptionDrawerTrigger = document.activeElement
+export function openSubscriptionSidebar(openerId?: MobileSubscriptionDrawerOpenerId) {
+  if (openerId) {
+    setSubscriptionDrawerOpener(openerId)
+  } else if (
+    document.activeElement instanceof HTMLElement &&
+    document.activeElement.id &&
+    (document.activeElement.id === MOBILE_SUBSCRIPTION_DRAWER_ENTRY_TRIGGER_ID ||
+      document.activeElement.id === MOBILE_SUBSCRIPTION_DRAWER_HEADER_TRIGGER_ID)
+  ) {
+    setSubscriptionDrawerOpener(document.activeElement.id as MobileSubscriptionDrawerOpenerId)
   }
 
   if (isMobile()) {

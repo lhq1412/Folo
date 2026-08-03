@@ -150,13 +150,7 @@
       document.documentElement.dataset.buildType = isElectron ? "electron" : "web"
     </script>
     <script>
-      const mobileViewportQuery = window.matchMedia("(max-width: 1023px)")
-      const applyViewportDataset = () => {
-        document.documentElement.dataset.viewport = mobileViewportQuery.matches
-          ? "mobile"
-          : "desktop"
-      }
-      applyViewportDataset()
+      <!-- FOLLOW VIEWPORT BOOTSTRAP INJECT -->
     </script>
   </head>
   <body>

@@ -1,10 +1,12 @@
 import type { RefObject } from "react"
-import { useEffect, useRef } from "react"
+import { useEffect, useLayoutEffect } from "react"
 
-import { getSubscriptionDrawerTrigger } from "~/lib/mobile-sidebar"
+import { focusSubscriptionDrawerOpener, getSubscriptionDrawerOpenerId } from "~/lib/mobile-sidebar"
 
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
+const FOCUS_RESTORE_MAX_ATTEMPTS = 10
 
 function getFocusableElements(container: HTMLElement) {
   return [...container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)].filter(
@@ -21,14 +23,10 @@ export function useMobileSubscriptionDrawerA11y({
   onClose: () => void
   drawerRef: RefObject<HTMLElement | null>
 }) {
-  const restoreFocusRef = useRef<HTMLElement | null>(null)
-
   useEffect(() => {
     if (!open) {
       return
     }
-
-    restoreFocusRef.current = getSubscriptionDrawerTrigger()
 
     const drawer = drawerRef.current
     const focusableElements = drawer ? getFocusableElements(drawer) : []
@@ -71,13 +69,37 @@ export function useMobileSubscriptionDrawerA11y({
 
     return () => {
       document.removeEventListener("keydown", handleKeyDown)
-
-      const restoreTarget = restoreFocusRef.current
-      if (restoreTarget?.isConnected) {
-        restoreTarget.focus()
-      }
     }
   }, [drawerRef, onClose, open])
+
+  useLayoutEffect(() => {
+    if (open) {
+      return
+    }
+
+    const openerId = getSubscriptionDrawerOpenerId()
+    if (!openerId) {
+      return
+    }
+
+    let frameId = 0
+    let attempts = 0
+
+    const restoreFocus = () => {
+      if (focusSubscriptionDrawerOpener(openerId) || attempts >= FOCUS_RESTORE_MAX_ATTEMPTS) {
+        return
+      }
+
+      attempts += 1
+      frameId = requestAnimationFrame(restoreFocus)
+    }
+
+    frameId = requestAnimationFrame(restoreFocus)
+
+    return () => {
+      cancelAnimationFrame(frameId)
+    }
+  }, [open])
 }
 
 export function useMobileSubscriptionDrawerInert({

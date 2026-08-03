@@ -34,6 +34,7 @@ import {
   closeSubscriptionSidebar,
   isMobileSubscriptionDrawerOpen,
   MOBILE_SUBSCRIPTION_DRAWER_ID,
+  MOBILE_SUBSCRIPTION_DRAWER_TRANSITION_MS,
 } from "~/lib/mobile-sidebar"
 import { COMMAND_ID } from "~/modules/command/commands/id"
 import { useCommandBinding } from "~/modules/command/hooks/use-command-binding"
@@ -114,7 +115,30 @@ const FeedResponsiveResizerContainer = ({
   const feedColumnTempShow = useSubscriptionColumnTempShow()
   const mobileDrawerOpen = isMobileSubscriptionDrawerOpen(feedColumnShow, feedColumnTempShow)
   const drawerRef = useRef<HTMLDivElement>(null)
+  const [drawerAccessibilityHidden, setDrawerAccessibilityHidden] = useState(
+    () => isMobileViewport && !mobileDrawerOpen,
+  )
   const t = useI18n()
+
+  useEffect(() => {
+    if (!isMobileViewport) {
+      setDrawerAccessibilityHidden(false)
+      return
+    }
+
+    if (mobileDrawerOpen) {
+      setDrawerAccessibilityHidden(false)
+      return
+    }
+
+    const timer = window.setTimeout(() => {
+      setDrawerAccessibilityHidden(true)
+    }, MOBILE_SUBSCRIPTION_DRAWER_TRANSITION_MS)
+
+    return () => {
+      window.clearTimeout(timer)
+    }
+  }, [isMobileViewport, mobileDrawerOpen])
 
   useMobileSubscriptionDrawerA11y({
     open: mobileDrawerOpen,
@@ -206,6 +230,8 @@ const FeedResponsiveResizerContainer = ({
         aria-label={
           isMobileViewport && mobileDrawerOpen ? t("app.subscription_drawer_label") : undefined
         }
+        aria-hidden={isMobileViewport && drawerAccessibilityHidden ? true : undefined}
+        inert={isMobileViewport && drawerAccessibilityHidden ? true : undefined}
         data-hide-in-print
         className={cn(
           "shrink-0 overflow-hidden",
