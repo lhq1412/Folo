@@ -19,6 +19,7 @@ import { createDependencyChunksPlugin } from "./plugins/vite/deps"
 import { htmlInjectPlugin } from "./plugins/vite/html-inject"
 import { localesPlugin } from "./plugins/vite/locales"
 import manifestPlugin from "./plugins/vite/manifest"
+import { setPrecacheManifestSnapshot } from "./plugins/vite/precache-manifest-snapshot"
 import { createPlatformSpecificImportPlugin } from "./plugins/vite/specific-import"
 import { validateServiceWorkerManifestPlugin } from "./plugins/vite/validate-sw-manifest"
 
@@ -166,15 +167,19 @@ export default ({ mode }) => {
 
             manifestTransforms: [
               (manifest) => {
+                const additionalManifestEntries = [
+                  {
+                    url: "/sw.js?pwa=true",
+                    revision: null,
+                  },
+                ]
+
+                setPrecacheManifestSnapshot([...manifest, ...additionalManifestEntries])
+
                 return {
                   manifest,
                   warnings: [],
-                  additionalManifestEntries: [
-                    {
-                      url: "/sw.js?pwa=true",
-                      revision: null,
-                    },
-                  ],
+                  additionalManifestEntries,
                 }
               },
             ],

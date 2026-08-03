@@ -5,11 +5,17 @@ import { join } from "pathe"
 import { afterEach, describe, expect, it } from "vitest"
 
 import {
-  assertServiceWorkerFileExists,
-  assertServiceWorkerManifestInjected,
-} from "./validate-sw-manifest"
+  assertPrecacheManifestInjectedIntoServiceWorker,
+  assertPrecacheManifestSnapshot,
+  resetPrecacheManifestSnapshot,
+} from "./precache-manifest-snapshot"
+import { assertServiceWorkerBuild, assertServiceWorkerFileExists } from "./validate-sw-manifest"
 
 const tempDirs: string[] = []
+
+afterEach(() => {
+  resetPrecacheManifestSnapshot()
+})
 
 afterEach(async () => {
   await Promise.all(
@@ -38,44 +44,75 @@ describe("assertServiceWorkerFileExists", () => {
   })
 })
 
-describe("assertServiceWorkerManifestInjected", () => {
-  it("passes when the manifest token is replaced with a non-empty precache array", () => {
+describe("assertPrecacheManifestSnapshot", () => {
+  it("passes for a non-empty workbox manifest snapshot", () => {
     expect(() =>
-      assertServiceWorkerManifestInjected(
-        'precacheAndRoute([{url:"/index.html",revision:"abc123"}]);',
+      assertPrecacheManifestSnapshot([
+        { url: "index.html", revision: "abc123" },
+        { url: "/sw.js?pwa=true", revision: null },
+      ]),
+    ).not.toThrow()
+  })
+
+  it("fails when the snapshot is empty", () => {
+    expect(() => assertPrecacheManifestSnapshot([])).toThrow(/snapshot is empty or missing/)
+  })
+})
+
+describe("assertPrecacheManifestInjectedIntoServiceWorker", () => {
+  it("passes when snapshot urls are present in sw.js", () => {
+    expect(() =>
+      assertPrecacheManifestInjectedIntoServiceWorker(
+        'xt([{"revision":"abc123","url":"index.html"}]);',
+        [{ url: "index.html", revision: "abc123" }],
       ),
     ).not.toThrow()
   })
 
-  it("passes for minified workbox precache injection", () => {
+  it("fails when snapshot urls are missing from sw.js", () => {
     expect(() =>
-      assertServiceWorkerManifestInjected(
-        'wt([{"revision":"abc123","url":"index.html"}]);yt();ue();',
+      assertPrecacheManifestInjectedIntoServiceWorker(
+        'const runtimeRoutes=[{url:"/api"}];xt([]);',
+        [{ url: "index.html", revision: "abc123" }],
       ),
+    ).toThrow(/were not injected into sw\.js/)
+  })
+})
+
+describe("assertServiceWorkerBuild", () => {
+  it("passes when snapshot and injected sw.js agree", () => {
+    expect(() =>
+      assertServiceWorkerBuild({
+        swContent: 'xt([{"revision":"abc123","url":"index.html"}]);',
+        precacheManifest: [{ url: "index.html", revision: "abc123" }],
+      }),
     ).not.toThrow()
   })
 
   it("fails when __WB_MANIFEST remains in the built service worker", () => {
     expect(() =>
-      assertServiceWorkerManifestInjected("precacheAndRoute(self.__WB_MANIFEST);"),
+      assertServiceWorkerBuild({
+        swContent: "precacheAndRoute(self.__WB_MANIFEST);",
+        precacheManifest: [{ url: "index.html", revision: "abc123" }],
+      }),
     ).toThrow(/__WB_MANIFEST was not injected/)
   })
 
-  it("fails when precacheAndRoute receives an empty array", () => {
-    expect(() => assertServiceWorkerManifestInjected("precacheAndRoute([]);")).toThrow(
-      /precache manifest is empty/,
-    )
-  })
-
-  it("fails when minified precache receives an empty array", () => {
-    expect(() => assertServiceWorkerManifestInjected("wt([]);yt();")).toThrow(
-      /precache manifest is empty/,
-    )
-  })
-
-  it("fails when no precache manifest entries are present", () => {
+  it("fails when precache snapshot is empty even if unrelated runtime url arrays exist", () => {
     expect(() =>
-      assertServiceWorkerManifestInjected("registerRoute(/./, new CacheFirst());"),
-    ).toThrow(/no precache manifest entries found/)
+      assertServiceWorkerBuild({
+        swContent: 'const runtimeRoutes=[{url:"/api"}];function mt(n){self.precache(n)}xt([]);',
+        precacheManifest: [],
+      }),
+    ).toThrow(/snapshot is empty or missing/)
+  })
+
+  it("fails when unrelated runtime url arrays exist but injected manifest urls are missing", () => {
+    expect(() =>
+      assertServiceWorkerBuild({
+        swContent: 'const runtimeRoutes=[{url:"/api"}];xt([]);',
+        precacheManifest: [{ url: "index.html", revision: "abc123" }],
+      }),
+    ).toThrow(/were not injected into sw\.js/)
   })
 })
