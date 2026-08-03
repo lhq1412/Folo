@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
+import { PWA_BUILD_REVISION_REQUEST, PWA_BUILD_REVISION_RESPONSE } from "./pwa-sw-messages"
 import {
   acceptPwaUpdateId,
   beginPwaUpdateCycle,
@@ -48,12 +49,25 @@ class MockBroadcastChannel {
   }
 }
 
-const createRegistration = (scriptUrl: string) =>
-  ({
-    waiting: { scriptURL: scriptUrl },
-  }) as ServiceWorkerRegistration
-
 const FIXED_SW_URL = "https://app.folo.is/sw.js"
+
+const createRegistration = (scriptUrl: string, buildRevision: string) =>
+  ({
+    waiting: {
+      scriptURL: scriptUrl,
+      postMessage: (message: { type?: string }, transfer: Transferable[]) => {
+        if (message.type !== PWA_BUILD_REVISION_REQUEST) {
+          return
+        }
+
+        const port = transfer[0] as MessagePort
+        port.postMessage({
+          type: PWA_BUILD_REVISION_RESPONSE,
+          revision: buildRevision,
+        })
+      },
+    },
+  }) as ServiceWorkerRegistration
 
 describe("update-coordinator", () => {
   beforeEach(() => {
@@ -92,9 +106,23 @@ describe("update-coordinator", () => {
   })
 
   it("rejects conflicting update ids from another batch", async () => {
-    await resolvePwaUpdateId(createRegistration(FIXED_SW_URL), { contentRevision: "rev-a" })
+    await resolvePwaUpdateId(createRegistration(FIXED_SW_URL, "rev-a"), { buildRevision: "rev-a" })
 
     expect(acceptPwaUpdateId(createPwaUpdateIdFromWaitingWorker(FIXED_SW_URL, "rev-b"))).toBe(false)
+  })
+
+  it("accepts persisted update ids when module memory is stale", async () => {
+    const staleUpdateId = createPwaUpdateIdFromWaitingWorker(FIXED_SW_URL, "rev-v2")
+    const nextUpdateId = createPwaUpdateIdFromWaitingWorker(FIXED_SW_URL, "rev-v3")
+
+    await resolvePwaUpdateId(createRegistration(FIXED_SW_URL, "rev-v2"), {
+      buildRevision: "rev-v2",
+    })
+    localStorage.setItem("folo-pwa-active-update-id-v1", nextUpdateId)
+
+    expect(acceptPwaUpdateId(nextUpdateId)).toBe(true)
+    expect(acceptPwaUpdateId(staleUpdateId)).toBe(false)
+    expect(getCurrentPwaUpdateId()).toBe(nextUpdateId)
   })
 
   it("reuses persisted update ids when a tab later detects needRefresh", () => {
@@ -104,24 +132,41 @@ describe("update-coordinator", () => {
   })
 
   it("converges multiple tabs to the same waiting worker update id", async () => {
-    const registration = createRegistration(FIXED_SW_URL)
+    const registration = createRegistration(FIXED_SW_URL, "rev-v2")
 
-    const firstTabUpdateId = await resolvePwaUpdateId(registration, { contentRevision: "rev-v2" })
-    const secondTabUpdateId = await resolvePwaUpdateId(registration, { contentRevision: "rev-v2" })
+    const firstTabUpdateId = await resolvePwaUpdateId(registration, { buildRevision: "rev-v2" })
+    const secondTabUpdateId = await resolvePwaUpdateId(registration, { buildRevision: "rev-v2" })
 
     expect(firstTabUpdateId).toBe(createPwaUpdateIdFromWaitingWorker(FIXED_SW_URL, "rev-v2"))
     expect(secondTabUpdateId).toBe(firstTabUpdateId)
   })
 
   it("does not inherit deferred state across worker versions with the same script url", async () => {
-    const registration = createRegistration(FIXED_SW_URL)
-    const firstVersionId = await resolvePwaUpdateId(registration, { contentRevision: "rev-v2" })
+    const registration = createRegistration(FIXED_SW_URL, "rev-v2")
+    const firstVersionId = await resolvePwaUpdateId(registration, { buildRevision: "rev-v2" })
     deferPwaUpdateForSession(firstVersionId)
 
-    await resolvePwaUpdateId(registration, { contentRevision: "rev-v3" })
+    await resolvePwaUpdateId(createRegistration(FIXED_SW_URL, "rev-v3"), {
+      buildRevision: "rev-v3",
+    })
 
     expect(isPwaUpdateDeferredForSession(firstVersionId)).toBe(false)
     expect(getCurrentPwaUpdateId()).toBe(createPwaUpdateIdFromWaitingWorker(FIXED_SW_URL, "rev-v3"))
+  })
+
+  it("keeps deferred state for newly opened tabs via localStorage", async () => {
+    const registration = createRegistration(FIXED_SW_URL, "rev-v2")
+    const updateId = await resolvePwaUpdateId(registration, { buildRevision: "rev-v2" })
+    deferPwaUpdateForSession(updateId)
+
+    resetPwaUpdateCoordinatorForTests()
+    localStorage.setItem("folo-pwa-active-update-id-v1", updateId)
+    localStorage.setItem(
+      "folo-pwa-update-deferred-v1",
+      JSON.stringify({ updateId, deferredAt: Date.now() }),
+    )
+
+    expect(isPwaUpdateDeferredForSession(updateId)).toBe(true)
   })
 
   it("shares fallback update ids across tabs via localStorage", () => {

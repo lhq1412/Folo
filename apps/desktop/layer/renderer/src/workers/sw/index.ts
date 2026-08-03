@@ -18,7 +18,13 @@ import {
   PWA_RUNTIME_CACHE_NAMES,
   shouldCacheAsArticleImage,
 } from "../../lib/pwa/cache-config"
+import {
+  PWA_BUILD_REVISION_REQUEST,
+  PWA_BUILD_REVISION_RESPONSE,
+} from "../../lib/pwa/pwa-sw-messages"
 import { registerPusher } from "./pusher"
+
+declare const PWA_BUILD_REVISION: string
 
 declare let self: ServiceWorkerGlobalScope & {
   __FOLO_PRECACHE_MANIFEST__: Array<{ revision?: string | null; url: string }>
@@ -33,6 +39,22 @@ clientsClaim()
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(clearLegacyPwaRuntimeCaches())
+})
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type !== PWA_BUILD_REVISION_REQUEST) {
+    return
+  }
+
+  const port = event.ports[0]
+  if (!port) {
+    return
+  }
+
+  port.postMessage({
+    type: PWA_BUILD_REVISION_RESPONSE,
+    revision: PWA_BUILD_REVISION,
+  })
 })
 
 const navigationHandler = createHandlerBoundToURL("/index.html")

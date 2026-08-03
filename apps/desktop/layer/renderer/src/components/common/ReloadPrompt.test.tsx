@@ -5,9 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import type { UpdaterStatusAtom } from "~/atoms/updater"
 import { setUpdaterStatus } from "~/atoms/updater"
+import { PWA_BUILD_REVISION_REQUEST, PWA_BUILD_REVISION_RESPONSE } from "~/lib/pwa/pwa-sw-messages"
 import {
   createPwaUpdateIdFromWaitingWorker,
-  hashServiceWorkerContent,
   isPwaUpdateDeferredForSession,
   resetPwaUpdateCoordinatorForTests,
 } from "~/lib/pwa/update-coordinator"
@@ -18,13 +18,25 @@ const mockUseRegisterSW = vi.fn()
 const mockUpdateServiceWorker = vi.fn(async () => {})
 
 const WAITING_SW_URL = "https://example.com/sw.js"
-const WAITING_SW_CONTENT = "mock-sw-content-v2"
+const WAITING_SW_BUILD_REVISION = "mock-build-revision-v2"
+const sharedUpdateId = createPwaUpdateIdFromWaitingWorker(WAITING_SW_URL, WAITING_SW_BUILD_REVISION)
 
 const mockRegistration = {
-  waiting: { scriptURL: WAITING_SW_URL },
-} as ServiceWorkerRegistration
+  waiting: {
+    scriptURL: WAITING_SW_URL,
+    postMessage: (message: { type?: string }, transfer: Transferable[]) => {
+      if (message.type !== PWA_BUILD_REVISION_REQUEST) {
+        return
+      }
 
-let sharedUpdateId = ""
+      const port = transfer[0] as MessagePort
+      port.postMessage({
+        type: PWA_BUILD_REVISION_RESPONSE,
+        revision: WAITING_SW_BUILD_REVISION,
+      })
+    },
+  },
+} as ServiceWorkerRegistration
 
 vi.mock("virtual:pwa-register/react", () => ({
   useRegisterSW: (options: {
@@ -101,23 +113,12 @@ describe("ReloadPrompt cross-tab updates", () => {
   const roots: Root[] = []
   let reloadSpy: ReturnType<typeof vi.spyOn> | null = null
 
-  beforeEach(async () => {
+  beforeEach(() => {
     resetPwaUpdateCoordinatorForTests()
-    sessionStorage.clear()
     localStorage.clear()
     MockBroadcastChannel.channels.clear()
     vi.stubGlobal("BroadcastChannel", MockBroadcastChannel)
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => ({
-        ok: true,
-        text: async () => WAITING_SW_CONTENT,
-      })),
-    )
     vi.clearAllMocks()
-
-    const revision = await hashServiceWorkerContent(WAITING_SW_CONTENT)
-    sharedUpdateId = createPwaUpdateIdFromWaitingWorker(WAITING_SW_URL, revision)
 
     reloadSpy = vi.spyOn(window.location, "reload").mockImplementation(() => {})
 
@@ -140,7 +141,6 @@ describe("ReloadPrompt cross-tab updates", () => {
     reloadSpy?.mockRestore()
     reloadSpy = null
     resetPwaUpdateCoordinatorForTests()
-    sessionStorage.clear()
     localStorage.clear()
     MockBroadcastChannel.channels.clear()
     vi.unstubAllGlobals()

@@ -32,6 +32,7 @@ export default defineProject({
     APP_DEV_CWD: JSON.stringify(process.cwd()),
 
     GIT_COMMIT_SHA: "'SHA'",
+    PWA_BUILD_REVISION: JSON.stringify("test-build-revision"),
     DEBUG: process.env.DEBUG === "true",
     ELECTRON: "false",
   },

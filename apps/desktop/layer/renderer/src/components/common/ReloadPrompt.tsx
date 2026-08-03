@@ -16,6 +16,7 @@ import {
   getCurrentPwaUpdateId,
   isPwaUpdateDeferredForSession,
   registerPeriodicServiceWorkerCheck,
+  registerPwaUpdateStorageSync,
   resolvePwaUpdateId,
 } from "~/lib/pwa/update-coordinator"
 
@@ -81,6 +82,11 @@ export function ReloadPrompt() {
   })
 
   updateServiceWorkerRef.current = updateServiceWorker
+
+  useEffect(() => {
+    const cleanupStorageSync = registerPwaUpdateStorageSync()
+    return cleanupStorageSync
+  }, [])
 
   useEffect(() => {
     const channel = createPwaUpdateChannel()
