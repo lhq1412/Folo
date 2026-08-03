@@ -39,6 +39,7 @@
   "app.pwa.update_deferred": "新版本已就绪，你可以在方便时更新。",
   "app.pwa.update_description": "新版本已就绪。你可以立即更新，或稍后继续阅读。",
   "app.pwa.update_failed": "更新失败，请联网后重试。",
+  "app.pwa.update_identity_unavailable": "无法确认等待中的更新。请在联网后重试。",
   "app.pwa.update_later": "稍后",
   "app.pwa.update_now": "立即更新",
   "app.pwa.update_reload_pending": "新版本已激活。请先保存当前内容，再刷新页面。",

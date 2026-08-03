@@ -11,6 +11,8 @@ import {
   getCurrentPwaUpdateId,
   isMatchingPwaUpdateId,
   isPwaUpdateDeferredForSession,
+  PwaUpdateIdentityUnavailableError,
+  requestWaitingWorkerBuildRevisionWithRetry,
   resetPwaUpdateCoordinatorForTests,
   resolvePwaUpdateId,
 } from "./update-coordinator"
@@ -68,6 +70,14 @@ const createRegistration = (scriptUrl: string, buildRevision: string) =>
       },
     },
   }) as ServiceWorkerRegistration
+
+const createSilentRegistration = (scriptUrl: string) =>
+  ({
+    waiting: {
+      scriptURL: scriptUrl,
+      postMessage: () => {},
+    },
+  }) as unknown as ServiceWorkerRegistration
 
 describe("update-coordinator", () => {
   beforeEach(() => {
@@ -192,5 +202,87 @@ describe("update-coordinator", () => {
     expect(isPwaUpdateDeferredForSession(updateId)).toBe(true)
 
     receiver.close()
+  })
+
+  it("does not inherit deferred state when revision handshake fails", async () => {
+    vi.useFakeTimers()
+
+    const v2UpdateId = createPwaUpdateIdFromWaitingWorker(FIXED_SW_URL, "rev-v2")
+    localStorage.setItem("folo-pwa-active-update-id-v1", v2UpdateId)
+    deferPwaUpdateForSession(v2UpdateId)
+
+    const pending = resolvePwaUpdateId(createSilentRegistration(FIXED_SW_URL))
+    const assertion = expect(pending).rejects.toBeInstanceOf(PwaUpdateIdentityUnavailableError)
+    await vi.runAllTimersAsync()
+    await assertion
+
+    expect(getCurrentPwaUpdateId()).toBeNull()
+    expect(isPwaUpdateDeferredForSession(v2UpdateId)).toBe(false)
+
+    vi.useRealTimers()
+  })
+
+  it("retries revision handshake before failing", async () => {
+    let attempts = 0
+    const registration = {
+      waiting: {
+        scriptURL: FIXED_SW_URL,
+        postMessage: (message: { type?: string }, transfer: Transferable[]) => {
+          attempts += 1
+          if (attempts < 2) {
+            return
+          }
+
+          const port = transfer[0] as MessagePort
+          port.postMessage({
+            type: PWA_BUILD_REVISION_RESPONSE,
+            revision: "rev-v3",
+          })
+        },
+      },
+    } as ServiceWorkerRegistration
+
+    const revision = await requestWaitingWorkerBuildRevisionWithRetry(
+      registration.waiting as ServiceWorker,
+      {
+        attempts: 3,
+        baseDelayMs: 1,
+      },
+    )
+
+    expect(revision).toBe("rev-v3")
+    expect(attempts).toBe(2)
+  })
+
+  it("resolves canonical update id after a failed revision attempt", async () => {
+    vi.useFakeTimers()
+
+    let attempts = 0
+    const registration = {
+      waiting: {
+        scriptURL: FIXED_SW_URL,
+        postMessage: (message: { type?: string }, transfer: Transferable[]) => {
+          attempts += 1
+          if (attempts < 2) {
+            return
+          }
+
+          const port = transfer[0] as MessagePort
+          port.postMessage({
+            type: PWA_BUILD_REVISION_RESPONSE,
+            revision: "rev-v3",
+          })
+        },
+      },
+    } as ServiceWorkerRegistration
+
+    const pending = resolvePwaUpdateId(registration)
+    await vi.runAllTimersAsync()
+    const updateId = await pending
+
+    expect(updateId).toBe(createPwaUpdateIdFromWaitingWorker(FIXED_SW_URL, "rev-v3"))
+    expect(getCurrentPwaUpdateId()).toBe(updateId)
+
+    vi.useRealTimers()
   })
 })

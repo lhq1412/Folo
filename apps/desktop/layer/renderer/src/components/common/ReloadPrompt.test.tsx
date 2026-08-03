@@ -9,6 +9,8 @@ import { PWA_BUILD_REVISION_REQUEST, PWA_BUILD_REVISION_RESPONSE } from "~/lib/p
 import {
   createPwaUpdateIdFromWaitingWorker,
   isPwaUpdateDeferredForSession,
+  PWA_ACTIVE_UPDATE_ID_KEY,
+  PWA_UPDATE_DEFERRED_KEY,
   resetPwaUpdateCoordinatorForTests,
 } from "~/lib/pwa/update-coordinator"
 
@@ -274,5 +276,41 @@ describe("ReloadPrompt cross-tab updates", () => {
 
     receiver.close()
     chatInput.remove()
+  })
+
+  it("syncs deferred state from localStorage when BroadcastChannel is unavailable", async () => {
+    vi.stubGlobal("BroadcastChannel", undefined)
+
+    mockUseRegisterSW.mockImplementation((options) => {
+      options?.onRegisteredSW?.(WAITING_SW_URL, mockRegistration)
+      return {
+        needRefresh: [true],
+        updateServiceWorker: mockUpdateServiceWorker,
+      }
+    })
+
+    const { root } = await renderReloadPrompt()
+    roots.push(root)
+    await act(async () => {})
+
+    localStorage.setItem(PWA_ACTIVE_UPDATE_ID_KEY, sharedUpdateId)
+    localStorage.setItem(
+      PWA_UPDATE_DEFERRED_KEY,
+      JSON.stringify({ updateId: sharedUpdateId, deferredAt: Date.now() }),
+    )
+
+    window.dispatchEvent(
+      new StorageEvent("storage", {
+        key: PWA_UPDATE_DEFERRED_KEY,
+        newValue: JSON.stringify({ updateId: sharedUpdateId, deferredAt: Date.now() }),
+        storageArea: localStorage,
+      }),
+    )
+
+    expect(isPwaUpdateDeferredForSession(sharedUpdateId)).toBe(true)
+    expect(getPwaStatusCalls().at(-1)).toMatchObject({
+      type: "pwa",
+      status: "deferred",
+    })
   })
 })

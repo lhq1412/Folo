@@ -39,6 +39,7 @@
   "app.pwa.update_deferred": "新しいバージョンがあります。都合のよいときに更新できます。",
   "app.pwa.update_description": "新しいバージョンがあります。今すぐ更新するか、後で更新できます。",
   "app.pwa.update_failed": "更新に失敗しました。オンライン時にもう一度お試しください。",
+  "app.pwa.update_identity_unavailable": "待機中の更新を確認できませんでした。オンライン時にもう一度お試しください。",
   "app.pwa.update_later": "後で",
   "app.pwa.update_now": "今すぐ更新",
   "app.pwa.update_reload_pending": "新しいバージョンが有効になりました。作業内容を保存してから再読み込みしてください。",

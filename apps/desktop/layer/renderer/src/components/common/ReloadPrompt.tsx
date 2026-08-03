@@ -15,6 +15,7 @@ import {
   deferPwaUpdateForSession,
   getCurrentPwaUpdateId,
   isPwaUpdateDeferredForSession,
+  PwaUpdateIdentityUnavailableError,
   registerPeriodicServiceWorkerCheck,
   registerPwaUpdateStorageSync,
   resolvePwaUpdateId,
@@ -29,6 +30,7 @@ export function ReloadPrompt() {
   const cleanupPeriodicCheckRef = useRef<(() => void) | null>(null)
   const cleanupWorkerListenerRef = useRef<(() => void) | null>(null)
   const currentUpdateIdRef = useRef<string | null>(null)
+  const needRefreshRef = useRef(false)
 
   const {
     needRefresh: [needRefresh],
@@ -82,9 +84,42 @@ export function ReloadPrompt() {
   })
 
   updateServiceWorkerRef.current = updateServiceWorker
+  needRefreshRef.current = needRefresh
+
+  const syncUpdaterStatusFromStorage = () => {
+    if (!needRefreshRef.current || pwaUpdateStarted) {
+      return
+    }
+
+    const updateId = getCurrentPwaUpdateId()
+    if (!updateId) {
+      return
+    }
+
+    currentUpdateIdRef.current = updateId
+
+    const finishUpdate = async () => {
+      await performPwaUpdate(updateServiceWorkerRef.current, updateId)
+    }
+
+    setUpdaterStatus(
+      createPwaUpdaterStatus(
+        isPwaUpdateDeferredForSession(updateId) ? "deferred" : "ready",
+        finishUpdate,
+        { updateId },
+      ),
+    )
+  }
 
   useEffect(() => {
-    const cleanupStorageSync = registerPwaUpdateStorageSync()
+    const cleanupStorageSync = registerPwaUpdateStorageSync({
+      onActiveUpdateIdChanged: () => {
+        syncUpdaterStatusFromStorage()
+      },
+      onDeferredStateChanged: () => {
+        syncUpdaterStatusFromStorage()
+      },
+    })
     return cleanupStorageSync
   }, [])
 
@@ -173,20 +208,39 @@ export function ReloadPrompt() {
         return
       }
 
-      const updateId = await resolvePwaUpdateId(registration)
-      currentUpdateIdRef.current = updateId
+      try {
+        const updateId = await resolvePwaUpdateId(registration)
+        currentUpdateIdRef.current = updateId
 
-      const finishUpdate = async () => {
-        await performPwaUpdate(updateServiceWorkerRef.current, updateId)
+        const finishUpdate = async () => {
+          await performPwaUpdate(updateServiceWorkerRef.current, updateId)
+        }
+
+        setUpdaterStatus(
+          createPwaUpdaterStatus(
+            isPwaUpdateDeferredForSession(updateId) ? "deferred" : "ready",
+            finishUpdate,
+            { updateId },
+          ),
+        )
+      } catch (error) {
+        if (error instanceof PwaUpdateIdentityUnavailableError) {
+          setUpdaterStatus(
+            createPwaUpdaterStatus(
+              "failed",
+              async () => {
+                await applyNeedRefresh()
+              },
+              {
+                error: i18n.t("app.pwa.update_identity_unavailable"),
+              },
+            ),
+          )
+          return
+        }
+
+        throw error
       }
-
-      setUpdaterStatus(
-        createPwaUpdaterStatus(
-          isPwaUpdateDeferredForSession(updateId) ? "deferred" : "ready",
-          finishUpdate,
-          { updateId },
-        ),
-      )
     }
 
     void applyNeedRefresh()

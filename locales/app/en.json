@@ -39,6 +39,7 @@
   "app.pwa.update_deferred": "A new version is ready. Update when it works for you.",
   "app.pwa.update_description": "A new version is ready. Update now or keep reading and update later.",
   "app.pwa.update_failed": "Update failed. Try again when you are back online.",
+  "app.pwa.update_identity_unavailable": "Could not verify the waiting update. Try again when you are back online.",
   "app.pwa.update_later": "Later",
   "app.pwa.update_now": "Update now",
   "app.pwa.update_reload_pending": "A new version is active. Save your work, then reload to continue.",

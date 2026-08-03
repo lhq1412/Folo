@@ -2,8 +2,12 @@ import type { PwaBuildRevisionResponseMessage } from "./pwa-sw-messages"
 import { PWA_BUILD_REVISION_REQUEST, PWA_BUILD_REVISION_RESPONSE } from "./pwa-sw-messages"
 
 const PWA_UPDATE_CHANNEL_NAME = "folo-pwa-update-v1"
-const PWA_UPDATE_DEFERRED_KEY = "folo-pwa-update-deferred-v1"
-const PWA_ACTIVE_UPDATE_ID_KEY = "folo-pwa-active-update-id-v1"
+export const PWA_UPDATE_DEFERRED_KEY = "folo-pwa-update-deferred-v1"
+export const PWA_ACTIVE_UPDATE_ID_KEY = "folo-pwa-active-update-id-v1"
+const PWA_UPDATE_CLAIM_LOCK = "folo-pwa-update-claim-v1"
+const REVISION_REQUEST_TIMEOUT_MS = 2000
+const REVISION_RETRY_ATTEMPTS = 3
+const REVISION_RETRY_BASE_DELAY_MS = 250
 
 export type PwaUpdateBroadcastMessage =
   | { type: "deferred"; updateId: string }
@@ -11,9 +15,21 @@ export type PwaUpdateBroadcastMessage =
   | { type: "update-completed"; updateId: string }
   | { type: "update-failed"; updateId: string; error: string }
 
+export type PwaUpdateStorageSyncHandlers = {
+  onActiveUpdateIdChanged?: (updateId: string | null) => void
+  onDeferredStateChanged?: () => void
+}
+
 type DeferredUpdateRecord = {
   updateId: string
   deferredAt: number
+}
+
+export class PwaUpdateIdentityUnavailableError extends Error {
+  constructor() {
+    super("PWA update identity unavailable")
+    this.name = "PwaUpdateIdentityUnavailableError"
+  }
 }
 
 let currentPwaUpdateId: string | null = null
@@ -63,6 +79,29 @@ function clearStaleDeferredForUpdateId(updateId: string): void {
   }
 }
 
+function claimFallbackUpdateIdSync(): string {
+  const persistedUpdateId = syncCurrentPwaUpdateIdFromStorage()
+  if (persistedUpdateId) {
+    return persistedUpdateId
+  }
+
+  const candidateUpdateId = crypto.randomUUID()
+  localStorage.setItem(PWA_ACTIVE_UPDATE_ID_KEY, candidateUpdateId)
+  const resolvedUpdateId = syncCurrentPwaUpdateIdFromStorage() ?? candidateUpdateId
+  currentPwaUpdateId = resolvedUpdateId
+  return resolvedUpdateId
+}
+
+async function claimFallbackUpdateId(): Promise<string> {
+  const claim = () => claimFallbackUpdateIdSync()
+
+  if (typeof navigator !== "undefined" && "locks" in navigator) {
+    return navigator.locks.request(PWA_UPDATE_CLAIM_LOCK, claim)
+  }
+
+  return claim()
+}
+
 export function createPwaUpdateIdFromWaitingWorker(
   scriptUrl: string,
   buildRevision: string,
@@ -72,7 +111,7 @@ export function createPwaUpdateIdFromWaitingWorker(
 
 export async function requestWaitingWorkerBuildRevision(
   worker: ServiceWorker,
-  timeoutMs = 2000,
+  timeoutMs = REVISION_REQUEST_TIMEOUT_MS,
 ): Promise<string | null> {
   if (typeof MessageChannel === "undefined") {
     return null
@@ -108,6 +147,29 @@ export async function requestWaitingWorkerBuildRevision(
   })
 }
 
+export async function requestWaitingWorkerBuildRevisionWithRetry(
+  worker: ServiceWorker,
+  options?: { attempts?: number; baseDelayMs?: number },
+): Promise<string | null> {
+  const attempts = options?.attempts ?? REVISION_RETRY_ATTEMPTS
+  const baseDelayMs = options?.baseDelayMs ?? REVISION_RETRY_BASE_DELAY_MS
+
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    const revision = await requestWaitingWorkerBuildRevision(worker)
+    if (revision) {
+      return revision
+    }
+
+    if (attempt < attempts - 1) {
+      await new Promise((resolve) => {
+        setTimeout(resolve, baseDelayMs * (attempt + 1))
+      })
+    }
+  }
+
+  return null
+}
+
 export async function resolvePwaUpdateId(
   registration?: ServiceWorkerRegistration | null,
   options?: { buildRevision?: string },
@@ -115,29 +177,24 @@ export async function resolvePwaUpdateId(
   const waitingWorker = registration?.waiting
   if (waitingWorker) {
     const buildRevision =
-      options?.buildRevision ?? (await requestWaitingWorkerBuildRevision(waitingWorker))
+      options?.buildRevision ?? (await requestWaitingWorkerBuildRevisionWithRetry(waitingWorker))
     if (buildRevision) {
       const updateId = createPwaUpdateIdFromWaitingWorker(waitingWorker.scriptURL, buildRevision)
       clearStaleDeferredForUpdateId(updateId)
       persistPwaUpdateId(updateId)
       return updateId
     }
+
+    clearActivePwaUpdateId()
+    clearDeferredPwaUpdateForSession()
+    throw new PwaUpdateIdentityUnavailableError()
   }
 
-  return beginPwaUpdateCycle()
+  return claimFallbackUpdateId()
 }
 
 export function beginPwaUpdateCycle(): string {
-  const persistedUpdateId = syncCurrentPwaUpdateIdFromStorage()
-  if (persistedUpdateId) {
-    return persistedUpdateId
-  }
-
-  const candidateUpdateId = crypto.randomUUID()
-  localStorage.setItem(PWA_ACTIVE_UPDATE_ID_KEY, candidateUpdateId)
-  const resolvedUpdateId = syncCurrentPwaUpdateIdFromStorage() ?? candidateUpdateId
-  currentPwaUpdateId = resolvedUpdateId
-  return resolvedUpdateId
+  return claimFallbackUpdateIdSync()
 }
 
 export function getCurrentPwaUpdateId(): string | null {
@@ -195,7 +252,7 @@ export function clearDeferredPwaUpdateForSession(): void {
   localStorage.removeItem(PWA_UPDATE_DEFERRED_KEY)
 }
 
-export function registerPwaUpdateStorageSync(): () => void {
+export function registerPwaUpdateStorageSync(handlers?: PwaUpdateStorageSyncHandlers): () => void {
   if (typeof window === "undefined") {
     return () => {}
   }
@@ -203,6 +260,11 @@ export function registerPwaUpdateStorageSync(): () => void {
   const handleStorage = (event: StorageEvent) => {
     if (event.key === PWA_ACTIVE_UPDATE_ID_KEY) {
       currentPwaUpdateId = event.newValue
+      handlers?.onActiveUpdateIdChanged?.(event.newValue)
+    }
+
+    if (event.key === PWA_UPDATE_DEFERRED_KEY) {
+      handlers?.onDeferredStateChanged?.()
     }
   }
 
