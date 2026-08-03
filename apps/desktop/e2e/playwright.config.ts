@@ -1,6 +1,7 @@
 import { defineConfig, devices } from "@playwright/test"
 
 import { resolveDesktopE2EEnv } from "./support/env"
+import { MOBILE_DRAWER_AUTH_FILE } from "./support/mobile-drawer-fixture"
 
 const env = resolveDesktopE2EEnv()
 
@@ -35,9 +36,23 @@ export default defineConfig({
   },
   projects: [
     {
+      name: "mobile-drawer-setup",
+      testMatch: /tests\/web\/mobile-drawer-a11y\.setup\.ts/,
+      use: {
+        ...devices["Pixel 7"],
+        channel: "chromium",
+        ignoreHTTPSErrors: true,
+        launchOptions: {
+          args: ["--disable-web-security"],
+        },
+      },
+    },
+    {
       name: "web-mobile",
       testMatch: /tests\/web\/mobile-drawer-a11y\.spec\.ts/,
+      dependencies: ["mobile-drawer-setup"],
       use: {
+        storageState: MOBILE_DRAWER_AUTH_FILE,
         ...devices["Pixel 7"],
         channel: "chromium",
         ignoreHTTPSErrors: true,

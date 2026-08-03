@@ -1,13 +1,13 @@
 import { expect, test } from "@playwright/test"
 
-import { createTestAccount, tryDeleteCurrentUser } from "../../support/account"
-import {
-  dismissFeedForm,
-  followOnboardingFeed,
-  openWebApp,
-  registerWithCredential,
-} from "../../support/app"
+import { tryDeleteCurrentUser } from "../../support/account"
+import { openWebApp } from "../../support/app"
 import { resolveDesktopE2EEnv } from "../../support/env"
+import {
+  ensureMobileDrawerTimelineReady,
+  openMobileSubscriptionDrawerFromEntry,
+  resolveMobileDrawerTestAccount,
+} from "../../support/mobile-drawer-fixture"
 
 const env = resolveDesktopE2EEnv()
 
@@ -40,28 +40,26 @@ test.describe("mobile subscription drawer a11y", () => {
   })
 
   test.beforeEach(async ({ page }) => {
-    const account = createTestAccount("mobile-drawer-a11y")
-    await openWebApp(page, env, "/timeline/articles/all/pending")
-    await registerWithCredential(page, account)
-    await followOnboardingFeed(page, env)
-    await dismissFeedForm(page)
-    await openWebApp(page, env, "/timeline/articles/all/pending")
+    await ensureMobileDrawerTimelineReady(page, env)
   })
 
-  test.afterEach(async ({ page }) => {
+  test.afterAll(async ({ browser }) => {
+    const fixedAccount = resolveMobileDrawerTestAccount()
+    if (!fixedAccount) {
+      return
+    }
+
+    const context = await browser.newContext()
+    const page = await context.newPage()
+    await ensureMobileDrawerTimelineReady(page, env)
     await tryDeleteCurrentUser(page, env).catch(() => {})
+    await context.close()
   })
 
   test("moves focus into the drawer immediately after open", async ({ page }) => {
-    const entryTrigger = page.locator(
-      '[data-testid="mobile-subscription-drawer-entry-trigger"]:visible',
-    )
     const drawer = page.locator("#mobile-subscription-drawer")
 
-    await expect(entryTrigger).toBeVisible({ timeout: 30_000 })
-    await entryTrigger.click()
-
-    await expect(drawer).toHaveAttribute("aria-modal", "true")
+    await openMobileSubscriptionDrawerFromEntry(page)
     await expect(drawer).not.toHaveAttribute("aria-hidden", "true")
     await expect
       .poll(() => drawer.evaluate((element) => element.contains(document.activeElement)))
@@ -69,7 +67,9 @@ test.describe("mobile subscription drawer a11y", () => {
 
     const activeElementTag = await page.evaluate(() => document.activeElement?.tagName ?? "")
     expect(activeElementTag).not.toBe("BODY")
-    await expect(entryTrigger).not.toBeFocused()
+
+    const activeElementId = await page.evaluate(() => document.activeElement?.id ?? "")
+    expect(activeElementId).not.toBe("mobile-subscription-drawer-entry-trigger")
   })
 
   test("restores focus to the entry trigger after Escape and backdrop close", async ({ page }) => {
@@ -78,51 +78,27 @@ test.describe("mobile subscription drawer a11y", () => {
     )
     const drawer = page.locator("#mobile-subscription-drawer")
 
-    await expect(entryTrigger).toBeVisible({ timeout: 30_000 })
-
-    await entryTrigger.click()
-    await expect(drawer).toHaveAttribute("aria-modal", "true")
+    await openMobileSubscriptionDrawerFromEntry(page)
 
     await page.keyboard.press("Escape")
     await expect(drawer).toHaveAttribute("aria-hidden", "true")
     await expect(entryTrigger).toBeFocused()
 
-    await entryTrigger.click()
-    await expect(drawer).toHaveAttribute("aria-modal", "true")
+    await openMobileSubscriptionDrawerFromEntry(page)
 
     await page.mouse.click(350, 400)
     await expect(drawer).toHaveAttribute("aria-hidden", "true")
     await expect(entryTrigger).toBeFocused()
   })
 
-  test("traps focus inside the drawer while it is open", async ({ page }) => {
-    const entryTrigger = page.locator(
-      '[data-testid="mobile-subscription-drawer-entry-trigger"]:visible',
-    )
+  test("isolates page content while the drawer is open", async ({ page }) => {
     const drawer = page.locator("#mobile-subscription-drawer")
+    const main = page.locator("main")
 
-    await expect(entryTrigger).toBeVisible({ timeout: 30_000 })
-    await entryTrigger.click()
+    await openMobileSubscriptionDrawerFromEntry(page)
     await expect(drawer).toHaveAttribute("aria-modal", "true")
-    await expect(drawer).not.toHaveAttribute("aria-hidden", "true")
-
-    const focusableCount = await drawer.evaluate((element) => {
-      const selector =
-        'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
-      return [...element.querySelectorAll<HTMLElement>(selector)].filter(
-        (node) => !node.hasAttribute("disabled") && node.tabIndex !== -1,
-      ).length
-    })
-
-    expect(focusableCount).toBeGreaterThanOrEqual(2)
-
-    for (let index = 0; index < focusableCount + 2; index += 1) {
-      await page.keyboard.press("Tab")
-      const isInsideDrawer = await drawer.evaluate((element) =>
-        element.contains(document.activeElement),
-      )
-      expect(isInsideDrawer).toBe(true)
-    }
+    await expect(main).toHaveAttribute("inert", "")
+    await expect(main).toHaveAttribute("aria-hidden", "true")
   })
 
   test("keeps closed drawer controls out of the tab order", async ({ page }) => {
@@ -131,7 +107,6 @@ test.describe("mobile subscription drawer a11y", () => {
     )
     const drawer = page.locator("#mobile-subscription-drawer")
 
-    await expect(entryTrigger).toBeVisible({ timeout: 30_000 })
     await expect(drawer).toHaveAttribute("aria-hidden", "true")
 
     await entryTrigger.focus()

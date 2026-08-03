@@ -45,6 +45,7 @@ apps/desktop/resources/cli
 !.codex/environments/environment.toml
 
 # E2E outputs
+/apps/desktop/e2e/.auth/
 /apps/desktop/e2e/playwright-report/
 /apps/desktop/e2e/test-results/
 /apps/mobile/e2e/artifacts/
