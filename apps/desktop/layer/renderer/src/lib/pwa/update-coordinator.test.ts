@@ -5,6 +5,7 @@ import {
   beginPwaUpdateCycle,
   broadcastPwaUpdateDeferred,
   clearDeferredPwaUpdateForSession,
+  createPwaUpdateIdFromWaitingWorker,
   deferPwaUpdateForSession,
   getCurrentPwaUpdateId,
   isMatchingPwaUpdateId,
@@ -52,6 +53,8 @@ const createRegistration = (scriptUrl: string) =>
     waiting: { scriptURL: scriptUrl },
   }) as ServiceWorkerRegistration
 
+const FIXED_SW_URL = "https://app.folo.is/sw.js"
+
 describe("update-coordinator", () => {
   beforeEach(() => {
     resetPwaUpdateCoordinatorForTests()
@@ -88,10 +91,10 @@ describe("update-coordinator", () => {
     expect(isMatchingPwaUpdateId("remote-update-id")).toBe(true)
   })
 
-  it("rejects conflicting update ids from another batch", () => {
-    resolvePwaUpdateId(createRegistration("https://example.com/sw-a.js"))
+  it("rejects conflicting update ids from another batch", async () => {
+    await resolvePwaUpdateId(createRegistration(FIXED_SW_URL), { contentRevision: "rev-a" })
 
-    expect(acceptPwaUpdateId("sw:https://example.com/sw-b.js")).toBe(false)
+    expect(acceptPwaUpdateId(createPwaUpdateIdFromWaitingWorker(FIXED_SW_URL, "rev-b"))).toBe(false)
   })
 
   it("reuses persisted update ids when a tab later detects needRefresh", () => {
@@ -100,14 +103,25 @@ describe("update-coordinator", () => {
     expect(beginPwaUpdateCycle()).toBe("remote-update-id")
   })
 
-  it("converges multiple tabs to the same waiting worker update id", () => {
-    const registration = createRegistration("https://example.com/sw-v2.js")
+  it("converges multiple tabs to the same waiting worker update id", async () => {
+    const registration = createRegistration(FIXED_SW_URL)
 
-    const firstTabUpdateId = resolvePwaUpdateId(registration)
-    const secondTabUpdateId = resolvePwaUpdateId(registration)
+    const firstTabUpdateId = await resolvePwaUpdateId(registration, { contentRevision: "rev-v2" })
+    const secondTabUpdateId = await resolvePwaUpdateId(registration, { contentRevision: "rev-v2" })
 
-    expect(firstTabUpdateId).toBe("sw:https://example.com/sw-v2.js")
+    expect(firstTabUpdateId).toBe(createPwaUpdateIdFromWaitingWorker(FIXED_SW_URL, "rev-v2"))
     expect(secondTabUpdateId).toBe(firstTabUpdateId)
+  })
+
+  it("does not inherit deferred state across worker versions with the same script url", async () => {
+    const registration = createRegistration(FIXED_SW_URL)
+    const firstVersionId = await resolvePwaUpdateId(registration, { contentRevision: "rev-v2" })
+    deferPwaUpdateForSession(firstVersionId)
+
+    await resolvePwaUpdateId(registration, { contentRevision: "rev-v3" })
+
+    expect(isPwaUpdateDeferredForSession(firstVersionId)).toBe(false)
+    expect(getCurrentPwaUpdateId()).toBe(createPwaUpdateIdFromWaitingWorker(FIXED_SW_URL, "rev-v3"))
   })
 
   it("shares fallback update ids across tabs via localStorage", () => {

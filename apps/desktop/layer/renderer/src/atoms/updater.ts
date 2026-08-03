@@ -19,6 +19,7 @@ type RendererUpdaterStatus = BaseUpdaterStatus<"renderer">
 type PwaUpdaterStatus = BaseUpdaterStatus<"pwa"> & {
   deferUpdate?: () => void
   error?: string
+  reloadOnly?: boolean
 }
 
 type DistributionUpdaterStatus = BaseUpdaterStatus<"distribution"> & {

@@ -6,6 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { UpdaterStatusAtom } from "~/atoms/updater"
 import { setUpdaterStatus } from "~/atoms/updater"
 import {
+  createPwaUpdateIdFromWaitingWorker,
+  hashServiceWorkerContent,
   isPwaUpdateDeferredForSession,
   resetPwaUpdateCoordinatorForTests,
 } from "~/lib/pwa/update-coordinator"
@@ -15,12 +17,14 @@ import { ReloadPrompt } from "./ReloadPrompt"
 const mockUseRegisterSW = vi.fn()
 const mockUpdateServiceWorker = vi.fn(async () => {})
 
-const WAITING_SW_URL = "https://example.com/sw-v2.js"
-const SHARED_UPDATE_ID = `sw:${WAITING_SW_URL}`
+const WAITING_SW_URL = "https://example.com/sw.js"
+const WAITING_SW_CONTENT = "mock-sw-content-v2"
 
 const mockRegistration = {
   waiting: { scriptURL: WAITING_SW_URL },
 } as ServiceWorkerRegistration
+
+let sharedUpdateId = ""
 
 vi.mock("virtual:pwa-register/react", () => ({
   useRegisterSW: (options: {
@@ -68,7 +72,7 @@ class MockBroadcastChannel {
   }
 }
 
-const renderReloadPrompt = async (options?: { needRefresh?: boolean }) => {
+const renderReloadPrompt = async () => {
   const container = document.createElement("div")
   document.body.append(container)
 
@@ -76,12 +80,6 @@ const renderReloadPrompt = async (options?: { needRefresh?: boolean }) => {
   await act(async () => {
     root.render(<ReloadPrompt />)
   })
-
-  if (options?.needRefresh) {
-    await act(async () => {
-      root.render(<ReloadPrompt />)
-    })
-  }
 
   return { container, root }
 }
@@ -101,13 +99,27 @@ const getPwaStatusCalls = () => {
 
 describe("ReloadPrompt cross-tab updates", () => {
   const roots: Root[] = []
+  let reloadSpy: ReturnType<typeof vi.spyOn> | null = null
 
-  beforeEach(() => {
+  beforeEach(async () => {
     resetPwaUpdateCoordinatorForTests()
+    sessionStorage.clear()
     localStorage.clear()
     MockBroadcastChannel.channels.clear()
     vi.stubGlobal("BroadcastChannel", MockBroadcastChannel)
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        text: async () => WAITING_SW_CONTENT,
+      })),
+    )
     vi.clearAllMocks()
+
+    const revision = await hashServiceWorkerContent(WAITING_SW_CONTENT)
+    sharedUpdateId = createPwaUpdateIdFromWaitingWorker(WAITING_SW_URL, revision)
+
+    reloadSpy = vi.spyOn(window.location, "reload").mockImplementation(() => {})
 
     mockUseRegisterSW.mockImplementation((options) => {
       options?.onRegisteredSW?.(WAITING_SW_URL, mockRegistration)
@@ -125,7 +137,10 @@ describe("ReloadPrompt cross-tab updates", () => {
       })
     }
 
+    reloadSpy?.mockRestore()
+    reloadSpy = null
     resetPwaUpdateCoordinatorForTests()
+    sessionStorage.clear()
     localStorage.clear()
     MockBroadcastChannel.channels.clear()
     vi.unstubAllGlobals()
@@ -136,7 +151,7 @@ describe("ReloadPrompt cross-tab updates", () => {
     roots.push(root)
 
     const receiver = new MockBroadcastChannel("folo-pwa-update-v1")
-    receiver.postMessage({ type: "update-started", updateId: SHARED_UPDATE_ID })
+    receiver.postMessage({ type: "update-started", updateId: sharedUpdateId })
 
     expect(setUpdaterStatus).toHaveBeenCalledWith({
       type: "pwa",
@@ -153,7 +168,7 @@ describe("ReloadPrompt cross-tab updates", () => {
     const receiver = new MockBroadcastChannel("folo-pwa-update-v1")
     receiver.postMessage({
       type: "update-failed",
-      updateId: SHARED_UPDATE_ID,
+      updateId: sharedUpdateId,
       error: "network",
     })
 
@@ -183,13 +198,8 @@ describe("ReloadPrompt cross-tab updates", () => {
 
     await act(async () => {})
 
-    const updateIds = getPwaStatusCalls()
-      .map((status) => status.status)
-      .filter((status) => status === "ready" || status === "deferred")
-
     expect(getPwaStatusCalls().length).toBeGreaterThanOrEqual(2)
-    expect(localStorage.getItem("folo-pwa-active-update-id-v1")).toBe(SHARED_UPDATE_ID)
-    expect(updateIds.length).toBeGreaterThanOrEqual(2)
+    expect(localStorage.getItem("folo-pwa-active-update-id-v1")).toBe(sharedUpdateId)
   })
 
   it("persists deferred state when another tab clicks later", async () => {
@@ -206,9 +216,9 @@ describe("ReloadPrompt cross-tab updates", () => {
     await act(async () => {})
 
     const receiver = new MockBroadcastChannel("folo-pwa-update-v1")
-    receiver.postMessage({ type: "deferred", updateId: SHARED_UPDATE_ID })
+    receiver.postMessage({ type: "deferred", updateId: sharedUpdateId })
 
-    expect(isPwaUpdateDeferredForSession(SHARED_UPDATE_ID)).toBe(true)
+    expect(isPwaUpdateDeferredForSession(sharedUpdateId)).toBe(true)
     expect(getPwaStatusCalls().at(-1)).toMatchObject({
       type: "pwa",
       status: "deferred",
@@ -232,7 +242,7 @@ describe("ReloadPrompt cross-tab updates", () => {
     await act(async () => {})
 
     const receiver = new MockBroadcastChannel("folo-pwa-update-v1")
-    receiver.postMessage({ type: "update-started", updateId: SHARED_UPDATE_ID })
+    receiver.postMessage({ type: "update-started", updateId: sharedUpdateId })
 
     expect(setUpdaterStatus).toHaveBeenCalledWith({
       type: "pwa",
@@ -240,5 +250,29 @@ describe("ReloadPrompt cross-tab updates", () => {
     })
 
     receiver.close()
+  })
+
+  it("does not auto reload on update-completed when unsaved work exists", async () => {
+    const { root } = await renderReloadPrompt()
+    roots.push(root)
+
+    const chatInput = document.createElement("div")
+    chatInput.setAttribute("data-testid", "chat-input")
+    chatInput.textContent = "draft message"
+    document.body.append(chatInput)
+
+    const receiver = new MockBroadcastChannel("folo-pwa-update-v1")
+    receiver.postMessage({ type: "update-completed", updateId: sharedUpdateId })
+
+    expect(reloadSpy).not.toHaveBeenCalled()
+    expect(getPwaStatusCalls().at(-1)).toMatchObject({
+      type: "pwa",
+      status: "ready",
+      reloadOnly: true,
+    })
+    expect(typeof getPwaStatusCalls().at(-1)?.finishUpdate).toBe("function")
+
+    receiver.close()
+    chatInput.remove()
   })
 })

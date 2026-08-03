@@ -8,6 +8,11 @@ export type PwaUpdateBroadcastMessage =
   | { type: "update-completed"; updateId: string }
   | { type: "update-failed"; updateId: string; error: string }
 
+type DeferredUpdateRecord = {
+  updateId: string
+  deferredAt: number
+}
+
 let currentPwaUpdateId: string | null = null
 
 function readPersistedPwaUpdateId(): string | null {
@@ -19,16 +24,84 @@ function persistPwaUpdateId(updateId: string): void {
   localStorage.setItem(PWA_ACTIVE_UPDATE_ID_KEY, updateId)
 }
 
-export function createPwaUpdateIdFromWaitingWorker(scriptUrl: string): string {
-  return `sw:${scriptUrl}`
+function readDeferredRecord(): DeferredUpdateRecord | null {
+  const raw = sessionStorage.getItem(PWA_UPDATE_DEFERRED_KEY)
+  if (!raw) {
+    return null
+  }
+
+  try {
+    return JSON.parse(raw) as DeferredUpdateRecord
+  } catch {
+    return {
+      updateId: raw,
+      deferredAt: Date.now(),
+    }
+  }
 }
 
-export function resolvePwaUpdateId(registration?: ServiceWorkerRegistration | null): string {
-  const waitingScriptUrl = registration?.waiting?.scriptURL
-  if (waitingScriptUrl) {
-    const updateId = createPwaUpdateIdFromWaitingWorker(waitingScriptUrl)
-    persistPwaUpdateId(updateId)
-    return updateId
+function writeDeferredRecord(record: DeferredUpdateRecord): void {
+  sessionStorage.setItem(PWA_UPDATE_DEFERRED_KEY, JSON.stringify(record))
+}
+
+function clearStaleDeferredForUpdateId(updateId: string): void {
+  const record = readDeferredRecord()
+  if (record && record.updateId !== updateId) {
+    clearDeferredPwaUpdateForSession()
+  }
+}
+
+export function createPwaUpdateIdFromWaitingWorker(
+  scriptUrl: string,
+  contentRevision: string,
+): string {
+  return `sw:${scriptUrl}#${contentRevision}`
+}
+
+export async function hashServiceWorkerContent(content: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(content))
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("")
+    .slice(0, 16)
+}
+
+async function getWaitingServiceWorkerContentRevision(
+  worker: ServiceWorker,
+): Promise<string | null> {
+  try {
+    const response = await fetch(worker.scriptURL, {
+      cache: "no-store",
+      headers: {
+        "cache-control": "no-cache",
+      },
+    })
+
+    if (!response.ok) {
+      return null
+    }
+
+    const content = await response.text()
+    return await hashServiceWorkerContent(content)
+  } catch {
+    return null
+  }
+}
+
+export async function resolvePwaUpdateId(
+  registration?: ServiceWorkerRegistration | null,
+  options?: { contentRevision?: string },
+): Promise<string> {
+  const waitingWorker = registration?.waiting
+  if (waitingWorker) {
+    const contentRevision =
+      options?.contentRevision ?? (await getWaitingServiceWorkerContentRevision(waitingWorker))
+    if (contentRevision) {
+      const updateId = createPwaUpdateIdFromWaitingWorker(waitingWorker.scriptURL, contentRevision)
+      clearStaleDeferredForUpdateId(updateId)
+      persistPwaUpdateId(updateId)
+      return updateId
+    }
   }
 
   return beginPwaUpdateCycle()
@@ -72,28 +145,31 @@ export function clearActivePwaUpdateId(): void {
 export function resetPwaUpdateCoordinatorForTests(): void {
   currentPwaUpdateId = null
   localStorage.removeItem(PWA_ACTIVE_UPDATE_ID_KEY)
-  localStorage.removeItem(PWA_UPDATE_DEFERRED_KEY)
+  sessionStorage.removeItem(PWA_UPDATE_DEFERRED_KEY)
 }
 
 export function deferPwaUpdateForSession(updateId?: string): void {
-  localStorage.setItem(PWA_UPDATE_DEFERRED_KEY, updateId ?? "1")
+  writeDeferredRecord({
+    updateId: updateId ?? "1",
+    deferredAt: Date.now(),
+  })
 }
 
 export function isPwaUpdateDeferredForSession(updateId?: string | null): boolean {
-  const stored = localStorage.getItem(PWA_UPDATE_DEFERRED_KEY)
-  if (!stored) {
+  const record = readDeferredRecord()
+  if (!record) {
     return false
   }
 
   if (updateId) {
-    return stored === updateId
+    return record.updateId === updateId
   }
 
-  return stored === "1" || stored.length > 0
+  return record.updateId.length > 0
 }
 
 export function clearDeferredPwaUpdateForSession(): void {
-  localStorage.removeItem(PWA_UPDATE_DEFERRED_KEY)
+  sessionStorage.removeItem(PWA_UPDATE_DEFERRED_KEY)
 }
 
 export function createPwaUpdateChannel(): BroadcastChannel | null {

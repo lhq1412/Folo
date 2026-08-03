@@ -9,14 +9,16 @@ export function createPwaUpdaterStatus(
   options?: {
     error?: string
     updateId?: string | null
+    reloadOnly?: boolean
   },
 ): NonNullable<UpdaterStatusAtom> {
-  const { error, updateId } = options ?? {}
+  const { error, updateId, reloadOnly } = options ?? {}
 
   return {
     type: "pwa",
     status,
     error,
+    reloadOnly,
     finishUpdate,
     deferUpdate: () => {
       deferPwaUpdateForSession(updateId ?? undefined)

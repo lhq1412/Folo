@@ -117,11 +117,12 @@ export function ReloadPrompt() {
         }
         case "update-completed": {
           clearActivePwaUpdateId()
-          if (!pwaUpdateStarted) {
-            window.location.reload()
-          } else {
+          if (pwaUpdateStarted) {
             setUpdaterStatus(null)
+            break
           }
+
+          handleRemoteUpdateCompleted(message.updateId)
           break
         }
         case "update-failed": {
@@ -166,7 +167,7 @@ export function ReloadPrompt() {
         return
       }
 
-      const updateId = resolvePwaUpdateId(registration)
+      const updateId = await resolvePwaUpdateId(registration)
       currentUpdateIdRef.current = updateId
 
       const finishUpdate = async () => {
@@ -190,6 +191,36 @@ export function ReloadPrompt() {
   }, [needRefresh])
 
   return null
+}
+
+function handleRemoteUpdateCompleted(updateId: string): void {
+  const reloadPage = createReloadPageHandler()
+
+  if (detectUnsavedWork().hasUnsavedWork) {
+    setUpdaterStatus(
+      createPwaUpdaterStatus("ready", reloadPage, {
+        updateId,
+        reloadOnly: true,
+      }),
+    )
+    return
+  }
+
+  void reloadPage()
+}
+
+function createReloadPageHandler(): () => Promise<void> {
+  return async () => {
+    const unsavedWork = detectUnsavedWork()
+    if (unsavedWork.hasUnsavedWork) {
+      const confirmed = window.confirm(i18n.t("app.pwa.update_unsaved_confirm"))
+      if (!confirmed) {
+        return
+      }
+    }
+
+    window.location.reload()
+  }
 }
 
 async function performPwaUpdate(

@@ -102,6 +102,10 @@ export const UpdateNotice = () => {
           return t("app.pwa.update_deferred")
         }
 
+        if (updaterStatus.reloadOnly) {
+          return t("app.pwa.update_reload_pending")
+        }
+
         return t("app.pwa.update_description")
       }
       case "distribution": {
@@ -119,8 +123,10 @@ export const UpdateNotice = () => {
 
   const isPwaUpdate = updaterStatus.type === "pwa"
   const isDeferredPwaUpdate = isPwaUpdate && updaterStatus.status === "deferred"
+  const isReloadOnlyPwaUpdate = isPwaUpdate && updaterStatus.reloadOnly === true
   const showPwaActions =
     isPwaUpdate && updaterStatus.status !== "updating" && updaterStatus.status !== "failed"
+  const showLaterButton = showPwaActions && !isDeferredPwaUpdate && !isReloadOnlyPwaUpdate
 
   return (
     <m.div
@@ -196,9 +202,9 @@ export const UpdateNotice = () => {
         {showPwaActions ? (
           <div className="relative flex gap-2 border-t border-fill px-4 py-2.5">
             <Button size="sm" buttonClassName="flex-1" onClick={() => void handlePrimaryAction()}>
-              {t("app.pwa.update_now")}
+              {isReloadOnlyPwaUpdate ? t("app.pwa.reload_now") : t("app.pwa.update_now")}
             </Button>
-            {!isDeferredPwaUpdate ? (
+            {showLaterButton ? (
               <Button size="sm" variant="ghost" onClick={handleDeferUpdate}>
                 {t("app.pwa.update_later")}
               </Button>
