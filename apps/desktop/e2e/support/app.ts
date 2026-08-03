@@ -379,7 +379,11 @@ export const registerWithCredential = async (page: Page, account: TestAccount) =
     submit.click({ force: true, noWaitAfter: true }),
   ])
   if (response) {
-    expect(response.ok()).toBe(true)
+    const responseBody = await response.text().catch(() => "")
+    expect(
+      response.ok(),
+      `sign-up failed with ${response.status()}: ${responseBody.slice(0, 300)}`,
+    ).toBe(true)
     await waitForBetterAuthSessionCookie(page, new URL(response.url()).origin)
   }
 
@@ -408,7 +412,11 @@ export const loginWithCredential = async (page: Page, account: TestAccount) => {
     submit.click({ force: true, noWaitAfter: true }),
   ])
   if (response) {
-    expect(response.ok()).toBe(true)
+    const responseBody = await response.text().catch(() => "")
+    expect(
+      response.ok(),
+      `sign-in failed with ${response.status()}: ${responseBody.slice(0, 300)}`,
+    ).toBe(true)
     await waitForBetterAuthSessionCookie(page, new URL(response.url()).origin)
   }
 

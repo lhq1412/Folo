@@ -15,9 +15,8 @@ export const MobileSubscriptionDrawerBackdrop: FC<MobileSubscriptionDrawerBackdr
   }
 
   return (
-    <button
-      type="button"
-      aria-label="Close sidebar"
+    <div
+      aria-hidden="true"
       className={cn("fixed inset-0 z-[11] bg-black/40", "duration-200 animate-in fade-in-0")}
       onClick={onClose}
     />

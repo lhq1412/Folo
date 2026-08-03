@@ -246,7 +246,7 @@ const RootContainer = ({
           "--fo-feed-col-w": `${feedColWidth}px`,
         } as any
       }
-      className="relative z-0 flex h-screen overflow-hidden print:h-auto print:overflow-auto"
+      className="relative z-0 flex h-dvh overflow-hidden lg:h-screen print:h-auto print:overflow-auto"
       onContextMenu={preventDefault}
       id={ROOT_CONTAINER_ID}
     >

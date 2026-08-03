@@ -5,6 +5,7 @@ import type { FC } from "react"
 
 import { mouseAtom } from "../atoms/mouse"
 import { viewportAtom } from "../atoms/viewport"
+import { getIsMobileViewport } from "../constants/viewport"
 
 export const EventProvider: FC = () => {
   const store = useStore()
@@ -26,8 +27,7 @@ export const EventProvider: FC = () => {
         w,
       })
 
-      const isMobile = window.innerWidth < 1024
-      document.documentElement.dataset.viewport = isMobile ? "mobile" : "desktop"
+      document.documentElement.dataset.viewport = getIsMobileViewport(w) ? "mobile" : "desktop"
     }, 16)
 
     readViewport()

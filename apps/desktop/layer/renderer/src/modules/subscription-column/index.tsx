@@ -1,5 +1,6 @@
 import { useGlobalFocusableScopeSelector } from "@follow/components/common/Focusable/hooks.js"
 import { Spring } from "@follow/components/constants/spring.js"
+import { useMobile } from "@follow/components/hooks/useMobile.js"
 import { ActionButton } from "@follow/components/ui/button/index.js"
 import { RootPortal } from "@follow/components/ui/portal/index.js"
 import { FeedViewType } from "@follow/constants"
@@ -21,13 +22,18 @@ import { Trans } from "react-i18next"
 import { useRootContainerElement } from "~/atoms/dom"
 import { useIsInMASReview } from "~/atoms/server-configs"
 import { useUISettingKey } from "~/atoms/settings/ui"
-import { setTimelineColumnShow, useSubscriptionColumnShow } from "~/atoms/sidebar"
+import {
+  setTimelineColumnShow,
+  useSubscriptionColumnShow,
+  useSubscriptionColumnTempShow,
+} from "~/atoms/sidebar"
 import { Focusable } from "~/components/common/Focusable"
 import { HotkeyScope } from "~/constants"
 import { useBackHome } from "~/hooks/biz/useNavigateEntry"
 import { useReduceMotion } from "~/hooks/biz/useReduceMotion"
 import { parseView, useRouteParamsSelector } from "~/hooks/biz/useRouteParams"
 import { useTimelineList } from "~/hooks/biz/useTimelineList"
+import { isMobileSubscriptionDrawerOpen } from "~/lib/mobile-sidebar"
 import { useSettingModal } from "~/modules/settings/modal/useSettingModal"
 
 import { WindowUnderBlur } from "../../components/ui/background"
@@ -317,12 +323,18 @@ const CommandsHandler = ({
   setActive: (args: string | ((prev: string | undefined, index: number) => string)) => void
   timelineList: string[]
 }) => {
+  const isMobileViewport = useMobile()
+  const feedColumnShow = useSubscriptionColumnShow()
+  const feedColumnTempShow = useSubscriptionColumnTempShow()
+  const mobileDrawerOpen = isMobileSubscriptionDrawerOpen(feedColumnShow, feedColumnTempShow)
+
   const when = useGlobalFocusableScopeSelector(
     useCallback(
       (activeScope) =>
-        activeScope.or(HotkeyScope.SubscriptionList, HotkeyScope.Timeline) ||
-        activeScope.size === 0,
-      [],
+        (activeScope.or(HotkeyScope.SubscriptionList, HotkeyScope.Timeline) ||
+          activeScope.size === 0) &&
+        !(isMobileViewport && mobileDrawerOpen),
+      [isMobileViewport, mobileDrawerOpen],
     ),
   )
 

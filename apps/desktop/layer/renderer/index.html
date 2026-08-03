@@ -5,7 +5,7 @@
     <meta name="referrer" content="no-referrer" />
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=0, viewport-fit=cover"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
     />
 
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff" />
@@ -150,8 +150,7 @@
       document.documentElement.dataset.buildType = isElectron ? "electron" : "web"
     </script>
     <script>
-      const isMobile = window.innerWidth < 1024
-      document.documentElement.dataset.viewport = isMobile ? "mobile" : "desktop"
+      <!-- FOLLOW VIEWPORT BOOTSTRAP INJECT -->
     </script>
   </head>
   <body>
