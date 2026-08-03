@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from "vitest"
 import {
   assertPrecacheManifestInjectedIntoServiceWorker,
   assertPrecacheManifestSnapshot,
+  extractWorkboxPrecacheUrls,
   resetPrecacheManifestSnapshot,
 } from "./precache-manifest-snapshot"
 import { assertServiceWorkerBuild, assertServiceWorkerFileExists } from "./validate-sw-manifest"
@@ -59,23 +60,63 @@ describe("assertPrecacheManifestSnapshot", () => {
   })
 })
 
+describe("extractWorkboxPrecacheUrls", () => {
+  it("extracts urls only from workbox manifest payload objects", () => {
+    const urls = extractWorkboxPrecacheUrls(
+      'const runtimeRoutes=[{url:"/api"}];xt([{"revision":"abc","url":"index.html"},{"revision":null,"url":"/sw.js?pwa=true"}]);',
+    )
+
+    expect(urls).toEqual(new Set(["index.html", "/sw.js?pwa=true"]))
+  })
+})
+
 describe("assertPrecacheManifestInjectedIntoServiceWorker", () => {
-  it("passes when snapshot urls are present in sw.js", () => {
+  it("passes when every snapshot url exists in the precache payload", () => {
     expect(() =>
       assertPrecacheManifestInjectedIntoServiceWorker(
-        'xt([{"revision":"abc123","url":"index.html"}]);',
-        [{ url: "index.html", revision: "abc123" }],
+        'xt([{"revision":"abc123","url":"index.html"},{"revision":null,"url":"/sw.js?pwa=true"}]);',
+        [
+          { url: "index.html", revision: "abc123" },
+          { url: "/sw.js?pwa=true", revision: null },
+        ],
       ),
     ).not.toThrow()
   })
 
-  it("fails when snapshot urls are missing from sw.js", () => {
+  it("fails when only one of two snapshot urls is present in the precache payload", () => {
     expect(() =>
       assertPrecacheManifestInjectedIntoServiceWorker(
-        'const runtimeRoutes=[{url:"/api"}];xt([]);',
-        [{ url: "index.html", revision: "abc123" }],
+        'xt([{"revision":"abc123","url":"index.html"}]);',
+        [
+          { url: "index.html", revision: "abc123" },
+          { url: "/sw.js?pwa=true", revision: null },
+        ],
       ),
-    ).toThrow(/were not injected into sw\.js/)
+    ).toThrow(/missing 1 entries/)
+  })
+
+  it("fails when /sw.js?pwa=true is missing from the precache payload", () => {
+    expect(() =>
+      assertPrecacheManifestInjectedIntoServiceWorker(
+        'xt([{"revision":"abc123","url":"index.html"}]);',
+        [
+          { url: "index.html", revision: "abc123" },
+          { url: "/sw.js?pwa=true", revision: null },
+        ],
+      ),
+    ).toThrow(/\/sw\.js\?pwa=true/)
+  })
+
+  it("fails when urls only appear in unrelated code", () => {
+    expect(() =>
+      assertPrecacheManifestInjectedIntoServiceWorker(
+        'const runtimeRoutes=[{url:"/api"}];const x="index.html";const y="/sw.js?pwa=true";xt([]);',
+        [
+          { url: "index.html", revision: "abc123" },
+          { url: "/sw.js?pwa=true", revision: null },
+        ],
+      ),
+    ).toThrow(/missing 2 entries/)
   })
 })
 
@@ -83,8 +124,12 @@ describe("assertServiceWorkerBuild", () => {
   it("passes when snapshot and injected sw.js agree", () => {
     expect(() =>
       assertServiceWorkerBuild({
-        swContent: 'xt([{"revision":"abc123","url":"index.html"}]);',
-        precacheManifest: [{ url: "index.html", revision: "abc123" }],
+        swContent:
+          'xt([{"revision":"abc123","url":"index.html"},{"revision":null,"url":"/sw.js?pwa=true"}]);',
+        precacheManifest: [
+          { url: "index.html", revision: "abc123" },
+          { url: "/sw.js?pwa=true", revision: null },
+        ],
       }),
     ).not.toThrow()
   })
@@ -105,14 +150,5 @@ describe("assertServiceWorkerBuild", () => {
         precacheManifest: [],
       }),
     ).toThrow(/snapshot is empty or missing/)
-  })
-
-  it("fails when unrelated runtime url arrays exist but injected manifest urls are missing", () => {
-    expect(() =>
-      assertServiceWorkerBuild({
-        swContent: 'const runtimeRoutes=[{url:"/api"}];xt([]);',
-        precacheManifest: [{ url: "index.html", revision: "abc123" }],
-      }),
-    ).toThrow(/were not injected into sw\.js/)
   })
 })

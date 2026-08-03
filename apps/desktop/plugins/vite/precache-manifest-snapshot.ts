@@ -35,16 +35,38 @@ export function assertPrecacheManifestSnapshot(
   }
 }
 
-function serviceWorkerIncludesManifestUrl(swContent: string, url: string): boolean {
-  const candidates = new Set<string>([url])
-  if (url.startsWith("/")) {
-    candidates.add(url.slice(1))
-  } else {
+const WORKBOX_MANIFEST_ENTRY_PATTERNS = [
+  /\{\s*"revision"\s*:\s*(?:"[^"]*"|null)\s*,\s*"url"\s*:\s*"((?:\\.|[^"\\])*)"\s*\}/g,
+  /\{\s*"url"\s*:\s*"((?:\\.|[^"\\])*)"\s*,\s*"revision"\s*:\s*(?:"[^"]*"|null)\s*\}/g,
+] as const
+
+export function extractWorkboxPrecacheUrls(swContent: string): Set<string> {
+  const urls = new Set<string>()
+
+  for (const pattern of WORKBOX_MANIFEST_ENTRY_PATTERNS) {
+    for (const match of swContent.matchAll(pattern)) {
+      const url = match[1]?.replaceAll(String.raw`\"`, '"')
+      if (url) {
+        urls.add(url)
+      }
+    }
+  }
+
+  return urls
+}
+
+function normalizeManifestUrl(url: string): string {
+  return url.startsWith("/") ? url.slice(1) : url
+}
+
+function precachePayloadIncludesUrl(precacheUrls: Set<string>, url: string): boolean {
+  const candidates = new Set<string>([url, normalizeManifestUrl(url)])
+  if (!url.startsWith("/")) {
     candidates.add(`/${url}`)
   }
 
   for (const candidate of candidates) {
-    if (swContent.includes(`"${candidate}"`)) {
+    if (precacheUrls.has(candidate) || precacheUrls.has(normalizeManifestUrl(candidate))) {
       return true
     }
   }
@@ -52,17 +74,30 @@ function serviceWorkerIncludesManifestUrl(swContent: string, url: string): boole
   return false
 }
 
+export function findMissingPrecacheManifestUrls(
+  swContent: string,
+  entries: PrecacheManifestEntry[],
+): string[] {
+  const precacheUrls = extractWorkboxPrecacheUrls(swContent)
+
+  return entries
+    .map((entry) => entry.url)
+    .filter((url): url is string => typeof url === "string" && url.length > 0)
+    .filter((url) => !precachePayloadIncludesUrl(precacheUrls, url))
+}
+
 export function assertPrecacheManifestInjectedIntoServiceWorker(
   swContent: string,
   entries: PrecacheManifestEntry[],
 ): void {
-  const injectedUrlCount = entries
-    .map((entry) => entry.url)
-    .filter((url) => serviceWorkerIncludesManifestUrl(swContent, url)).length
+  const missingUrls = findMissingPrecacheManifestUrls(swContent, entries)
 
-  if (injectedUrlCount === 0) {
+  if (missingUrls.length > 0) {
+    const preview = missingUrls.slice(0, 5).join(", ")
+    const suffix = missingUrls.length > 5 ? "..." : ""
+
     throw new Error(
-      "Service worker build failed: precache manifest snapshot urls were not injected into sw.js.",
+      `Service worker build failed: precache manifest missing ${missingUrls.length} entries in sw.js payload: ${preview}${suffix}`,
     )
   }
 }
