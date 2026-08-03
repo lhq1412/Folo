@@ -1,5 +1,6 @@
 /// <reference lib="webworker" />
 import { CacheableResponsePlugin } from "workbox-cacheable-response"
+import { clientsClaim } from "workbox-core"
 import { ExpirationPlugin } from "workbox-expiration"
 import {
   cleanupOutdatedCaches,
@@ -12,11 +13,15 @@ import { CacheFirst } from "workbox-strategies"
 import { registerPusher } from "./pusher"
 
 declare let self: ServiceWorkerGlobalScope & {
-  __WB_MANIFEST: Array<{ revision?: string | null; url: string }>
+  __FOLO_PRECACHE_MANIFEST__: Array<{ revision?: string | null; url: string }>
 }
 
-precacheAndRoute(self.__WB_MANIFEST)
+precacheAndRoute(self.__FOLO_PRECACHE_MANIFEST__)
+;(
+  self as ServiceWorkerGlobalScope & { __FOLLO_PRECACHE_BOUNDARY__?: string }
+).__FOLLO_PRECACHE_BOUNDARY__ = "folo-precache-manifest-boundary"
 cleanupOutdatedCaches()
+clientsClaim()
 
 const navigationHandler = createHandlerBoundToURL("/index.html")
 registerRoute(

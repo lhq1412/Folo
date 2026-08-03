@@ -11,6 +11,9 @@ export function ReloadPrompt() {
     needRefresh: [needRefresh],
     updateServiceWorker,
   } = useRegisterSW({
+    onRegisterError(error) {
+      console.error("[PWA] Service worker registration failed:", error)
+    },
     onRegisteredSW(swUrl, r) {
       if (period <= 0) return
       if (r?.active?.state === "activated") {
@@ -48,14 +51,20 @@ function registerPeriodicSync(period: number, swUrl: string, r: ServiceWorkerReg
   setInterval(async () => {
     if ("onLine" in navigator && !navigator.onLine) return
 
-    const resp = await fetch(swUrl, {
-      cache: "no-store",
-      headers: {
+    try {
+      const resp = await fetch(swUrl, {
         cache: "no-store",
-        "cache-control": "no-cache",
-      },
-    })
+        headers: {
+          cache: "no-store",
+          "cache-control": "no-cache",
+        },
+      })
 
-    if (resp?.status === 200) await r.update()
+      if (resp?.status === 200) {
+        await r.update()
+      }
+    } catch (error) {
+      console.error("[PWA] Service worker update check failed:", error)
+    }
   }, period)
 }

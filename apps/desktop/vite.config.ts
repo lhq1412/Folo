@@ -19,7 +19,14 @@ import { createDependencyChunksPlugin } from "./plugins/vite/deps"
 import { htmlInjectPlugin } from "./plugins/vite/html-inject"
 import { localesPlugin } from "./plugins/vite/locales"
 import manifestPlugin from "./plugins/vite/manifest"
+import {
+  buildExpectedPrecacheManifest,
+  FOLLO_PRECACHE_MANIFEST_INJECTION_POINT,
+  PRECACHE_ADDITIONAL_MANIFEST_ENTRIES,
+} from "./plugins/vite/precache-manifest-entries"
+import { setPrecacheManifestSnapshot } from "./plugins/vite/precache-manifest-snapshot"
 import { createPlatformSpecificImportPlugin } from "./plugins/vite/specific-import"
+import { validateServiceWorkerManifestPlugin } from "./plugins/vite/validate-sw-manifest"
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url))
 const isCI = process.env.CI === "true" || process.env.CI === "1"
@@ -44,7 +51,7 @@ const devPrint = (): PluginOption => ({
 })
 
 const isWebBuild = process.env.WEB_BUILD === "1"
-// eslint-disable-next-line no-console
+
 console.log(green("Build type:"), isWebBuild ? "Web" : "Unknown")
 
 const proxyConfig = {
@@ -159,22 +166,21 @@ export default ({ mode }) => {
           injectRegister: false,
 
           injectManifest: {
-            injectionPoint: undefined,
             globPatterns: [
               "**/*.{js,json,css,html,txt,svg,png,ico,webp,woff,woff2,ttf,eot,otf,wasm}",
             ],
 
+            injectionPoint: FOLLO_PRECACHE_MANIFEST_INJECTION_POINT,
+
+            additionalManifestEntries: [...PRECACHE_ADDITIONAL_MANIFEST_ENTRIES],
+
             manifestTransforms: [
               (manifest) => {
+                setPrecacheManifestSnapshot(buildExpectedPrecacheManifest(manifest))
+
                 return {
                   manifest,
                   warnings: [],
-                  additionalManifestEntries: [
-                    {
-                      url: "/sw.js?pwa=true",
-                      revision: null,
-                    },
-                  ],
                 }
               },
             ],
@@ -302,6 +308,7 @@ export default ({ mode }) => {
 
       createPlatformSpecificImportPlugin(isWebBuild ? "web" : "electron"),
       isWebBuild && manifestPlugin(),
+      isWebBuild && validateServiceWorkerManifestPlugin(),
       isWebBuild && htmlPlugin(typedEnv),
       process.env.analyzer && analyzer(),
     ],
