@@ -9,7 +9,6 @@ import type { TestAccount } from "./account"
 import { injectRecaptchaToken, openWebApp, waitForAuthenticated } from "./app"
 import { bootstrapAuthenticatedWebSession } from "./auth-bootstrap"
 import type { DesktopE2EEnv } from "./env"
-import { clickReactElement } from "./react"
 
 const MOBILE_DRAWER_E2E_USER_ID = "e2e-mobile-drawer-user"
 const MOBILE_LAYOUT_INIT_KEY = "follow:mobile-layout-initialized"
@@ -128,14 +127,24 @@ export const ensureMobileDrawerTimelineReady = async (page: Page, env: DesktopE2
   ).toBeVisible({ timeout: 30_000 })
 }
 
-export const openMobileSubscriptionDrawerFromEntry = async (page: Page) => {
+export const openMobileSubscriptionDrawerFromEntry = async (
+  page: Page,
+  options: { method?: "click" | "enter" } = {},
+) => {
+  const method = options.method ?? "click"
   const entryTrigger = page.locator(
     '[data-testid="mobile-subscription-drawer-entry-trigger"]:visible',
   )
   const drawer = page.locator("#mobile-subscription-drawer")
 
   await expect(entryTrigger).toBeVisible({ timeout: 30_000 })
-  await clickReactElement(entryTrigger)
+
+  if (method === "enter") {
+    await entryTrigger.focus()
+    await entryTrigger.press("Enter")
+  } else {
+    await entryTrigger.click()
+  }
 
   await expect(drawer).toHaveAttribute("aria-modal", "true", { timeout: 15_000 })
 }

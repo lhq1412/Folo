@@ -6,16 +6,12 @@ import {
   focusSubscriptionDrawerOpener,
 } from "~/lib/mobile-sidebar"
 
-const FOCUSABLE_SELECTOR =
-  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+import {
+  getFocusableElements,
+  handleMobileDrawerFocusTrapKeyDown,
+} from "./mobile-subscription-drawer-focus-trap"
 
 const FOCUS_RESTORE_MAX_ATTEMPTS = 10
-
-function getFocusableElements(container: HTMLElement) {
-  return [...container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)].filter(
-    (element) => !element.hasAttribute("disabled") && element.tabIndex !== -1,
-  )
-}
 
 export function useMobileSubscriptionDrawerA11y({
   open,
@@ -36,42 +32,26 @@ export function useMobileSubscriptionDrawerA11y({
     focusableElements[0]?.focus()
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault()
-        onClose()
+      if (!drawer) {
         return
       }
 
-      if (event.key !== "Tab" || !drawer) {
-        return
-      }
-
-      const elements = getFocusableElements(drawer)
-      if (elements.length === 0) {
+      if (
+        handleMobileDrawerFocusTrapKeyDown(event, drawer, document.activeElement, () => {
+          event.preventDefault()
+          onClose()
+        })
+      ) {
         event.preventDefault()
-        return
-      }
-
-      const first = elements[0]
-      const last = elements.at(-1)
-      if (!first || !last) {
-        return
-      }
-
-      const activeElement = document.activeElement
-      if (event.shiftKey && activeElement === first) {
-        event.preventDefault()
-        last.focus()
-      } else if (!event.shiftKey && activeElement === last) {
-        event.preventDefault()
-        first.focus()
+        event.stopPropagation()
+        event.stopImmediatePropagation()
       }
     }
 
-    document.addEventListener("keydown", handleKeyDown)
+    document.addEventListener("keydown", handleKeyDown, true)
 
     return () => {
-      document.removeEventListener("keydown", handleKeyDown)
+      document.removeEventListener("keydown", handleKeyDown, true)
     }
   }, [drawerRef, onClose, open])
 
