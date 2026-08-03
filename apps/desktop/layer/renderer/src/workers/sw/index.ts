@@ -1,5 +1,6 @@
 /// <reference lib="webworker" />
 import { CacheableResponsePlugin } from "workbox-cacheable-response"
+import { clientsClaim } from "workbox-core"
 import { ExpirationPlugin } from "workbox-expiration"
 import {
   cleanupOutdatedCaches,
@@ -17,6 +18,7 @@ declare let self: ServiceWorkerGlobalScope & {
 
 precacheAndRoute(self.__WB_MANIFEST)
 cleanupOutdatedCaches()
+clientsClaim()
 
 const navigationHandler = createHandlerBoundToURL("/index.html")
 registerRoute(

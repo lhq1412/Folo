@@ -11,6 +11,9 @@ export function ReloadPrompt() {
     needRefresh: [needRefresh],
     updateServiceWorker,
   } = useRegisterSW({
+    onRegisterError(error) {
+      console.error("[PWA] Service worker registration failed:", error)
+    },
     onRegisteredSW(swUrl, r) {
       if (period <= 0) return
       if (r?.active?.state === "activated") {
