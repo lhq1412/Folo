@@ -28,13 +28,17 @@ export function setSubscriptionDrawerOpener(openerId: MobileSubscriptionDrawerOp
   subscriptionDrawerOpenerId = openerId
 }
 
-export function focusSubscriptionDrawerOpener(
-  openerId: MobileSubscriptionDrawerOpenerId | null = subscriptionDrawerOpenerId,
-) {
-  if (!openerId) {
-    return false
-  }
+export function consumeSubscriptionDrawerOpener() {
+  const openerId = subscriptionDrawerOpenerId
+  subscriptionDrawerOpenerId = null
+  return openerId
+}
 
+export function clearSubscriptionDrawerOpener() {
+  subscriptionDrawerOpenerId = null
+}
+
+export function focusSubscriptionDrawerOpener(openerId: MobileSubscriptionDrawerOpenerId) {
   const element = document.getElementById(openerId)
   if (!(element instanceof HTMLElement)) {
     return false

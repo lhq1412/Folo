@@ -1,7 +1,10 @@
 import type { RefObject } from "react"
-import { useEffect, useLayoutEffect } from "react"
+import { useEffect, useLayoutEffect, useRef } from "react"
 
-import { focusSubscriptionDrawerOpener, getSubscriptionDrawerOpenerId } from "~/lib/mobile-sidebar"
+import {
+  consumeSubscriptionDrawerOpener,
+  focusSubscriptionDrawerOpener,
+} from "~/lib/mobile-sidebar"
 
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
@@ -72,12 +75,17 @@ export function useMobileSubscriptionDrawerA11y({
     }
   }, [drawerRef, onClose, open])
 
+  const wasOpenRef = useRef(open)
+
   useLayoutEffect(() => {
-    if (open) {
+    const wasOpen = wasOpenRef.current
+    wasOpenRef.current = open
+
+    if (!wasOpen || open) {
       return
     }
 
-    const openerId = getSubscriptionDrawerOpenerId()
+    const openerId = consumeSubscriptionDrawerOpener()
     if (!openerId) {
       return
     }

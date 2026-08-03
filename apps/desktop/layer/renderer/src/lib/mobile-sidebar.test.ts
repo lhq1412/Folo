@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 
 import {
+  clearSubscriptionDrawerOpener,
+  consumeSubscriptionDrawerOpener,
   focusSubscriptionDrawerOpener,
   getSubscriptionDrawerOpenerId,
   MOBILE_SUBSCRIPTION_DRAWER_ENTRY_TRIGGER_ID,
@@ -19,6 +21,7 @@ describe("mobile-sidebar opener restoration", () => {
 
   afterEach(() => {
     document.body.innerHTML = ""
+    clearSubscriptionDrawerOpener()
     vi.restoreAllMocks()
   })
 
@@ -36,8 +39,28 @@ describe("mobile-sidebar opener restoration", () => {
     replacement.id = MOBILE_SUBSCRIPTION_DRAWER_ENTRY_TRIGGER_ID
     document.body.append(replacement)
 
-    expect(focusSubscriptionDrawerOpener()).toBe(true)
+    const openerId = consumeSubscriptionDrawerOpener()
+    expect(openerId).toBe(MOBILE_SUBSCRIPTION_DRAWER_ENTRY_TRIGGER_ID)
+    expect(getSubscriptionDrawerOpenerId()).toBeNull()
+    expect(focusSubscriptionDrawerOpener(openerId!)).toBe(true)
     expect(document.activeElement).toBe(replacement)
+  })
+
+  test("consumes opener identity once", () => {
+    expect(consumeSubscriptionDrawerOpener()).toBe(MOBILE_SUBSCRIPTION_DRAWER_ENTRY_TRIGGER_ID)
+    expect(consumeSubscriptionDrawerOpener()).toBeNull()
+    expect(getSubscriptionDrawerOpenerId()).toBeNull()
+  })
+
+  test("does not restore focus after opener identity was consumed", () => {
+    const trigger = document.getElementById(MOBILE_SUBSCRIPTION_DRAWER_ENTRY_TRIGGER_ID)
+    expect(trigger).not.toBeNull()
+
+    consumeSubscriptionDrawerOpener()
+    trigger?.focus()
+
+    expect(focusSubscriptionDrawerOpener(MOBILE_SUBSCRIPTION_DRAWER_ENTRY_TRIGGER_ID)).toBe(true)
+    expect(document.activeElement).toBe(trigger)
   })
 
   test("records opener id for header trigger", () => {
