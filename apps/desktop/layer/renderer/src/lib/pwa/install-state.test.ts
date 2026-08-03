@@ -1,8 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
 import {
+  clearStaleInstalledHint,
   isPwaInstallCooldownActive,
   markPwaInstallDismissed,
+  markPwaInstalled,
   PWA_INSTALL_COOLDOWN_MS,
   readPwaInstallRecord,
   recordPwaVisit,
@@ -16,7 +18,14 @@ describe("install-state", () => {
 
   afterEach(() => {
     resetPwaInstallRecordForTests()
-    vi.useRealTimers()
+  })
+
+  it("clears stale installed hints for browser reinstall flows", () => {
+    markPwaInstalled(1_000)
+    const cleared = clearStaleInstalledHint()
+
+    expect(cleared.installedAt).toBeNull()
+    expect(readPwaInstallRecord().installedAt).toBeNull()
   })
 
   it("persists dismissal across reads", () => {

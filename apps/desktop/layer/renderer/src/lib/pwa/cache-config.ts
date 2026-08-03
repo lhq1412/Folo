@@ -13,6 +13,8 @@ export const PWA_RUNTIME_CACHE_NAMES = {
   articleImages: "folo-article-images-v1",
 } as const
 
+export const LEGACY_PWA_RUNTIME_CACHE_NAMES = ["image-assets"] as const
+
 export type PwaRuntimeCacheName =
   (typeof PWA_RUNTIME_CACHE_NAMES)[keyof typeof PWA_RUNTIME_CACHE_NAMES]
 
@@ -33,7 +35,12 @@ export const PWA_RUNTIME_CACHE_LIMITS = {
 
 export const PWA_RUNTIME_CACHE_NAME_LIST = Object.values(PWA_RUNTIME_CACHE_NAMES)
 
-const SENSITIVE_QUERY_PARAMS = [
+export const ALL_PWA_RUNTIME_CACHE_NAMES_TO_CLEAR = [
+  ...PWA_RUNTIME_CACHE_NAME_LIST,
+  ...LEGACY_PWA_RUNTIME_CACHE_NAMES,
+] as const
+
+const SENSITIVE_QUERY_PARAMS = new Set([
   "signature",
   "sig",
   "token",
@@ -42,15 +49,27 @@ const SENSITIVE_QUERY_PARAMS = [
   "expires",
   "x-goog-signature",
   "policy",
-] as const
+])
 
 const IMAGE_EXTENSION_PATTERN = /\.(?:png|jpe?g|gif|webp|avif|svg|ico)(?:$|[?#])/i
 
 const FEED_ICON_PATH_PATTERN = /\/(?:avatar|icon|favicon|feed-icon|logo)(?:\/|$)/i
 
+const USER_SPECIFIC_PATH_PATTERN = /\/(?:api|private|user|account|auth)(?:\/|$)/i
+
+const SAME_ORIGIN_STATIC_PATH_PATTERNS = [
+  /^\/assets\/[^/]+(?:-[a-f0-9]{8,}|\.[a-f0-9]{8,})\.(?:png|jpe?g|gif|webp|avif|svg|ico)$/i,
+  /^\/pwa-\d+x\d+\.png$/i,
+  /^\/apple-touch-icon(?:-\d+x\d+)?\.png$/i,
+  /^\/maskable-icon-\d+x\d+\.png$/i,
+  /^\/favicon(?:-\d+x\d+)?\.(?:png|ico)$/i,
+] as const
+
+export type RuntimeImageCacheRoute = "feedIcons" | "sameOriginStaticImages" | "articleImages" | null
+
 export function hasSensitiveQueryParams(url: URL): boolean {
-  for (const param of SENSITIVE_QUERY_PARAMS) {
-    if (url.searchParams.has(param)) {
+  for (const [paramName] of url.searchParams.entries()) {
+    if (SENSITIVE_QUERY_PARAMS.has(paramName.toLowerCase())) {
       return true
     }
   }
@@ -62,12 +81,32 @@ export function isApiUrl(url: URL): boolean {
   return url.pathname.startsWith("/api/")
 }
 
+export function isUserSpecificPath(url: URL): boolean {
+  return USER_SPECIFIC_PATH_PATTERN.test(url.pathname)
+}
+
+export function isSafeRuntimeImageUrl(url: URL): boolean {
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    return false
+  }
+
+  if (isApiUrl(url) || isUserSpecificPath(url) || hasSensitiveQueryParams(url)) {
+    return false
+  }
+
+  return IMAGE_EXTENSION_PATTERN.test(url.pathname)
+}
+
 export function isSameOriginStaticImage(url: URL, origin: string): boolean {
-  return url.origin === origin && IMAGE_EXTENSION_PATTERN.test(url.pathname)
+  if (url.origin !== origin || !isSafeRuntimeImageUrl(url)) {
+    return false
+  }
+
+  return SAME_ORIGIN_STATIC_PATH_PATTERNS.some((pattern) => pattern.test(url.pathname))
 }
 
 export function isFeedIconOrAvatar(url: URL): boolean {
-  if (!IMAGE_EXTENSION_PATTERN.test(url.pathname)) {
+  if (!isSafeRuntimeImageUrl(url)) {
     return false
   }
 
@@ -75,25 +114,49 @@ export function isFeedIconOrAvatar(url: URL): boolean {
 }
 
 export function shouldCacheAsArticleImage(url: URL): boolean {
-  if (url.protocol !== "http:" && url.protocol !== "https:") {
+  if (!isSafeRuntimeImageUrl(url)) {
     return false
   }
 
-  if (isApiUrl(url) || hasSensitiveQueryParams(url)) {
+  if (isFeedIconOrAvatar(url) || isSameOriginStaticImage(url, url.origin)) {
     return false
   }
 
-  return IMAGE_EXTENSION_PATTERN.test(url.pathname)
+  return true
 }
 
-export async function clearPwaRuntimeCaches(): Promise<void> {
+export function resolveRuntimeImageCacheRoute(url: URL, origin: string): RuntimeImageCacheRoute {
+  if (!isSafeRuntimeImageUrl(url)) {
+    return null
+  }
+
+  if (isFeedIconOrAvatar(url)) {
+    return "feedIcons"
+  }
+
+  if (isSameOriginStaticImage(url, origin)) {
+    return "sameOriginStaticImages"
+  }
+
+  if (shouldCacheAsArticleImage(url)) {
+    return "articleImages"
+  }
+
+  return null
+}
+
+export async function deletePwaRuntimeCacheNames(cacheNames: readonly string[]): Promise<void> {
   if (!("caches" in globalThis)) {
     return
   }
 
-  await Promise.all(
-    PWA_RUNTIME_CACHE_NAME_LIST.map(async (cacheName) => {
-      await caches.delete(cacheName)
-    }),
-  )
+  await Promise.all(cacheNames.map((cacheName) => caches.delete(cacheName)))
+}
+
+export async function clearLegacyPwaRuntimeCaches(): Promise<void> {
+  await deletePwaRuntimeCacheNames(LEGACY_PWA_RUNTIME_CACHE_NAMES)
+}
+
+export async function clearPwaRuntimeCaches(): Promise<void> {
+  await deletePwaRuntimeCacheNames(ALL_PWA_RUNTIME_CACHE_NAMES_TO_CLEAR)
 }

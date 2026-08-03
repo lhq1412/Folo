@@ -2,18 +2,41 @@ const PWA_UPDATE_CHANNEL_NAME = "folo-pwa-update-v1"
 const PWA_UPDATE_DEFERRED_KEY = "folo-pwa-update-deferred-v1"
 
 export type PwaUpdateBroadcastMessage =
-  | { type: "update-started" }
-  | { type: "update-completed" }
-  | { type: "update-failed"; error: string }
+  | { type: "deferred"; updateId: string }
+  | { type: "update-started"; updateId: string }
+  | { type: "update-completed"; updateId: string }
+  | { type: "update-failed"; updateId: string; error: string }
 
-let periodicUpdateIntervalId: ReturnType<typeof setInterval> | null = null
+let currentPwaUpdateId: string | null = null
 
-export function deferPwaUpdateForSession(): void {
-  sessionStorage.setItem(PWA_UPDATE_DEFERRED_KEY, "1")
+export function beginPwaUpdateCycle(): string {
+  currentPwaUpdateId = crypto.randomUUID()
+  return currentPwaUpdateId
 }
 
-export function isPwaUpdateDeferredForSession(): boolean {
-  return sessionStorage.getItem(PWA_UPDATE_DEFERRED_KEY) === "1"
+export function getCurrentPwaUpdateId(): string | null {
+  return currentPwaUpdateId
+}
+
+export function isMatchingPwaUpdateId(updateId: string): boolean {
+  return currentPwaUpdateId === updateId
+}
+
+export function deferPwaUpdateForSession(updateId?: string): void {
+  sessionStorage.setItem(PWA_UPDATE_DEFERRED_KEY, updateId ?? "1")
+}
+
+export function isPwaUpdateDeferredForSession(updateId?: string | null): boolean {
+  const stored = sessionStorage.getItem(PWA_UPDATE_DEFERRED_KEY)
+  if (!stored) {
+    return false
+  }
+
+  if (updateId) {
+    return stored === updateId
+  }
+
+  return stored === "1" || stored.length > 0
 }
 
 export function clearDeferredPwaUpdateForSession(): void {
@@ -34,6 +57,11 @@ export function broadcastPwaUpdateMessage(message: PwaUpdateBroadcastMessage): v
   channel?.close()
 }
 
+export function broadcastPwaUpdateDeferred(updateId: string): void {
+  deferPwaUpdateForSession(updateId)
+  broadcastPwaUpdateMessage({ type: "deferred", updateId })
+}
+
 export function registerPeriodicServiceWorkerCheck(
   period: number,
   swUrl: string,
@@ -43,11 +71,7 @@ export function registerPeriodicServiceWorkerCheck(
     return () => {}
   }
 
-  if (periodicUpdateIntervalId) {
-    clearInterval(periodicUpdateIntervalId)
-  }
-
-  periodicUpdateIntervalId = setInterval(async () => {
+  const intervalId = setInterval(async () => {
     if ("onLine" in navigator && !navigator.onLine) {
       return
     }
@@ -70,9 +94,6 @@ export function registerPeriodicServiceWorkerCheck(
   }, period)
 
   return () => {
-    if (periodicUpdateIntervalId) {
-      clearInterval(periodicUpdateIntervalId)
-      periodicUpdateIntervalId = null
-    }
+    clearInterval(intervalId)
   }
 }

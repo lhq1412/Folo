@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 
 import type { PwaInstallStorageRecord } from "~/lib/pwa/install-state"
 import {
+  clearStaleInstalledHint,
   hasPwaInstallEngagement,
   isPwaInstallCooldownActive,
   markPwaInstallDismissed,
@@ -48,9 +49,7 @@ export function PwaInstallProvider({ children }: PropsWithChildren) {
   const [installRecord, setInstallRecord] = useState<PwaInstallStorageRecord>(() =>
     readPwaInstallRecord(),
   )
-  const [installed, setInstalled] = useState(
-    () => isStandaloneDisplayMode() || Boolean(readPwaInstallRecord().installedAt),
-  )
+  const [installed, setInstalled] = useState(() => isStandaloneDisplayMode())
   const [engagementReady, setEngagementReady] = useState(false)
   const [dismissedInSession, setDismissedInSession] = useState(false)
   const promptShownRef = useRef(false)
@@ -59,9 +58,7 @@ export function PwaInstallProvider({ children }: PropsWithChildren) {
     const record = recordPwaVisit()
     setInstallRecord(record)
 
-    if (record.installedAt) {
-      setInstalled(true)
-    } else if (isStandaloneDisplayMode()) {
+    if (isStandaloneDisplayMode()) {
       const installedRecord = markPwaInstalled()
       setInstallRecord(installedRecord)
       setInstalled(true)
@@ -77,12 +74,17 @@ export function PwaInstallProvider({ children }: PropsWithChildren) {
   }, [])
 
   useEffect(() => {
-    if (installed) {
+    if (isStandaloneDisplayMode()) {
+      setInstalled(true)
       return
     }
 
     const handleBeforeInstallPrompt = (event: Event) => {
       event.preventDefault()
+      if (readPwaInstallRecord().installedAt) {
+        setInstallRecord(clearStaleInstalledHint())
+      }
+      setInstalled(false)
       setDeferredPrompt(event as BeforeInstallPromptEvent)
     }
 
@@ -101,7 +103,7 @@ export function PwaInstallProvider({ children }: PropsWithChildren) {
       window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt)
       window.removeEventListener("appinstalled", handleAppInstalled)
     }
-  }, [installed])
+  }, [])
 
   const cooldownActive = isPwaInstallCooldownActive(installRecord)
   const hasEngagement = hasPwaInstallEngagement(installRecord)

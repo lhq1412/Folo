@@ -11,6 +11,7 @@ import { NavigationRoute, registerRoute } from "workbox-routing"
 import { CacheFirst, StaleWhileRevalidate } from "workbox-strategies"
 
 import {
+  clearLegacyPwaRuntimeCaches,
   isFeedIconOrAvatar,
   isSameOriginStaticImage,
   PWA_RUNTIME_CACHE_LIMITS,
@@ -29,6 +30,10 @@ precacheAndRoute(self.__FOLO_PRECACHE_MANIFEST__)
 ).__FOLLO_PRECACHE_BOUNDARY__ = "folo-precache-manifest-boundary"
 cleanupOutdatedCaches()
 clientsClaim()
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(clearLegacyPwaRuntimeCaches())
+})
 
 const navigationHandler = createHandlerBoundToURL("/index.html")
 registerRoute(
@@ -86,16 +91,16 @@ registerRoute(({ request, url }) => {
     return false
   }
 
-  return isSameOriginStaticImage(url, self.location.origin)
-}, sameOriginStaticImageCache)
+  return isFeedIconOrAvatar(url)
+}, feedIconCache)
 
 registerRoute(({ request, url }) => {
   if (request.destination !== "image") {
     return false
   }
 
-  return isFeedIconOrAvatar(url)
-}, feedIconCache)
+  return isSameOriginStaticImage(url, self.location.origin)
+}, sameOriginStaticImageCache)
 
 registerRoute(({ request, url }) => {
   if (request.destination !== "image") {

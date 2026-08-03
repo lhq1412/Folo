@@ -7,10 +7,13 @@ import { createPwaUpdaterStatus } from "~/lib/pwa/pwa-updater"
 import { detectUnsavedWork } from "~/lib/pwa/unsaved-work-guard"
 import type { PwaUpdateBroadcastMessage } from "~/lib/pwa/update-coordinator"
 import {
+  beginPwaUpdateCycle,
   broadcastPwaUpdateMessage,
   clearDeferredPwaUpdateForSession,
   createPwaUpdateChannel,
   deferPwaUpdateForSession,
+  getCurrentPwaUpdateId,
+  isMatchingPwaUpdateId,
   isPwaUpdateDeferredForSession,
   registerPeriodicServiceWorkerCheck,
 } from "~/lib/pwa/update-coordinator"
@@ -21,6 +24,8 @@ let pwaUpdateStarted = false
 export function ReloadPrompt() {
   const updateServiceWorkerRef = useRef<((reloadPage?: boolean) => Promise<void>) | null>(null)
   const cleanupPeriodicCheckRef = useRef<(() => void) | null>(null)
+  const cleanupWorkerListenerRef = useRef<(() => void) | null>(null)
+  const currentUpdateIdRef = useRef<string | null>(null)
 
   const {
     needRefresh: [needRefresh],
@@ -53,12 +58,22 @@ export function ReloadPrompt() {
         return
       }
 
-      registration.installing?.addEventListener("statechange", (event) => {
+      const installingWorker = registration.installing
+      if (!installingWorker) {
+        return
+      }
+
+      const handleStateChange = (event: Event) => {
         const worker = event.target as ServiceWorker
         if (worker.state === "activated") {
           startPeriodicCheck()
         }
-      })
+      }
+
+      installingWorker.addEventListener("statechange", handleStateChange)
+      cleanupWorkerListenerRef.current = () => {
+        installingWorker.removeEventListener("statechange", handleStateChange)
+      }
     },
   })
 
@@ -70,20 +85,47 @@ export function ReloadPrompt() {
       return
     }
 
+    const finishUpdate = async () => {
+      await performPwaUpdate(updateServiceWorkerRef.current, currentUpdateIdRef.current)
+    }
+
     const handleMessage = (event: MessageEvent<PwaUpdateBroadcastMessage>) => {
-      if (event.data.type === "update-started") {
-        setUpdaterStatus({
-          type: "pwa",
-          status: "updating",
-        })
+      const message = event.data
+      if (!isMatchingPwaUpdateId(message.updateId)) {
+        return
       }
 
-      if (event.data.type === "update-failed") {
-        setUpdaterStatus({
-          type: "pwa",
-          status: "failed",
-          error: event.data.error,
-        })
+      switch (message.type) {
+        case "deferred": {
+          setUpdaterStatus(
+            createPwaUpdaterStatus("deferred", finishUpdate, { updateId: message.updateId }),
+          )
+          break
+        }
+        case "update-started": {
+          setUpdaterStatus({
+            type: "pwa",
+            status: "updating",
+          })
+          break
+        }
+        case "update-completed": {
+          if (!pwaUpdateStarted) {
+            window.location.reload()
+          } else {
+            setUpdaterStatus(null)
+          }
+          break
+        }
+        case "update-failed": {
+          setUpdaterStatus(
+            createPwaUpdaterStatus("failed", finishUpdate, {
+              error: message.error,
+              updateId: message.updateId,
+            }),
+          )
+          break
+        }
       }
     }
 
@@ -98,6 +140,8 @@ export function ReloadPrompt() {
     return () => {
       cleanupPeriodicCheckRef.current?.()
       cleanupPeriodicCheckRef.current = null
+      cleanupWorkerListenerRef.current?.()
+      cleanupWorkerListenerRef.current = null
     }
   }, [])
 
@@ -106,12 +150,19 @@ export function ReloadPrompt() {
       return
     }
 
+    const updateId = beginPwaUpdateCycle()
+    currentUpdateIdRef.current = updateId
+
     const finishUpdate = async () => {
-      await performPwaUpdate(updateServiceWorkerRef.current)
+      await performPwaUpdate(updateServiceWorkerRef.current, updateId)
     }
 
     setUpdaterStatus(
-      createPwaUpdaterStatus(isPwaUpdateDeferredForSession() ? "deferred" : "ready", finishUpdate),
+      createPwaUpdaterStatus(
+        isPwaUpdateDeferredForSession(updateId) ? "deferred" : "ready",
+        finishUpdate,
+        { updateId },
+      ),
     )
   }, [needRefresh])
 
@@ -120,8 +171,14 @@ export function ReloadPrompt() {
 
 async function performPwaUpdate(
   updateServiceWorker: ((reloadPage?: boolean) => Promise<void>) | null,
+  updateId: string | null,
 ): Promise<void> {
   if (!updateServiceWorker || pwaUpdateStarted) {
+    return
+  }
+
+  const activeUpdateId = updateId ?? getCurrentPwaUpdateId()
+  if (!activeUpdateId) {
     return
   }
 
@@ -129,17 +186,24 @@ async function performPwaUpdate(
   if (unsavedWork.hasUnsavedWork) {
     const confirmed = window.confirm(i18n.t("app.pwa.update_unsaved_confirm"))
     if (!confirmed) {
-      deferPwaUpdateForSession()
+      deferPwaUpdateForSession(activeUpdateId)
       setUpdaterStatus(
-        createPwaUpdaterStatus("deferred", () => performPwaUpdate(updateServiceWorker)),
+        createPwaUpdaterStatus(
+          "deferred",
+          () => performPwaUpdate(updateServiceWorker, activeUpdateId),
+          {
+            updateId: activeUpdateId,
+          },
+        ),
       )
+      broadcastPwaUpdateMessage({ type: "deferred", updateId: activeUpdateId })
       return
     }
   }
 
   pwaUpdateStarted = true
   clearDeferredPwaUpdateForSession()
-  broadcastPwaUpdateMessage({ type: "update-started" })
+  broadcastPwaUpdateMessage({ type: "update-started", updateId: activeUpdateId })
 
   setUpdaterStatus({
     type: "pwa",
@@ -148,13 +212,20 @@ async function performPwaUpdate(
 
   try {
     await updateServiceWorker(true)
-    broadcastPwaUpdateMessage({ type: "update-completed" })
+    broadcastPwaUpdateMessage({ type: "update-completed", updateId: activeUpdateId })
   } catch (error) {
     pwaUpdateStarted = false
     const message = error instanceof Error ? error.message : String(error)
-    broadcastPwaUpdateMessage({ type: "update-failed", error: message })
+    broadcastPwaUpdateMessage({ type: "update-failed", updateId: activeUpdateId, error: message })
     setUpdaterStatus(
-      createPwaUpdaterStatus("failed", () => performPwaUpdate(updateServiceWorker), message),
+      createPwaUpdaterStatus(
+        "failed",
+        () => performPwaUpdate(updateServiceWorker, activeUpdateId),
+        {
+          error: message,
+          updateId: activeUpdateId,
+        },
+      ),
     )
   }
 }
