@@ -1,12 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import {
+  acceptPwaUpdateId,
   beginPwaUpdateCycle,
   broadcastPwaUpdateDeferred,
   clearDeferredPwaUpdateForSession,
   deferPwaUpdateForSession,
+  getCurrentPwaUpdateId,
   isMatchingPwaUpdateId,
   isPwaUpdateDeferredForSession,
+  resetPwaUpdateCoordinatorForTests,
 } from "./update-coordinator"
 
 class MockBroadcastChannel {
@@ -45,13 +48,13 @@ class MockBroadcastChannel {
 
 describe("update-coordinator", () => {
   beforeEach(() => {
-    sessionStorage.clear()
+    resetPwaUpdateCoordinatorForTests()
     MockBroadcastChannel.channels.clear()
     vi.stubGlobal("BroadcastChannel", MockBroadcastChannel)
   })
 
   afterEach(() => {
-    sessionStorage.clear()
+    resetPwaUpdateCoordinatorForTests()
     MockBroadcastChannel.channels.clear()
     vi.unstubAllGlobals()
   })
@@ -68,6 +71,27 @@ describe("update-coordinator", () => {
     deferPwaUpdateForSession("update-1")
     clearDeferredPwaUpdateForSession()
     expect(isPwaUpdateDeferredForSession("update-1")).toBe(false)
+  })
+
+  it("adopts remote update ids in non-origin tabs", () => {
+    resetPwaUpdateCoordinatorForTests()
+
+    expect(getCurrentPwaUpdateId()).toBeNull()
+    expect(acceptPwaUpdateId("remote-update-id")).toBe(true)
+    expect(getCurrentPwaUpdateId()).toBe("remote-update-id")
+    expect(isMatchingPwaUpdateId("remote-update-id")).toBe(true)
+  })
+
+  it("rejects conflicting update ids from another batch", () => {
+    beginPwaUpdateCycle()
+
+    expect(acceptPwaUpdateId("different-update-id")).toBe(false)
+  })
+
+  it("reuses persisted update ids when a tab later detects needRefresh", () => {
+    acceptPwaUpdateId("remote-update-id")
+
+    expect(beginPwaUpdateCycle()).toBe("remote-update-id")
   })
 
   it("broadcasts deferred decisions across tabs", () => {

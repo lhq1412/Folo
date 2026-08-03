@@ -3,7 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { setUpdaterStatus } from "~/atoms/updater"
 
 import { createPwaUpdaterStatus } from "./pwa-updater"
-import { beginPwaUpdateCycle, isPwaUpdateDeferredForSession } from "./update-coordinator"
+import {
+  beginPwaUpdateCycle,
+  isPwaUpdateDeferredForSession,
+  resetPwaUpdateCoordinatorForTests,
+} from "./update-coordinator"
 
 vi.mock("~/atoms/updater", () => ({
   setUpdaterStatus: vi.fn(),
@@ -11,12 +15,12 @@ vi.mock("~/atoms/updater", () => ({
 
 describe("pwa-updater", () => {
   beforeEach(() => {
-    sessionStorage.clear()
+    resetPwaUpdateCoordinatorForTests()
     vi.clearAllMocks()
   })
 
   afterEach(() => {
-    sessionStorage.clear()
+    resetPwaUpdateCoordinatorForTests()
   })
 
   it("creates deferred updater state and persists session deferral", () => {

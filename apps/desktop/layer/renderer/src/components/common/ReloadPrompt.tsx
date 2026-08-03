@@ -7,13 +7,14 @@ import { createPwaUpdaterStatus } from "~/lib/pwa/pwa-updater"
 import { detectUnsavedWork } from "~/lib/pwa/unsaved-work-guard"
 import type { PwaUpdateBroadcastMessage } from "~/lib/pwa/update-coordinator"
 import {
+  acceptPwaUpdateId,
   beginPwaUpdateCycle,
   broadcastPwaUpdateMessage,
+  clearActivePwaUpdateId,
   clearDeferredPwaUpdateForSession,
   createPwaUpdateChannel,
   deferPwaUpdateForSession,
   getCurrentPwaUpdateId,
-  isMatchingPwaUpdateId,
   isPwaUpdateDeferredForSession,
   registerPeriodicServiceWorkerCheck,
 } from "~/lib/pwa/update-coordinator"
@@ -91,9 +92,11 @@ export function ReloadPrompt() {
 
     const handleMessage = (event: MessageEvent<PwaUpdateBroadcastMessage>) => {
       const message = event.data
-      if (!isMatchingPwaUpdateId(message.updateId)) {
+      if (!acceptPwaUpdateId(message.updateId)) {
         return
       }
+
+      currentUpdateIdRef.current = message.updateId
 
       switch (message.type) {
         case "deferred": {
@@ -110,6 +113,7 @@ export function ReloadPrompt() {
           break
         }
         case "update-completed": {
+          clearActivePwaUpdateId()
           if (!pwaUpdateStarted) {
             window.location.reload()
           } else {
@@ -150,7 +154,7 @@ export function ReloadPrompt() {
       return
     }
 
-    const updateId = beginPwaUpdateCycle()
+    const updateId = getCurrentPwaUpdateId() ?? beginPwaUpdateCycle()
     currentUpdateIdRef.current = updateId
 
     const finishUpdate = async () => {
@@ -212,6 +216,7 @@ async function performPwaUpdate(
 
   try {
     await updateServiceWorker(true)
+    clearActivePwaUpdateId()
     broadcastPwaUpdateMessage({ type: "update-completed", updateId: activeUpdateId })
   } catch (error) {
     pwaUpdateStarted = false

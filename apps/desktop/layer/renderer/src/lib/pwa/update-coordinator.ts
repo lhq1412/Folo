@@ -1,5 +1,6 @@
 const PWA_UPDATE_CHANNEL_NAME = "folo-pwa-update-v1"
 const PWA_UPDATE_DEFERRED_KEY = "folo-pwa-update-deferred-v1"
+const PWA_ACTIVE_UPDATE_ID_KEY = "folo-pwa-active-update-id-v1"
 
 export type PwaUpdateBroadcastMessage =
   | { type: "deferred"; updateId: string }
@@ -9,17 +10,54 @@ export type PwaUpdateBroadcastMessage =
 
 let currentPwaUpdateId: string | null = null
 
+function readPersistedPwaUpdateId(): string | null {
+  return sessionStorage.getItem(PWA_ACTIVE_UPDATE_ID_KEY)
+}
+
+function persistPwaUpdateId(updateId: string): void {
+  currentPwaUpdateId = updateId
+  sessionStorage.setItem(PWA_ACTIVE_UPDATE_ID_KEY, updateId)
+}
+
 export function beginPwaUpdateCycle(): string {
-  currentPwaUpdateId = crypto.randomUUID()
-  return currentPwaUpdateId
+  const persistedUpdateId = readPersistedPwaUpdateId()
+  if (persistedUpdateId) {
+    currentPwaUpdateId = persistedUpdateId
+    return persistedUpdateId
+  }
+
+  const updateId = crypto.randomUUID()
+  persistPwaUpdateId(updateId)
+  return updateId
 }
 
 export function getCurrentPwaUpdateId(): string | null {
-  return currentPwaUpdateId
+  return currentPwaUpdateId ?? readPersistedPwaUpdateId()
+}
+
+export function acceptPwaUpdateId(updateId: string): boolean {
+  const activeUpdateId = getCurrentPwaUpdateId()
+  if (activeUpdateId && activeUpdateId !== updateId) {
+    return false
+  }
+
+  persistPwaUpdateId(updateId)
+  return true
 }
 
 export function isMatchingPwaUpdateId(updateId: string): boolean {
-  return currentPwaUpdateId === updateId
+  return getCurrentPwaUpdateId() === updateId
+}
+
+export function clearActivePwaUpdateId(): void {
+  currentPwaUpdateId = null
+  sessionStorage.removeItem(PWA_ACTIVE_UPDATE_ID_KEY)
+}
+
+export function resetPwaUpdateCoordinatorForTests(): void {
+  currentPwaUpdateId = null
+  sessionStorage.removeItem(PWA_ACTIVE_UPDATE_ID_KEY)
+  sessionStorage.removeItem(PWA_UPDATE_DEFERRED_KEY)
 }
 
 export function deferPwaUpdateForSession(updateId?: string): void {

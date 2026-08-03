@@ -19,6 +19,10 @@ export default defineProject({
     alias: {
       "@pkg": resolve(__dirname, "./package.json"),
       "@locales": resolve(__dirname, "../../../../locales"),
+      "virtual:pwa-register/react": resolve(
+        __dirname,
+        "./src/test-mocks/virtual-pwa-register-react.ts",
+      ),
     },
   },
 
