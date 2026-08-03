@@ -169,3 +169,14 @@ These classes map to the UIKit color variables (see `.cursor rules/color` and `a
   - [ ] `pnpm typecheck` passes
   - [ ] `pnpm lint:fix` passes cleanly
   - [ ] Tests updated and pass
+
+## Cursor Cloud specific instructions
+
+Durable, non-obvious notes for running this repo in a headless cloud VM. Standard commands live in "Setup commands" / "Quality gates" above and in `CONTRIBUTING.md`; only the caveats below are cloud-specific.
+
+- Primary runnable app: the desktop **web renderer**. Start it with `cd apps/desktop && pnpm run dev:web` (Vite dev server on port **2233**). `apps/mobile` (Expo) needs macOS/Xcode and cannot run here.
+- There is **no backend/database service in this repo**. The renderer is a thin SPA against the hosted API. `VITE_API_URL` defaults to `https://api.folo.is` (see `packages/internal/shared/src/env.common.ts`), so it works with no `.env`. Do **not** create `apps/desktop/.env` from `.env.example` — that points `VITE_API_URL` at `http://localhost:3000`, which has no server here and breaks all API calls.
+- **CORS gotcha (important):** opening `http://localhost:2233` directly makes the browser hit `api.folo.is` from a non-whitelisted origin, so every API call fails with CORS errors and the reader looks empty. The working dev flow (per `CONTRIBUTING.md`) is to open **`https://app.folo.is/__debug_proxy.html`** in the browser: it loads the local dev bundle from `localhost:2233` but runs it under the `app.folo.is` origin (which the API's CORS + cookies allow). The Vite dev server already sends `Access-Control-Allow-Private-Network: true` to permit this public→localhost fetch. Requires network egress to `app.folo.is` / `api.folo.is`.
+- **Auth:** browsing/reading the default feeds and article content works without an account. Subscribing to / previewing a _new_ feed requires signing in (Google/GitHub/Apple/Email), i.e. a real Folo account.
+- Quality gates (root): `pnpm run typecheck`, `pnpm run test`, `pnpm run lint`. `pnpm run lint` currently reports ~977 warnings but **0 errors** (exit 0) — warnings are expected, only errors should block.
+- Build gotcha: `pnpm install` runs a `postinstall` that builds `packages/**` via `turbo`, and `@follow-app/readability` builds with `tsdown`, which needs the `unrun` package to load its `.ts` config. `unrun` is only an optional peer of `tsdown`; it is pinned to `0.3.1` in `pnpm-workspace.yaml` `overrides` and added as a root `devDependency` so the build succeeds. If a `Failed to import module "unrun"` error appears during install, run `pnpm add -w -D -E unrun@0.3.1`.
