@@ -21,9 +21,10 @@ describe("pwa-updater", () => {
 
   afterEach(() => {
     resetPwaUpdateCoordinatorForTests()
+    vi.unstubAllGlobals()
   })
 
-  it("creates deferred updater state and persists session deferral", () => {
+  it("updates local updater state immediately when deferring", () => {
     const updateId = beginPwaUpdateCycle()
     const finishUpdate = vi.fn(async () => {})
     const status = createPwaUpdaterStatus("ready", finishUpdate, { updateId })
@@ -36,6 +37,31 @@ describe("pwa-updater", () => {
     }
 
     expect(isPwaUpdateDeferredForSession(updateId)).toBe(true)
-    expect(setUpdaterStatus).not.toHaveBeenCalled()
+    expect(setUpdaterStatus).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "pwa",
+        status: "deferred",
+      }),
+    )
+  })
+
+  it("defers locally when BroadcastChannel is unavailable", () => {
+    vi.stubGlobal("BroadcastChannel", undefined)
+
+    const updateId = beginPwaUpdateCycle()
+    const finishUpdate = vi.fn(async () => {})
+    const status = createPwaUpdaterStatus("ready", finishUpdate, { updateId })
+
+    if (status.type === "pwa") {
+      status.deferUpdate?.()
+    }
+
+    expect(isPwaUpdateDeferredForSession(updateId)).toBe(true)
+    expect(setUpdaterStatus).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "pwa",
+        status: "deferred",
+      }),
+    )
   })
 })

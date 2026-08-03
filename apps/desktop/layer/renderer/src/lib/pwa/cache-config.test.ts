@@ -50,6 +50,30 @@ describe("cache-config", () => {
     expect(resolveRuntimeImageCacheRoute(url, ORIGIN)).toBe("feedIcons")
   })
 
+  it("routes common feed icon filename forms to feed icon cache", () => {
+    const urls = [
+      "https://cdn.example.com/avatar.png",
+      "https://cdn.example.com/favicon.ico",
+      "https://cdn.example.com/logo.svg",
+      "https://cdn.example.com/icon-192.png",
+      "https://cdn.example.com/icons/site.png",
+      "https://cdn.example.com/avatars/user.png",
+    ]
+
+    for (const href of urls) {
+      const url = new URL(href)
+      expect(isFeedIconOrAvatar(url)).toBe(true)
+      expect(resolveRuntimeImageCacheRoute(url, ORIGIN)).toBe("feedIcons")
+    }
+  })
+
+  it("does not route unrelated image filenames to feed icon cache", () => {
+    const url = new URL("https://cdn.example.com/article/photo.jpg")
+
+    expect(isFeedIconOrAvatar(url)).toBe(false)
+    expect(resolveRuntimeImageCacheRoute(url, ORIGIN)).toBe("articleImages")
+  })
+
   it("routes hashed asset images to same-origin static cache", () => {
     const url = new URL("https://app.folo.is/assets/logo-01234567abcdef.png")
 

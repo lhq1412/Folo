@@ -1,7 +1,7 @@
 import type { UpdaterStatusAtom } from "~/atoms/updater"
 import { setUpdaterStatus } from "~/atoms/updater"
 
-import { broadcastPwaUpdateDeferred, deferPwaUpdateForSession } from "./update-coordinator"
+import { broadcastPwaUpdateMessage, deferPwaUpdateForSession } from "./update-coordinator"
 
 export function createPwaUpdaterStatus(
   status: "ready" | "deferred" | "updating" | "failed",
@@ -19,13 +19,12 @@ export function createPwaUpdaterStatus(
     error,
     finishUpdate,
     deferUpdate: () => {
-      if (updateId) {
-        broadcastPwaUpdateDeferred(updateId)
-        return
-      }
-
-      deferPwaUpdateForSession()
+      deferPwaUpdateForSession(updateId ?? undefined)
       setUpdaterStatus(createPwaUpdaterStatus("deferred", finishUpdate, { error, updateId }))
+
+      if (updateId) {
+        broadcastPwaUpdateMessage({ type: "deferred", updateId })
+      }
     },
   }
 }

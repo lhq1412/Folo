@@ -53,7 +53,10 @@ const SENSITIVE_QUERY_PARAMS = new Set([
 
 const IMAGE_EXTENSION_PATTERN = /\.(?:png|jpe?g|gif|webp|avif|svg|ico)(?:$|[?#])/i
 
-const FEED_ICON_PATH_PATTERN = /\/(?:avatar|icon|favicon|feed-icon|logo)(?:\/|$)/i
+const FEED_ICON_SEGMENT_PATTERN = /\/(?:avatars?|icons?|favicons?|feed-icons?|logos?)(?:\/|$)/i
+
+const FEED_ICON_FILENAME_STEM_PATTERN =
+  /^(?:avatar|avatars|favicon|favicons|feed-icon|feed-icons|logo|logos|icon-\d+)$/i
 
 const USER_SPECIFIC_PATH_PATTERN = /\/(?:api|private|user|account|auth)(?:\/|$)/i
 
@@ -110,7 +113,13 @@ export function isFeedIconOrAvatar(url: URL): boolean {
     return false
   }
 
-  return FEED_ICON_PATH_PATTERN.test(url.pathname)
+  if (FEED_ICON_SEGMENT_PATTERN.test(url.pathname)) {
+    return true
+  }
+
+  const filename = url.pathname.split("/").pop() ?? ""
+  const stem = filename.replace(/\.[^.]+$/, "")
+  return FEED_ICON_FILENAME_STEM_PATTERN.test(stem)
 }
 
 export function shouldCacheAsArticleImage(url: URL): boolean {
