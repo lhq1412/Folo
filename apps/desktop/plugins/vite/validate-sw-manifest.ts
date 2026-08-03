@@ -18,23 +18,34 @@ export function reportPrecacheManifestStats({
   outDir: string
   precacheManifest: PrecacheManifestEntry[]
 }): void {
-  const fileSizes = precacheManifest
+  const fileStats = precacheManifest
     .map((entry) => {
       const filePath = join(outDir, entry.url.replace(/^\//, ""))
       if (!existsSync(filePath)) {
         return null
       }
 
-      return statSync(filePath).size
+      return {
+        url: entry.url,
+        size: statSync(filePath).size,
+      }
     })
-    .filter((size): size is number => size !== null)
+    .filter((entry): entry is { size: number; url: string } => entry !== null)
 
-  const totalBytes = fileSizes.reduce((sum, size) => sum + size, 0)
-  const largestBytes = fileSizes.length > 0 ? Math.max(...fileSizes) : 0
+  const totalBytes = fileStats.reduce((sum, entry) => sum + entry.size, 0)
+  const largestFiles = [...fileStats].sort((left, right) => right.size - left.size).slice(0, 5)
 
   console.info(
-    `[PWA] Precache manifest: ${precacheManifest.length} entries, ${totalBytes} bytes total, largest asset ${largestBytes} bytes.`,
+    `[PWA] Precache manifest: ${precacheManifest.length} entries, ${totalBytes} bytes total.`,
   )
+
+  if (largestFiles.length > 0) {
+    console.info(
+      `[PWA] Largest precache assets: ${largestFiles
+        .map((entry) => `${entry.url} (${entry.size} bytes)`)
+        .join(", ")}`,
+    )
+  }
 }
 
 export function assertServiceWorkerFileExists(swPath: string): void {

@@ -35,6 +35,7 @@
   "app.pwa.install_description": "Folo をインストールして、より快適な全画面読書体験を。",
   "app.pwa.install_title": "Folo をインストール",
   "app.pwa.offline_status": "オフラインです。最近読み込んだコンテンツは引き続き表示できる場合があります。",
+  "app.pwa.update_deferred": "新しいバージョンがあります。都合のよいときに更新できます。",
   "app.pwa.update_description": "新しいバージョンがあります。今すぐ更新するか、後で更新できます。",
   "app.pwa.update_failed": "更新に失敗しました。オンライン時にもう一度お試しください。",
   "app.pwa.update_later": "後で",

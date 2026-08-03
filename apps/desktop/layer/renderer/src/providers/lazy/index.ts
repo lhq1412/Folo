@@ -1,4 +1,4 @@
-import { createElement, lazy, Suspense } from "react"
+import { lazy } from "react"
 
 const LazyContextMenuProvider = lazy(() =>
   import("./../context-menu-provider").then((res) => ({
@@ -35,26 +35,12 @@ const LazyOfflineStatusBanner = lazy(() =>
   })),
 )
 
-const LazyPwaInstallProvider = lazy(() =>
-  import("~/providers/pwa-install-provider").then((module) => ({
-    default: module.PwaInstallProvider,
-  })),
-)
-
-const LazyPwaInstallSurfaceWithProvider = () => {
-  return createElement(
-    Suspense,
-    null,
-    createElement(LazyPwaInstallProvider, null, createElement(LazyPwaInstallSurface)),
-  )
-}
-
 export {
   LazyContextMenuProvider,
   LazyExtensionExposeProvider,
   LazyOfflineStatusBanner,
   LazyPopoverProvider,
-  LazyPwaInstallSurfaceWithProvider as LazyPWAInstallPrompt,
+  LazyPwaInstallSurface,
   LazyReloadPrompt,
 }
 

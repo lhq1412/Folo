@@ -1,6 +1,7 @@
 import type { PropsWithChildren } from "react"
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react"
 
+import type { PwaInstallStorageRecord } from "~/lib/pwa/install-state"
 import {
   hasPwaInstallEngagement,
   isPwaInstallCooldownActive,
@@ -44,14 +45,25 @@ export function usePwaInstall(): PwaInstallContextValue {
 
 export function PwaInstallProvider({ children }: PropsWithChildren) {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
-  const [installed, setInstalled] = useState(() => isStandaloneDisplayMode())
+  const [installRecord, setInstallRecord] = useState<PwaInstallStorageRecord>(() =>
+    readPwaInstallRecord(),
+  )
+  const [installed, setInstalled] = useState(
+    () => isStandaloneDisplayMode() || Boolean(readPwaInstallRecord().installedAt),
+  )
   const [engagementReady, setEngagementReady] = useState(false)
   const [dismissedInSession, setDismissedInSession] = useState(false)
   const promptShownRef = useRef(false)
 
   useEffect(() => {
     const record = recordPwaVisit()
+    setInstallRecord(record)
+
     if (record.installedAt) {
+      setInstalled(true)
+    } else if (isStandaloneDisplayMode()) {
+      const installedRecord = markPwaInstalled()
+      setInstallRecord(installedRecord)
       setInstalled(true)
     }
 
@@ -75,7 +87,8 @@ export function PwaInstallProvider({ children }: PropsWithChildren) {
     }
 
     const handleAppInstalled = () => {
-      markPwaInstalled()
+      const nextRecord = markPwaInstalled()
+      setInstallRecord(nextRecord)
       setInstalled(true)
       setDeferredPrompt(null)
       setDismissedInSession(true)
@@ -90,9 +103,8 @@ export function PwaInstallProvider({ children }: PropsWithChildren) {
     }
   }, [installed])
 
-  const record = readPwaInstallRecord()
-  const cooldownActive = isPwaInstallCooldownActive(record)
-  const hasEngagement = hasPwaInstallEngagement(record)
+  const cooldownActive = isPwaInstallCooldownActive(installRecord)
+  const hasEngagement = hasPwaInstallEngagement(installRecord)
 
   const canPrompt =
     !installed && !dismissedInSession && !cooldownActive && engagementReady && hasEngagement
@@ -119,11 +131,11 @@ export function PwaInstallProvider({ children }: PropsWithChildren) {
     }
 
     promptShownRef.current = true
-    markPwaPromptShown()
+    setInstallRecord(markPwaPromptShown())
   }, [promptVariant])
 
   const dismissPrompt = useCallback(() => {
-    markPwaInstallDismissed()
+    setInstallRecord(markPwaInstallDismissed())
     setDismissedInSession(true)
     setDeferredPrompt(null)
   }, [])
@@ -138,7 +150,8 @@ export function PwaInstallProvider({ children }: PropsWithChildren) {
     setDeferredPrompt(null)
 
     if (outcome === "accepted") {
-      markPwaInstalled()
+      const nextRecord = markPwaInstalled()
+      setInstallRecord(nextRecord)
       setInstalled(true)
       return
     }

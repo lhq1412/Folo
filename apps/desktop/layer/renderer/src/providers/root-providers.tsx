@@ -28,9 +28,10 @@ import {
   LazyExternalJumpInProvider,
   LazyOfflineStatusBanner,
   LazyPopoverProvider,
-  LazyPWAInstallPrompt,
+  LazyPwaInstallSurface,
   LazyReloadPrompt,
 } from "./lazy/index"
+import { PwaInstallProvider } from "./pwa-install-provider"
 import { ServerConfigsProvider } from "./server-configs-provider"
 import { SettingSync } from "./setting-sync"
 import { UserProvider } from "./user-provider"
@@ -66,7 +67,11 @@ export const RootProviders: FC<PropsWithChildren> = ({ children }) => (
                     <LazyExternalJumpInProvider />
                     <LazyReloadPrompt />
                     {!IN_ELECTRON && <LazyOfflineStatusBanner />}
-                    {!IN_ELECTRON && <LazyPWAInstallPrompt />}
+                    {!IN_ELECTRON && (
+                      <PwaInstallProvider>
+                        <LazyPwaInstallSurface />
+                      </PwaInstallProvider>
+                    )}
                   </Suspense>
                   {/* <FocusableGuardProvider /> */}
                 </ModalStackProvider>

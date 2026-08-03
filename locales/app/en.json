@@ -35,6 +35,7 @@
   "app.pwa.install_description": "Install Folo for a faster, full-screen reading experience.",
   "app.pwa.install_title": "Install Folo",
   "app.pwa.offline_status": "You are offline. Recently loaded content may still be available.",
+  "app.pwa.update_deferred": "A new version is ready. Update when it works for you.",
   "app.pwa.update_description": "A new version is ready. Update now or keep reading and update later.",
   "app.pwa.update_failed": "Update failed. Try again when you are back online.",
   "app.pwa.update_later": "Later",

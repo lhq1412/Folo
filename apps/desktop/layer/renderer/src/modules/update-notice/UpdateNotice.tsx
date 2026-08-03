@@ -98,6 +98,10 @@ export const UpdateNotice = () => {
           return updaterStatus.error ?? t("app.pwa.update_failed")
         }
 
+        if (updaterStatus.status === "deferred") {
+          return t("app.pwa.update_deferred")
+        }
+
         return t("app.pwa.update_description")
       }
       case "distribution": {
@@ -113,11 +117,8 @@ export const UpdateNotice = () => {
 
   if (!updaterStatus) return null
 
-  if (updaterStatus.type === "pwa" && updaterStatus.status === "deferred") {
-    return null
-  }
-
   const isPwaUpdate = updaterStatus.type === "pwa"
+  const isDeferredPwaUpdate = isPwaUpdate && updaterStatus.status === "deferred"
   const showPwaActions =
     isPwaUpdate && updaterStatus.status !== "updating" && updaterStatus.status !== "failed"
 
@@ -197,9 +198,11 @@ export const UpdateNotice = () => {
             <Button size="sm" buttonClassName="flex-1" onClick={() => void handlePrimaryAction()}>
               {t("app.pwa.update_now")}
             </Button>
-            <Button size="sm" variant="ghost" onClick={handleDeferUpdate}>
-              {t("app.pwa.update_later")}
-            </Button>
+            {!isDeferredPwaUpdate ? (
+              <Button size="sm" variant="ghost" onClick={handleDeferUpdate}>
+                {t("app.pwa.update_later")}
+              </Button>
+            ) : null}
           </div>
         ) : null}
 

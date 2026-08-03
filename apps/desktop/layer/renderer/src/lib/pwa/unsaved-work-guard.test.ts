@@ -1,10 +1,13 @@
 import { afterEach, describe, expect, it } from "vitest"
 
+import { settingSyncQueue } from "~/modules/settings/helper/sync-queue"
+
 import { detectUnsavedWork } from "./unsaved-work-guard"
 
 describe("unsaved-work-guard", () => {
   afterEach(() => {
     document.body.innerHTML = ""
+    settingSyncQueue.queue = []
   })
 
   it("detects unsent ai chat input", () => {
@@ -28,6 +31,19 @@ describe("unsaved-work-guard", () => {
     expect(detectUnsavedWork()).toEqual({
       hasUnsavedWork: true,
       surfaces: ["search"],
+    })
+  })
+
+  it("detects pending settings sync", () => {
+    settingSyncQueue.queue.push({
+      tab: "general",
+      payload: { language: "en" },
+      date: Date.now(),
+    })
+
+    expect(detectUnsavedWork()).toEqual({
+      hasUnsavedWork: true,
+      surfaces: ["settings_form"],
     })
   })
 

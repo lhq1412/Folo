@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react"
 import { useRegisterSW } from "virtual:pwa-register/react"
 
 import { setUpdaterStatus } from "~/atoms/updater"
+import { createPwaUpdaterStatus } from "~/lib/pwa/pwa-updater"
 import { detectUnsavedWork } from "~/lib/pwa/unsaved-work-guard"
 import type { PwaUpdateBroadcastMessage } from "~/lib/pwa/update-coordinator"
 import {
@@ -19,6 +20,7 @@ let pwaUpdateStarted = false
 
 export function ReloadPrompt() {
   const updateServiceWorkerRef = useRef<((reloadPage?: boolean) => Promise<void>) | null>(null)
+  const cleanupPeriodicCheckRef = useRef<(() => void) | null>(null)
 
   const {
     needRefresh: [needRefresh],
@@ -37,15 +39,24 @@ export function ReloadPrompt() {
         return
       }
 
+      const startPeriodicCheck = () => {
+        cleanupPeriodicCheckRef.current?.()
+        cleanupPeriodicCheckRef.current = registerPeriodicServiceWorkerCheck(
+          UPDATE_CHECK_PERIOD_MS,
+          swUrl,
+          registration,
+        )
+      }
+
       if (registration.active?.state === "activated") {
-        registerPeriodicServiceWorkerCheck(UPDATE_CHECK_PERIOD_MS, swUrl, registration)
+        startPeriodicCheck()
         return
       }
 
       registration.installing?.addEventListener("statechange", (event) => {
         const worker = event.target as ServiceWorker
         if (worker.state === "activated") {
-          registerPeriodicServiceWorkerCheck(UPDATE_CHECK_PERIOD_MS, swUrl, registration)
+          startPeriodicCheck()
         }
       })
     },
@@ -84,54 +95,24 @@ export function ReloadPrompt() {
   }, [])
 
   useEffect(() => {
+    return () => {
+      cleanupPeriodicCheckRef.current?.()
+      cleanupPeriodicCheckRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
     if (!needRefresh || pwaUpdateStarted) {
       return
     }
 
-    if (isPwaUpdateDeferredForSession()) {
-      setUpdaterStatus({
-        type: "pwa",
-        status: "deferred",
-        finishUpdate: async () => {
-          await performPwaUpdate(updateServiceWorkerRef.current)
-        },
-        deferUpdate: () => {
-          deferPwaUpdateForSession()
-          setUpdaterStatus({
-            type: "pwa",
-            status: "deferred",
-            finishUpdate: async () => {
-              await performPwaUpdate(updateServiceWorkerRef.current)
-            },
-            deferUpdate: () => {
-              deferPwaUpdateForSession()
-            },
-          })
-        },
-      })
-      return
+    const finishUpdate = async () => {
+      await performPwaUpdate(updateServiceWorkerRef.current)
     }
 
-    setUpdaterStatus({
-      type: "pwa",
-      status: "ready",
-      finishUpdate: async () => {
-        await performPwaUpdate(updateServiceWorkerRef.current)
-      },
-      deferUpdate: () => {
-        deferPwaUpdateForSession()
-        setUpdaterStatus({
-          type: "pwa",
-          status: "deferred",
-          finishUpdate: async () => {
-            await performPwaUpdate(updateServiceWorkerRef.current)
-          },
-          deferUpdate: () => {
-            deferPwaUpdateForSession()
-          },
-        })
-      },
-    })
+    setUpdaterStatus(
+      createPwaUpdaterStatus(isPwaUpdateDeferredForSession() ? "deferred" : "ready", finishUpdate),
+    )
   }, [needRefresh])
 
   return null
@@ -149,16 +130,9 @@ async function performPwaUpdate(
     const confirmed = window.confirm(i18n.t("app.pwa.update_unsaved_confirm"))
     if (!confirmed) {
       deferPwaUpdateForSession()
-      setUpdaterStatus({
-        type: "pwa",
-        status: "deferred",
-        finishUpdate: async () => {
-          await performPwaUpdate(updateServiceWorker)
-        },
-        deferUpdate: () => {
-          deferPwaUpdateForSession()
-        },
-      })
+      setUpdaterStatus(
+        createPwaUpdaterStatus("deferred", () => performPwaUpdate(updateServiceWorker)),
+      )
       return
     }
   }
@@ -179,20 +153,8 @@ async function performPwaUpdate(
     pwaUpdateStarted = false
     const message = error instanceof Error ? error.message : String(error)
     broadcastPwaUpdateMessage({ type: "update-failed", error: message })
-    setUpdaterStatus({
-      type: "pwa",
-      status: "failed",
-      error: message,
-      finishUpdate: async () => {
-        await performPwaUpdate(updateServiceWorker)
-      },
-      deferUpdate: () => {
-        deferPwaUpdateForSession()
-        setUpdaterStatus({
-          type: "pwa",
-          status: "deferred",
-        })
-      },
-    })
+    setUpdaterStatus(
+      createPwaUpdaterStatus("failed", () => performPwaUpdate(updateServiceWorker), message),
+    )
   }
 }
