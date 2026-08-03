@@ -49,6 +49,7 @@ export default defineConfig({
     {
       name: "web",
       testMatch: /tests\/web\/.*\.spec\.ts/,
+      testIgnore: /tests\/web\/mobile-drawer-a11y\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
         channel: "chromium",

@@ -11,7 +11,7 @@ import { Slot } from "@radix-ui/react-slot"
 import { debounce } from "es-toolkit/compat"
 import type { PropsWithChildren } from "react"
 import * as React from "react"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { Trans } from "react-i18next"
 import { useResizable } from "react-resizable-layout"
 
@@ -118,9 +118,10 @@ const FeedResponsiveResizerContainer = ({
   const [drawerAccessibilityHidden, setDrawerAccessibilityHidden] = useState(
     () => isMobileViewport && !mobileDrawerOpen,
   )
+  const drawerInteractive = isMobileViewport && mobileDrawerOpen && !drawerAccessibilityHidden
   const t = useI18n()
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!isMobileViewport) {
       setDrawerAccessibilityHidden(false)
       return
@@ -128,6 +129,11 @@ const FeedResponsiveResizerContainer = ({
 
     if (mobileDrawerOpen) {
       setDrawerAccessibilityHidden(false)
+    }
+  }, [isMobileViewport, mobileDrawerOpen])
+
+  useEffect(() => {
+    if (!isMobileViewport || mobileDrawerOpen) {
       return
     }
 
@@ -141,7 +147,7 @@ const FeedResponsiveResizerContainer = ({
   }, [isMobileViewport, mobileDrawerOpen])
 
   useMobileSubscriptionDrawerA11y({
-    open: mobileDrawerOpen,
+    open: drawerInteractive,
     onClose: closeSubscriptionSidebar,
     drawerRef,
   })
@@ -225,11 +231,9 @@ const FeedResponsiveResizerContainer = ({
       <div
         ref={drawerRef}
         id={isMobileViewport ? MOBILE_SUBSCRIPTION_DRAWER_ID : undefined}
-        role={isMobileViewport && mobileDrawerOpen ? "dialog" : undefined}
-        aria-modal={isMobileViewport && mobileDrawerOpen ? true : undefined}
-        aria-label={
-          isMobileViewport && mobileDrawerOpen ? t("app.subscription_drawer_label") : undefined
-        }
+        role={drawerInteractive ? "dialog" : undefined}
+        aria-modal={drawerInteractive ? true : undefined}
+        aria-label={drawerInteractive ? t("app.subscription_drawer_label") : undefined}
         aria-hidden={isMobileViewport && drawerAccessibilityHidden ? true : undefined}
         inert={isMobileViewport && drawerAccessibilityHidden ? true : undefined}
         data-hide-in-print

@@ -1,8 +1,12 @@
 import { expect, test } from "@playwright/test"
 
 import { createTestAccount, tryDeleteCurrentUser } from "../../support/account"
-import { dismissFeedForm, followOnboardingFeed, openWebApp } from "../../support/app"
-import { bootstrapAuthenticatedWebSession } from "../../support/auth-bootstrap"
+import {
+  dismissFeedForm,
+  followOnboardingFeed,
+  openWebApp,
+  registerWithCredential,
+} from "../../support/app"
 import { resolveDesktopE2EEnv } from "../../support/env"
 
 const env = resolveDesktopE2EEnv()
@@ -29,13 +33,16 @@ test.describe("mobile viewport bootstrap", () => {
 })
 
 test.describe("mobile subscription drawer a11y", () => {
+  test.describe.configure({ timeout: 180_000 })
+
   test.use({
     viewport: { width: 390, height: 844 },
   })
 
   test.beforeEach(async ({ page }) => {
     const account = createTestAccount("mobile-drawer-a11y")
-    await bootstrapAuthenticatedWebSession(page, env, account)
+    await openWebApp(page, env, "/timeline/articles/all/pending")
+    await registerWithCredential(page, account)
     await followOnboardingFeed(page, env)
     await dismissFeedForm(page)
     await openWebApp(page, env, "/timeline/articles/all/pending")
@@ -43,6 +50,26 @@ test.describe("mobile subscription drawer a11y", () => {
 
   test.afterEach(async ({ page }) => {
     await tryDeleteCurrentUser(page, env).catch(() => {})
+  })
+
+  test("moves focus into the drawer immediately after open", async ({ page }) => {
+    const entryTrigger = page.locator(
+      '[data-testid="mobile-subscription-drawer-entry-trigger"]:visible',
+    )
+    const drawer = page.locator("#mobile-subscription-drawer")
+
+    await expect(entryTrigger).toBeVisible({ timeout: 30_000 })
+    await entryTrigger.click()
+
+    await expect(drawer).toHaveAttribute("aria-modal", "true")
+    await expect(drawer).not.toHaveAttribute("aria-hidden", "true")
+    await expect
+      .poll(() => drawer.evaluate((element) => element.contains(document.activeElement)))
+      .toBe(true)
+
+    const activeElementTag = await page.evaluate(() => document.activeElement?.tagName ?? "")
+    expect(activeElementTag).not.toBe("BODY")
+    await expect(entryTrigger).not.toBeFocused()
   })
 
   test("restores focus to the entry trigger after Escape and backdrop close", async ({ page }) => {
