@@ -4,15 +4,18 @@ import { tmpdir } from "node:os"
 import { join } from "pathe"
 import { afterEach, describe, expect, it } from "vitest"
 
+import { FOLLO_PRECACHE_MANIFEST_BOUNDARY } from "./precache-manifest-entries"
 import {
   assertPrecacheManifestInjectedIntoServiceWorker,
   assertPrecacheManifestSnapshot,
-  extractWorkboxPrecacheUrls,
+  extractActualPrecachePayload,
   resetPrecacheManifestSnapshot,
 } from "./precache-manifest-snapshot"
 import { assertServiceWorkerBuild, assertServiceWorkerFileExists } from "./validate-sw-manifest"
 
 const tempDirs: string[] = []
+
+const boundaryAnchor = `("${FOLLO_PRECACHE_MANIFEST_BOUNDARY}")`
 
 afterEach(() => {
   resetPrecacheManifestSnapshot()
@@ -60,21 +63,32 @@ describe("assertPrecacheManifestSnapshot", () => {
   })
 })
 
-describe("extractWorkboxPrecacheUrls", () => {
-  it("extracts urls only from workbox manifest payload objects", () => {
-    const urls = extractWorkboxPrecacheUrls(
-      'const runtimeRoutes=[{url:"/api"}];xt([{"revision":"abc","url":"index.html"},{"revision":null,"url":"/sw.js?pwa=true"}]);',
+describe("extractActualPrecachePayload", () => {
+  it("extracts the inline array passed to the precache call before the boundary anchor", () => {
+    const payload = extractActualPrecachePayload(
+      `xt([{"revision":"abc","url":"index.html"},{"revision":null,"url":"/sw.js?pwa=true"}]);${boundaryAnchor};`,
     )
 
-    expect(urls).toEqual(new Set(["index.html", "/sw.js?pwa=true"]))
+    expect(payload).toEqual([
+      { revision: "abc", url: "index.html" },
+      { revision: null, url: "/sw.js?pwa=true" },
+    ])
+  })
+
+  it("returns an empty array when the precache call receives []", () => {
+    expect(
+      extractActualPrecachePayload(
+        `const unusedManifest=[{"revision":"abc","url":"index.html"}];xt([]);${boundaryAnchor};`,
+      ),
+    ).toEqual([])
   })
 })
 
 describe("assertPrecacheManifestInjectedIntoServiceWorker", () => {
-  it("passes when every snapshot url exists in the precache payload", () => {
+  it("passes when every snapshot entry matches the actual precache payload", () => {
     expect(() =>
       assertPrecacheManifestInjectedIntoServiceWorker(
-        'xt([{"revision":"abc123","url":"index.html"},{"revision":null,"url":"/sw.js?pwa=true"}]);',
+        `xt([{"revision":"abc123","url":"index.html"},{"revision":null,"url":"/sw.js?pwa=true"}]);${boundaryAnchor};`,
         [
           { url: "index.html", revision: "abc123" },
           { url: "/sw.js?pwa=true", revision: null },
@@ -86,19 +100,7 @@ describe("assertPrecacheManifestInjectedIntoServiceWorker", () => {
   it("fails when only one of two snapshot urls is present in the precache payload", () => {
     expect(() =>
       assertPrecacheManifestInjectedIntoServiceWorker(
-        'xt([{"revision":"abc123","url":"index.html"}]);',
-        [
-          { url: "index.html", revision: "abc123" },
-          { url: "/sw.js?pwa=true", revision: null },
-        ],
-      ),
-    ).toThrow(/missing 1 entries/)
-  })
-
-  it("fails when /sw.js?pwa=true is missing from the precache payload", () => {
-    expect(() =>
-      assertPrecacheManifestInjectedIntoServiceWorker(
-        'xt([{"revision":"abc123","url":"index.html"}]);',
+        `xt([{"revision":"abc123","url":"index.html"}]);${boundaryAnchor};`,
         [
           { url: "index.html", revision: "abc123" },
           { url: "/sw.js?pwa=true", revision: null },
@@ -107,16 +109,37 @@ describe("assertPrecacheManifestInjectedIntoServiceWorker", () => {
     ).toThrow(/\/sw\.js\?pwa=true/)
   })
 
-  it("fails when urls only appear in unrelated code", () => {
+  it("fails when /sw.js?pwa=true is missing from the precache payload", () => {
     expect(() =>
       assertPrecacheManifestInjectedIntoServiceWorker(
-        'const runtimeRoutes=[{url:"/api"}];const x="index.html";const y="/sw.js?pwa=true";xt([]);',
+        `xt([{"revision":"abc123","url":"index.html"}]);${boundaryAnchor};`,
         [
           { url: "index.html", revision: "abc123" },
           { url: "/sw.js?pwa=true", revision: null },
         ],
       ),
-    ).toThrow(/missing 2 entries/)
+    ).toThrow(/\/sw\.js\?pwa=true/)
+  })
+
+  it("fails when a full manifest exists in an unrelated variable but precache receives []", () => {
+    expect(() =>
+      assertPrecacheManifestInjectedIntoServiceWorker(
+        `const unusedManifest=[{"revision":"abc123","url":"index.html"},{"revision":null,"url":"/sw.js?pwa=true"}];xt([]);${boundaryAnchor};`,
+        [
+          { url: "index.html", revision: "abc123" },
+          { url: "/sw.js?pwa=true", revision: null },
+        ],
+      ),
+    ).toThrow(/missing or mismatched/)
+  })
+
+  it("fails when the url matches but revision is stale", () => {
+    expect(() =>
+      assertPrecacheManifestInjectedIntoServiceWorker(
+        `xt([{"revision":"stale","url":"index.html"}]);${boundaryAnchor};`,
+        [{ url: "index.html", revision: "abc123" }],
+      ),
+    ).toThrow(/index\.html/)
   })
 })
 
@@ -124,8 +147,7 @@ describe("assertServiceWorkerBuild", () => {
   it("passes when snapshot and injected sw.js agree", () => {
     expect(() =>
       assertServiceWorkerBuild({
-        swContent:
-          'xt([{"revision":"abc123","url":"index.html"},{"revision":null,"url":"/sw.js?pwa=true"}]);',
+        swContent: `xt([{"revision":"abc123","url":"index.html"},{"revision":null,"url":"/sw.js?pwa=true"}]);${boundaryAnchor};`,
         precacheManifest: [
           { url: "index.html", revision: "abc123" },
           { url: "/sw.js?pwa=true", revision: null },
@@ -140,13 +162,13 @@ describe("assertServiceWorkerBuild", () => {
         swContent: "precacheAndRoute(self.__WB_MANIFEST);",
         precacheManifest: [{ url: "index.html", revision: "abc123" }],
       }),
-    ).toThrow(/__WB_MANIFEST was not injected/)
+    ).toThrow(/boundary anchor/)
   })
 
   it("fails when precache snapshot is empty even if unrelated runtime url arrays exist", () => {
     expect(() =>
       assertServiceWorkerBuild({
-        swContent: 'const runtimeRoutes=[{url:"/api"}];function mt(n){self.precache(n)}xt([]);',
+        swContent: `const runtimeRoutes=[{url:"/api"}];function mt(n){self.precache(n)}xt([]);${boundaryAnchor};`,
         precacheManifest: [],
       }),
     ).toThrow(/snapshot is empty or missing/)

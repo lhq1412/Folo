@@ -3,14 +3,13 @@ import { existsSync, readFileSync } from "node:fs"
 import { join } from "pathe"
 import type { Plugin, ResolvedConfig } from "vite"
 
+import { FOLLO_PRECACHE_MANIFEST_INJECTION_POINT } from "./precache-manifest-entries"
 import type { PrecacheManifestEntry } from "./precache-manifest-snapshot"
 import {
   assertPrecacheManifestInjectedIntoServiceWorker,
   assertPrecacheManifestSnapshot,
   consumePrecacheManifestSnapshot,
 } from "./precache-manifest-snapshot"
-
-const UNINJECTED_MANIFEST_TOKEN = "__WB_MANIFEST"
 
 export function assertServiceWorkerFileExists(swPath: string): void {
   if (!existsSync(swPath)) {
@@ -25,9 +24,9 @@ export function assertServiceWorkerBuild({
   precacheManifest: PrecacheManifestEntry[] | null
   swContent: string
 }): void {
-  if (swContent.includes(UNINJECTED_MANIFEST_TOKEN)) {
+  if (swContent.includes(FOLLO_PRECACHE_MANIFEST_INJECTION_POINT)) {
     throw new Error(
-      `Service worker build failed: ${UNINJECTED_MANIFEST_TOKEN} was not injected. Check vite-plugin-pwa injectManifest configuration.`,
+      `Service worker build failed: ${FOLLO_PRECACHE_MANIFEST_INJECTION_POINT} was not injected. Check vite-plugin-pwa injectManifest configuration.`,
     )
   }
 

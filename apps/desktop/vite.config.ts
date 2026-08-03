@@ -21,6 +21,7 @@ import { localesPlugin } from "./plugins/vite/locales"
 import manifestPlugin from "./plugins/vite/manifest"
 import {
   buildExpectedPrecacheManifest,
+  FOLLO_PRECACHE_MANIFEST_INJECTION_POINT,
   PRECACHE_ADDITIONAL_MANIFEST_ENTRIES,
 } from "./plugins/vite/precache-manifest-entries"
 import { setPrecacheManifestSnapshot } from "./plugins/vite/precache-manifest-snapshot"
@@ -168,6 +169,8 @@ export default ({ mode }) => {
             globPatterns: [
               "**/*.{js,json,css,html,txt,svg,png,ico,webp,woff,woff2,ttf,eot,otf,wasm}",
             ],
+
+            injectionPoint: FOLLO_PRECACHE_MANIFEST_INJECTION_POINT,
 
             additionalManifestEntries: [...PRECACHE_ADDITIONAL_MANIFEST_ENTRIES],
 
