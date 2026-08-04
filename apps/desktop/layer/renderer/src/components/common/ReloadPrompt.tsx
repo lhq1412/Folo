@@ -5,7 +5,10 @@ import { useRegisterSW } from "virtual:pwa-register/react"
 import { setUpdaterStatus } from "~/atoms/updater"
 import { createPwaUpdaterStatus } from "~/lib/pwa/pwa-updater"
 import { detectUnsavedWork } from "~/lib/pwa/unsaved-work-guard"
-import type { PwaUpdateBroadcastMessage } from "~/lib/pwa/update-coordinator"
+import type {
+  PwaUpdateBroadcastMessage,
+  PwaUpdateLifecycleRecord,
+} from "~/lib/pwa/update-coordinator"
 import {
   acceptPwaUpdateId,
   broadcastPwaUpdateMessage,
@@ -15,10 +18,12 @@ import {
   createPwaUpdateChannel,
   deferPwaUpdateForSession,
   getCurrentPwaUpdateId,
+  hasProcessedLifecycleCompletion,
   isPwaUpdateDeferredForSession,
+  isValidPwaUpdateLifecycleRecord,
+  markLifecycleCompletionProcessed,
   markPwaUpdateCompleted,
   PwaUpdateIdentityUnavailableError,
-  readPwaUpdateLifecycleRecord,
   registerPeriodicServiceWorkerCheck,
   registerPwaUpdateStorageSync,
   registerServiceWorkerUpdateListener,
@@ -36,7 +41,8 @@ export function ReloadPrompt() {
   const cleanupUpdateListenerRef = useRef<(() => void) | null>(null)
   const currentUpdateIdRef = useRef<string | null>(null)
   const needRefreshRef = useRef(false)
-  const reconcileInFlightRef = useRef<Promise<void> | null>(null)
+  const reconcileLoopRef = useRef<Promise<void> | null>(null)
+  const reconcilePendingRef = useRef(false)
   const reconcilePwaUpdateRef = useRef<(() => Promise<void>) | null>(null)
 
   const {
@@ -106,55 +112,59 @@ export function ReloadPrompt() {
       return
     }
 
-    if (reconcileInFlightRef.current) {
-      await reconcileInFlightRef.current
-      return
+    reconcilePendingRef.current = true
+
+    if (!reconcileLoopRef.current) {
+      reconcileLoopRef.current = (async () => {
+        while (reconcilePendingRef.current) {
+          reconcilePendingRef.current = false
+
+          const registration =
+            registrationRef.current ?? (await navigator.serviceWorker?.getRegistration()) ?? null
+
+          try {
+            const updateId = await resolvePwaUpdateId(registration)
+            currentUpdateIdRef.current = updateId
+
+            const finishUpdate = async () => {
+              await performPwaUpdate(updateServiceWorkerRef.current, updateId)
+            }
+
+            setUpdaterStatus(
+              createPwaUpdaterStatus(
+                isPwaUpdateDeferredForSession(updateId) ? "deferred" : "ready",
+                finishUpdate,
+                { updateId },
+              ),
+            )
+          } catch (error) {
+            if (error instanceof PwaUpdateIdentityUnavailableError) {
+              setUpdaterStatus(
+                createPwaUpdaterStatus(
+                  "failed",
+                  async () => {
+                    await reconcilePwaUpdateRef.current?.()
+                  },
+                  {
+                    error: i18n.t("app.pwa.update_identity_unavailable"),
+                  },
+                ),
+              )
+              return
+            }
+
+            throw error
+          }
+        }
+      })().finally(() => {
+        reconcileLoopRef.current = null
+      })
     }
 
-    const reconcileTask = (async () => {
-      const registration =
-        registrationRef.current ?? (await navigator.serviceWorker?.getRegistration()) ?? null
+    await reconcileLoopRef.current
 
-      try {
-        const updateId = await resolvePwaUpdateId(registration)
-        currentUpdateIdRef.current = updateId
-
-        const finishUpdate = async () => {
-          await performPwaUpdate(updateServiceWorkerRef.current, updateId)
-        }
-
-        setUpdaterStatus(
-          createPwaUpdaterStatus(
-            isPwaUpdateDeferredForSession(updateId) ? "deferred" : "ready",
-            finishUpdate,
-            { updateId },
-          ),
-        )
-      } catch (error) {
-        if (error instanceof PwaUpdateIdentityUnavailableError) {
-          setUpdaterStatus(
-            createPwaUpdaterStatus(
-              "failed",
-              async () => {
-                await reconcilePwaUpdateRef.current?.()
-              },
-              {
-                error: i18n.t("app.pwa.update_identity_unavailable"),
-              },
-            ),
-          )
-          return
-        }
-
-        throw error
-      }
-    })()
-
-    reconcileInFlightRef.current = reconcileTask
-    try {
-      await reconcileTask
-    } finally {
-      reconcileInFlightRef.current = null
+    if (reconcilePendingRef.current) {
+      await reconcilePwaUpdateRef.current?.()
     }
   }
 
@@ -174,21 +184,25 @@ export function ReloadPrompt() {
     void reloadPage()
   }
 
+  const handleLifecycleCompletion = (record: PwaUpdateLifecycleRecord | null) => {
+    if (!record || pwaUpdateStarted) {
+      return
+    }
+
+    if (!isValidPwaUpdateLifecycleRecord(record)) {
+      return
+    }
+
+    if (hasProcessedLifecycleCompletion(record.nonce)) {
+      return
+    }
+
+    markLifecycleCompletionProcessed(record.nonce)
+    handleRemoteUpdateCompleted(record.updateId)
+  }
+
   const syncUpdaterStatusFromStorage = () => {
-    if (pwaUpdateStarted) {
-      return
-    }
-
-    const lifecycleRecord = readPwaUpdateLifecycleRecord()
-    if (lifecycleRecord?.state === "completed") {
-      clearPwaUpdateLifecycleRecord()
-      if (!pwaUpdateStarted) {
-        handleRemoteUpdateCompleted(lifecycleRecord.updateId)
-      }
-      return
-    }
-
-    if (!needRefreshRef.current) {
+    if (pwaUpdateStarted || !needRefreshRef.current) {
       return
     }
 
@@ -220,8 +234,8 @@ export function ReloadPrompt() {
       onDeferredStateChanged: () => {
         syncUpdaterStatusFromStorage()
       },
-      onLifecycleChanged: () => {
-        syncUpdaterStatusFromStorage()
+      onLifecycleChanged: (record) => {
+        handleLifecycleCompletion(record)
       },
     })
     return cleanupStorageSync

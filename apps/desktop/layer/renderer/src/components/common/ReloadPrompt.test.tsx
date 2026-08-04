@@ -15,6 +15,7 @@ import {
   PWA_UPDATE_LIFECYCLE_KEY,
   resetPwaUpdateCoordinatorForTests,
 } from "~/lib/pwa/update-coordinator"
+import * as updateCoordinator from "~/lib/pwa/update-coordinator"
 
 import { ReloadPrompt } from "./ReloadPrompt"
 
@@ -124,6 +125,7 @@ describe("ReloadPrompt cross-tab updates", () => {
   beforeEach(() => {
     resetPwaUpdateCoordinatorForTests()
     localStorage.clear()
+    sessionStorage.clear()
     MockBroadcastChannel.channels.clear()
     vi.stubGlobal("BroadcastChannel", MockBroadcastChannel)
     vi.clearAllMocks()
@@ -335,20 +337,177 @@ describe("ReloadPrompt cross-tab updates", () => {
     roots.push(root)
     await act(async () => {})
 
-    markPwaUpdateCompleted(sharedUpdateId)
+    const record = markPwaUpdateCompleted(sharedUpdateId)
 
     window.dispatchEvent(
       new StorageEvent("storage", {
         key: PWA_UPDATE_LIFECYCLE_KEY,
-        newValue: JSON.stringify({
-          updateId: sharedUpdateId,
-          state: "completed",
-          completedAt: Date.now(),
-        }),
+        newValue: JSON.stringify(record),
         storageArea: localStorage,
       }),
     )
 
     expect(reloadSpy).toHaveBeenCalled()
+  })
+
+  it("lets each tab process the same lifecycle completion independently", async () => {
+    vi.stubGlobal("BroadcastChannel", undefined)
+
+    mockUseRegisterSW.mockImplementation((options) => {
+      options?.onRegisteredSW?.(WAITING_SW_URL, mockRegistration)
+      return {
+        needRefresh: [true],
+        updateServiceWorker: mockUpdateServiceWorker,
+      }
+    })
+
+    const record = markPwaUpdateCompleted(sharedUpdateId)
+    const lifecyclePayload = JSON.stringify(record)
+
+    const first = await renderReloadPrompt()
+    roots.push(first.root)
+    await act(async () => {})
+
+    window.dispatchEvent(
+      new StorageEvent("storage", {
+        key: PWA_UPDATE_LIFECYCLE_KEY,
+        newValue: lifecyclePayload,
+        storageArea: localStorage,
+      }),
+    )
+
+    expect(reloadSpy).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      first.root.unmount()
+    })
+    roots.pop()
+    sessionStorage.clear()
+    reloadSpy?.mockClear()
+
+    const second = await renderReloadPrompt()
+    roots.push(second.root)
+    await act(async () => {})
+
+    window.dispatchEvent(
+      new StorageEvent("storage", {
+        key: PWA_UPDATE_LIFECYCLE_KEY,
+        newValue: lifecyclePayload,
+        storageArea: localStorage,
+      }),
+    )
+
+    expect(reloadSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it("does not reload from stale lifecycle when a newer update becomes active", async () => {
+    vi.stubGlobal("BroadcastChannel", undefined)
+
+    const staleUpdateId = createPwaUpdateIdFromWaitingWorker(
+      WAITING_SW_URL,
+      "mock-build-revision-v2",
+    )
+    const nextUpdateId = createPwaUpdateIdFromWaitingWorker(
+      WAITING_SW_URL,
+      "mock-build-revision-v3",
+    )
+
+    mockUseRegisterSW.mockImplementation((options) => {
+      options?.onRegisteredSW?.(WAITING_SW_URL, mockRegistration)
+      return {
+        needRefresh: [true],
+        updateServiceWorker: mockUpdateServiceWorker,
+      }
+    })
+
+    const { root } = await renderReloadPrompt()
+    roots.push(root)
+    await act(async () => {})
+
+    localStorage.setItem(
+      PWA_UPDATE_LIFECYCLE_KEY,
+      JSON.stringify({
+        updateId: staleUpdateId,
+        state: "completed",
+        completedAt: Date.now(),
+        nonce: "stale-lifecycle-nonce",
+      }),
+    )
+
+    reloadSpy?.mockClear()
+
+    localStorage.setItem(PWA_ACTIVE_UPDATE_ID_KEY, nextUpdateId)
+    window.dispatchEvent(
+      new StorageEvent("storage", {
+        key: PWA_ACTIVE_UPDATE_ID_KEY,
+        newValue: nextUpdateId,
+        storageArea: localStorage,
+      }),
+    )
+
+    expect(reloadSpy).not.toHaveBeenCalled()
+    expect(getPwaStatusCalls().at(-1)).toMatchObject({
+      type: "pwa",
+      status: "ready",
+    })
+  })
+
+  it("re-runs reconcile when a new waiting worker arrives during an in-flight reconcile", async () => {
+    const { registerServiceWorkerUpdateListener: realRegisterListener } = await vi.importActual<
+      typeof updateCoordinator
+    >("~/lib/pwa/update-coordinator")
+
+    const v2UpdateId = createPwaUpdateIdFromWaitingWorker(WAITING_SW_URL, "mock-build-revision-v2")
+    const v3UpdateId = createPwaUpdateIdFromWaitingWorker(WAITING_SW_URL, "mock-build-revision-v3")
+
+    let releaseFirstResolve: () => void = () => {}
+    const firstResolveGate = new Promise<void>((resolve) => {
+      releaseFirstResolve = resolve
+    })
+
+    const resolveSpy = vi
+      .spyOn(updateCoordinator, "resolvePwaUpdateId")
+      .mockImplementationOnce(async () => {
+        await firstResolveGate
+        return v2UpdateId
+      })
+      .mockImplementationOnce(async () => v3UpdateId)
+
+    let triggerWaitingWorkerReady: () => void = () => {}
+    const registerListenerSpy = vi
+      .spyOn(updateCoordinator, "registerServiceWorkerUpdateListener")
+      .mockImplementation((registration, onReady) => {
+        triggerWaitingWorkerReady = onReady
+        return realRegisterListener(registration, onReady)
+      })
+
+    mockUseRegisterSW.mockImplementation((options) => {
+      options?.onRegisteredSW?.(WAITING_SW_URL, mockRegistration)
+      return {
+        needRefresh: [true],
+        updateServiceWorker: mockUpdateServiceWorker,
+      }
+    })
+
+    const { root } = await renderReloadPrompt()
+    roots.push(root)
+    await act(async () => {})
+
+    triggerWaitingWorkerReady()
+    releaseFirstResolve()
+
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(resolveSpy).toHaveBeenCalledTimes(2)
+    expect(getPwaStatusCalls().at(-1)).toMatchObject({
+      type: "pwa",
+      status: "ready",
+    })
+
+    resolveSpy.mockRestore()
+    registerListenerSpy.mockRestore()
   })
 })

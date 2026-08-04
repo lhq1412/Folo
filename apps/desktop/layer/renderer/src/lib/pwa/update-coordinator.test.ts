@@ -9,8 +9,14 @@ import {
   createPwaUpdateIdFromWaitingWorker,
   deferPwaUpdateForSession,
   getCurrentPwaUpdateId,
+  hasProcessedLifecycleCompletion,
   isMatchingPwaUpdateId,
   isPwaUpdateDeferredForSession,
+  isValidPwaUpdateLifecycleRecord,
+  markLifecycleCompletionProcessed,
+  markPwaUpdateCompleted,
+  parsePwaUpdateLifecycleRecord,
+  PWA_UPDATE_LIFECYCLE_KEY,
   PwaUpdateIdentityUnavailableError,
   registerServiceWorkerUpdateListener,
   requestWaitingWorkerBuildRevisionWithRetry,
@@ -305,6 +311,44 @@ describe("update-coordinator", () => {
     expect(getCurrentPwaUpdateId()).toBe(updateId)
 
     vi.useRealTimers()
+  })
+
+  it("invalidates stale lifecycle records when a newer update id resolves", async () => {
+    const v2UpdateId = createPwaUpdateIdFromWaitingWorker(FIXED_SW_URL, "rev-v2")
+    markPwaUpdateCompleted(v2UpdateId)
+
+    await resolvePwaUpdateId(createRegistration(FIXED_SW_URL, "rev-v3"), {
+      buildRevision: "rev-v3",
+    })
+
+    expect(localStorage.getItem(PWA_UPDATE_LIFECYCLE_KEY)).toBeNull()
+  })
+
+  it("parses lifecycle records with nonce from storage events", () => {
+    const record = markPwaUpdateCompleted("update-1")
+    const parsed = parsePwaUpdateLifecycleRecord(JSON.stringify(record))
+
+    expect(parsed).toEqual(record)
+    expect(parsed?.nonce).toBeTruthy()
+  })
+
+  it("rejects expired lifecycle records", () => {
+    vi.useFakeTimers()
+
+    const record = markPwaUpdateCompleted("update-1")
+    vi.advanceTimersByTime(5 * 60 * 1000 + 1)
+
+    expect(isValidPwaUpdateLifecycleRecord(record)).toBe(false)
+
+    vi.useRealTimers()
+  })
+
+  it("deduplicates lifecycle completion per tab session", () => {
+    const record = markPwaUpdateCompleted("update-1")
+
+    expect(hasProcessedLifecycleCompletion(record.nonce)).toBe(false)
+    markLifecycleCompletionProcessed(record.nonce)
+    expect(hasProcessedLifecycleCompletion(record.nonce)).toBe(true)
   })
 
   it("notifies when a newly installed worker becomes waiting", () => {

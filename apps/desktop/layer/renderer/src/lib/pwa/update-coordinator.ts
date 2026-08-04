@@ -19,7 +19,7 @@ export type PwaUpdateBroadcastMessage =
 export type PwaUpdateStorageSyncHandlers = {
   onActiveUpdateIdChanged?: (updateId: string | null) => void
   onDeferredStateChanged?: () => void
-  onLifecycleChanged?: () => void
+  onLifecycleChanged?: (record: PwaUpdateLifecycleRecord | null) => void
 }
 
 type DeferredUpdateRecord = {
@@ -31,7 +31,11 @@ export type PwaUpdateLifecycleRecord = {
   updateId: string
   state: "completed"
   completedAt: number
+  nonce: string
 }
+
+export const PWA_UPDATE_LIFECYCLE_TTL_MS = 5 * 60 * 1000
+const PWA_PROCESSED_LIFECYCLE_KEY = "folo-pwa-processed-lifecycle-v1"
 
 export class PwaUpdateIdentityUnavailableError extends Error {
   constructor() {
@@ -84,6 +88,13 @@ function clearStaleDeferredForUpdateId(updateId: string): void {
   const record = readDeferredRecord()
   if (record && record.updateId !== updateId) {
     clearDeferredPwaUpdateForSession()
+  }
+}
+
+function invalidateStaleLifecycleRecord(activeUpdateId: string): void {
+  const record = readPwaUpdateLifecycleRecord()
+  if (record && record.updateId !== activeUpdateId) {
+    clearPwaUpdateLifecycleRecord()
   }
 }
 
@@ -188,6 +199,7 @@ export async function resolvePwaUpdateId(
       options?.buildRevision ?? (await requestWaitingWorkerBuildRevisionWithRetry(waitingWorker))
     if (buildRevision) {
       const updateId = createPwaUpdateIdFromWaitingWorker(waitingWorker.scriptURL, buildRevision)
+      invalidateStaleLifecycleRecord(updateId)
       clearStaleDeferredForUpdateId(updateId)
       persistPwaUpdateId(updateId)
       return updateId
@@ -233,28 +245,71 @@ export function resetPwaUpdateCoordinatorForTests(): void {
   localStorage.removeItem(PWA_ACTIVE_UPDATE_ID_KEY)
   localStorage.removeItem(PWA_UPDATE_DEFERRED_KEY)
   localStorage.removeItem(PWA_UPDATE_LIFECYCLE_KEY)
+  sessionStorage.removeItem(PWA_PROCESSED_LIFECYCLE_KEY)
 }
 
-export function markPwaUpdateCompleted(updateId: string): void {
+export function markPwaUpdateCompleted(updateId: string): PwaUpdateLifecycleRecord {
   const record: PwaUpdateLifecycleRecord = {
     updateId,
     state: "completed",
     completedAt: Date.now(),
+    nonce: crypto.randomUUID(),
   }
   localStorage.setItem(PWA_UPDATE_LIFECYCLE_KEY, JSON.stringify(record))
+  return record
 }
 
-export function readPwaUpdateLifecycleRecord(): PwaUpdateLifecycleRecord | null {
-  const raw = localStorage.getItem(PWA_UPDATE_LIFECYCLE_KEY)
+export function parsePwaUpdateLifecycleRecord(raw: string | null): PwaUpdateLifecycleRecord | null {
   if (!raw) {
     return null
   }
 
   try {
-    return JSON.parse(raw) as PwaUpdateLifecycleRecord
+    const record = JSON.parse(raw) as PwaUpdateLifecycleRecord
+    if (record.state !== "completed" || !record.updateId || !record.nonce) {
+      return null
+    }
+
+    return record
   } catch {
     return null
   }
+}
+
+export function readPwaUpdateLifecycleRecord(): PwaUpdateLifecycleRecord | null {
+  return parsePwaUpdateLifecycleRecord(localStorage.getItem(PWA_UPDATE_LIFECYCLE_KEY))
+}
+
+export function isValidPwaUpdateLifecycleRecord(record: PwaUpdateLifecycleRecord): boolean {
+  return Date.now() - record.completedAt < PWA_UPDATE_LIFECYCLE_TTL_MS
+}
+
+function readProcessedLifecycleNonces(): Set<string> {
+  const raw = sessionStorage.getItem(PWA_PROCESSED_LIFECYCLE_KEY)
+  if (!raw) {
+    return new Set()
+  }
+
+  try {
+    const nonces = JSON.parse(raw) as string[]
+    return new Set(nonces)
+  } catch {
+    return new Set()
+  }
+}
+
+function writeProcessedLifecycleNonces(nonces: Set<string>): void {
+  sessionStorage.setItem(PWA_PROCESSED_LIFECYCLE_KEY, JSON.stringify([...nonces]))
+}
+
+export function hasProcessedLifecycleCompletion(nonce: string): boolean {
+  return readProcessedLifecycleNonces().has(nonce)
+}
+
+export function markLifecycleCompletionProcessed(nonce: string): void {
+  const nonces = readProcessedLifecycleNonces()
+  nonces.add(nonce)
+  writeProcessedLifecycleNonces(nonces)
 }
 
 export function clearPwaUpdateLifecycleRecord(): void {
@@ -301,7 +356,7 @@ export function registerPwaUpdateStorageSync(handlers?: PwaUpdateStorageSyncHand
     }
 
     if (event.key === PWA_UPDATE_LIFECYCLE_KEY) {
-      handlers?.onLifecycleChanged?.()
+      handlers?.onLifecycleChanged?.(parsePwaUpdateLifecycleRecord(event.newValue))
     }
   }
 
