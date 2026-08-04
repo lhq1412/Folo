@@ -14,11 +14,12 @@ import {
   PWA_ACTIVE_UPDATE_ID_KEY,
   PWA_UPDATE_DEFERRED_KEY,
   PWA_UPDATE_LIFECYCLE_KEY,
+  PWA_UPDATE_SIGNAL_KEY,
   resetPwaUpdateCoordinatorForTests,
 } from "~/lib/pwa/update-coordinator"
 import * as updateCoordinator from "~/lib/pwa/update-coordinator"
 
-import { ReloadPrompt } from "./ReloadPrompt"
+import { ReloadPrompt, resetPwaUpdateSessionForTests } from "./ReloadPrompt"
 
 const mockUseRegisterSW = vi.fn()
 const mockUpdateServiceWorker = vi.fn(async () => {})
@@ -120,33 +121,27 @@ const getPwaStatusCalls = () => {
 }
 
 const flushAsyncUpdates = async () => {
-  await act(async () => {
-    await Promise.resolve()
-    await Promise.resolve()
-  })
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await act(async () => {
+      await Promise.resolve()
+      await new Promise((resolve) => {
+        setTimeout(resolve, 0)
+      })
+    })
+  }
 }
 
 describe("ReloadPrompt cross-tab updates", () => {
   const roots: Root[] = []
   let reloadSpy: ReturnType<typeof vi.spyOn> | null = null
-  let lockChain = Promise.resolve()
 
-  beforeEach(() => {
-    resetPwaUpdateCoordinatorForTests()
+  beforeEach(async () => {
+    resetPwaUpdateSessionForTests()
+    await resetPwaUpdateCoordinatorForTests()
     localStorage.clear()
     sessionStorage.clear()
     MockBroadcastChannel.channels.clear()
     vi.stubGlobal("BroadcastChannel", MockBroadcastChannel)
-    lockChain = Promise.resolve()
-    vi.stubGlobal("navigator", {
-      locks: {
-        request: async (_name: string, callback: () => unknown) => {
-          const run = lockChain.then(() => callback())
-          lockChain = run.then(() => undefined).catch(() => undefined)
-          return run
-        },
-      },
-    })
     vi.clearAllMocks()
 
     reloadSpy = vi.spyOn(window.location, "reload").mockImplementation(() => {})
@@ -161,6 +156,9 @@ describe("ReloadPrompt cross-tab updates", () => {
   })
 
   afterEach(async () => {
+    resetPwaUpdateSessionForTests()
+    await resetPwaUpdateCoordinatorForTests()
+
     for (const root of roots.splice(0)) {
       await act(async () => {
         root.unmount()
@@ -169,7 +167,6 @@ describe("ReloadPrompt cross-tab updates", () => {
 
     reloadSpy?.mockRestore()
     reloadSpy = null
-    resetPwaUpdateCoordinatorForTests()
     localStorage.clear()
     MockBroadcastChannel.channels.clear()
     vi.unstubAllGlobals()
@@ -227,7 +224,7 @@ describe("ReloadPrompt cross-tab updates", () => {
     const second = await renderReloadPrompt()
     roots.push(first.root, second.root)
 
-    await act(async () => {})
+    await flushAsyncUpdates()
 
     expect(getPwaStatusCalls().length).toBeGreaterThanOrEqual(2)
     expect(localStorage.getItem("folo-pwa-active-update-id-v1")).toBe(sharedUpdateId)
@@ -244,7 +241,7 @@ describe("ReloadPrompt cross-tab updates", () => {
 
     const { root } = await renderReloadPrompt()
     roots.push(root)
-    await act(async () => {})
+    await flushAsyncUpdates()
 
     const receiver = new MockBroadcastChannel("folo-pwa-update-v1")
     receiver.postMessage({ type: "deferred", updateId: sharedUpdateId })
@@ -271,7 +268,7 @@ describe("ReloadPrompt cross-tab updates", () => {
     const first = await renderReloadPrompt()
     const second = await renderReloadPrompt()
     roots.push(first.root, second.root)
-    await act(async () => {})
+    await flushAsyncUpdates()
 
     const receiver = new MockBroadcastChannel("folo-pwa-update-v1")
     receiver.postMessage({ type: "update-started", updateId: sharedUpdateId })
@@ -328,7 +325,7 @@ describe("ReloadPrompt cross-tab updates", () => {
 
     const { root } = await renderReloadPrompt()
     roots.push(root)
-    await act(async () => {})
+    await flushAsyncUpdates()
 
     localStorage.setItem(PWA_ACTIVE_UPDATE_ID_KEY, sharedUpdateId)
     localStorage.setItem(
@@ -343,6 +340,7 @@ describe("ReloadPrompt cross-tab updates", () => {
         storageArea: localStorage,
       }),
     )
+    await flushAsyncUpdates()
 
     expect(isPwaUpdateDeferredForSession(sharedUpdateId)).toBe(true)
     expect(getPwaStatusCalls().at(-1)).toMatchObject({
@@ -364,14 +362,14 @@ describe("ReloadPrompt cross-tab updates", () => {
 
     const { root } = await renderReloadPrompt()
     roots.push(root)
-    await act(async () => {})
+    await flushAsyncUpdates()
 
-    const record = await markPwaUpdateCompleted(sharedUpdateId)
+    await markPwaUpdateCompleted(sharedUpdateId)
 
     window.dispatchEvent(
       new StorageEvent("storage", {
-        key: PWA_UPDATE_LIFECYCLE_KEY,
-        newValue: JSON.stringify(record),
+        key: PWA_UPDATE_SIGNAL_KEY,
+        newValue: crypto.randomUUID(),
         storageArea: localStorage,
       }),
     )
@@ -396,7 +394,7 @@ describe("ReloadPrompt cross-tab updates", () => {
 
     const first = await renderReloadPrompt()
     roots.push(first.root)
-    await act(async () => {})
+    await flushAsyncUpdates()
 
     window.dispatchEvent(
       new StorageEvent("storage", {
@@ -418,7 +416,7 @@ describe("ReloadPrompt cross-tab updates", () => {
 
     const second = await renderReloadPrompt()
     roots.push(second.root)
-    await act(async () => {})
+    await flushAsyncUpdates()
 
     window.dispatchEvent(
       new StorageEvent("storage", {
@@ -454,7 +452,7 @@ describe("ReloadPrompt cross-tab updates", () => {
 
     const { root } = await renderReloadPrompt()
     roots.push(root)
-    await act(async () => {})
+    await flushAsyncUpdates()
 
     localStorage.setItem(
       PWA_UPDATE_LIFECYCLE_KEY,
@@ -523,24 +521,27 @@ describe("ReloadPrompt cross-tab updates", () => {
 
     const { root } = await renderReloadPrompt()
     roots.push(root)
-    await act(async () => {})
+    await flushAsyncUpdates()
 
-    triggerWaitingWorkerReady()
-    releaseFirstResolve()
+    try {
+      triggerWaitingWorkerReady()
+      releaseFirstResolve()
 
-    await act(async () => {
-      await Promise.resolve()
-      await Promise.resolve()
-    })
+      await act(async () => {
+        await Promise.resolve()
+        await Promise.resolve()
+      })
 
-    expect(resolveSpy).toHaveBeenCalledTimes(2)
-    expect(getPwaStatusCalls().at(-1)).toMatchObject({
-      type: "pwa",
-      status: "ready",
-    })
-
-    resolveSpy.mockRestore()
-    registerListenerSpy.mockRestore()
+      expect(resolveSpy).toHaveBeenCalledTimes(2)
+      expect(getPwaStatusCalls().at(-1)).toMatchObject({
+        type: "pwa",
+        status: "ready",
+      })
+    } finally {
+      releaseFirstResolve()
+      resolveSpy.mockRestore()
+      registerListenerSpy.mockRestore()
+    }
   })
 
   it("ignores a stale lifecycle event when the tab already coordinates to a newer update", async () => {
@@ -565,7 +566,7 @@ describe("ReloadPrompt cross-tab updates", () => {
 
     const { root } = await renderReloadPrompt()
     roots.push(root)
-    await act(async () => {})
+    await flushAsyncUpdates()
 
     localStorage.setItem(PWA_ACTIVE_UPDATE_ID_KEY, nextUpdateId)
     window.dispatchEvent(
@@ -616,7 +617,7 @@ describe("ReloadPrompt cross-tab updates", () => {
 
     const { root } = await renderReloadPrompt()
     roots.push(root)
-    await act(async () => {})
+    await flushAsyncUpdates()
 
     localStorage.setItem(PWA_ACTIVE_UPDATE_ID_KEY, sharedUpdateId)
     reloadSpy?.mockClear()
@@ -689,21 +690,23 @@ describe("ReloadPrompt cross-tab updates", () => {
 
     const { root } = await renderReloadPrompt()
     roots.push(root)
-    await act(async () => {})
+    await flushAsyncUpdates()
 
     const staleFinishUpdate = getPwaStatusCalls().at(-1)?.finishUpdate
     expect(typeof staleFinishUpdate).toBe("function")
 
-    triggerWaitingWorkerReady()
-    await act(async () => {
-      await staleFinishUpdate?.()
-    })
+    try {
+      triggerWaitingWorkerReady()
+      await act(async () => {
+        await staleFinishUpdate?.()
+      })
 
-    expect(mockUpdateServiceWorker).not.toHaveBeenCalled()
-
-    releaseSecondResolve()
-    resolveSpy.mockRestore()
-    registerListenerSpy.mockRestore()
+      expect(mockUpdateServiceWorker).not.toHaveBeenCalled()
+    } finally {
+      releaseSecondResolve()
+      resolveSpy.mockRestore()
+      registerListenerSpy.mockRestore()
+    }
   })
 
   it("does not re-persist active update id when handling remote completion", async () => {
@@ -724,14 +727,14 @@ describe("ReloadPrompt cross-tab updates", () => {
 
     const { root } = await renderReloadPrompt()
     roots.push(root)
-    await act(async () => {})
+    await flushAsyncUpdates()
 
-    const record = await markPwaUpdateCompleted(sharedUpdateId)
+    await markPwaUpdateCompleted(sharedUpdateId)
 
     window.dispatchEvent(
       new StorageEvent("storage", {
-        key: PWA_UPDATE_LIFECYCLE_KEY,
-        newValue: JSON.stringify(record),
+        key: PWA_UPDATE_SIGNAL_KEY,
+        newValue: crypto.randomUUID(),
         storageArea: localStorage,
       }),
     )
@@ -767,7 +770,7 @@ describe("ReloadPrompt cross-tab updates", () => {
 
     const { root } = await renderReloadPrompt()
     roots.push(root)
-    await act(async () => {})
+    await flushAsyncUpdates()
 
     const receiver = new MockBroadcastChannel("folo-pwa-update-v1")
     receiver.postMessage({
@@ -807,7 +810,7 @@ describe("ReloadPrompt cross-tab updates", () => {
 
     const { root } = await renderReloadPrompt()
     roots.push(root)
-    await act(async () => {})
+    await flushAsyncUpdates()
 
     localStorage.setItem(PWA_ACTIVE_UPDATE_ID_KEY, v3UpdateId)
     window.dispatchEvent(
@@ -817,6 +820,7 @@ describe("ReloadPrompt cross-tab updates", () => {
         storageArea: localStorage,
       }),
     )
+    await flushAsyncUpdates()
 
     reloadSpy?.mockClear()
     vi.mocked(setUpdaterStatus).mockClear()
@@ -836,6 +840,70 @@ describe("ReloadPrompt cross-tab updates", () => {
     expect(setUpdaterStatus).not.toHaveBeenCalled()
 
     receiver.close()
+  })
+
+  it("does not override reloadOnly UI when a stale completion arrives after tombstone is established", async () => {
+    const staleUpdateId = createPwaUpdateIdFromWaitingWorker(
+      WAITING_SW_URL,
+      "mock-build-revision-v1",
+    )
+
+    vi.stubGlobal("BroadcastChannel", undefined)
+
+    mockUseRegisterSW.mockImplementation((options) => {
+      options?.onRegisteredSW?.(WAITING_SW_URL, mockRegistration)
+      return {
+        needRefresh: [true],
+        updateServiceWorker: mockUpdateServiceWorker,
+      }
+    })
+
+    const chatInput = document.createElement("div")
+    chatInput.setAttribute("data-testid", "chat-input")
+    chatInput.textContent = "draft message"
+    document.body.append(chatInput)
+
+    const { root } = await renderReloadPrompt()
+    roots.push(root)
+    await flushAsyncUpdates()
+
+    await markPwaUpdateCompleted(sharedUpdateId)
+
+    window.dispatchEvent(
+      new StorageEvent("storage", {
+        key: PWA_UPDATE_SIGNAL_KEY,
+        newValue: crypto.randomUUID(),
+        storageArea: localStorage,
+      }),
+    )
+    await flushAsyncUpdates()
+
+    expect(
+      getPwaStatusCalls().some((status) => status.status === "ready" && status.reloadOnly === true),
+    ).toBe(true)
+
+    reloadSpy?.mockClear()
+    vi.mocked(setUpdaterStatus).mockClear()
+
+    window.dispatchEvent(
+      new StorageEvent("storage", {
+        key: PWA_UPDATE_LIFECYCLE_KEY,
+        newValue: JSON.stringify({
+          updateId: staleUpdateId,
+          state: "completed",
+          completedAt: Date.now(),
+          nonce: "late-v2-completion",
+        }),
+        storageArea: localStorage,
+      }),
+    )
+    await flushAsyncUpdates()
+
+    expect(reloadSpy).not.toHaveBeenCalled()
+    expect(setUpdaterStatus).not.toHaveBeenCalled()
+    expect(hasProcessedLifecycleCompletion("late-v2-completion")).toBe(false)
+
+    chatInput.remove()
   })
 
   it("re-validates canonical update id after unsaved-work confirmation", async () => {
@@ -868,17 +936,20 @@ describe("ReloadPrompt cross-tab updates", () => {
 
     const { root } = await renderReloadPrompt()
     roots.push(root)
-    await act(async () => {})
+    await flushAsyncUpdates()
 
     const finishUpdate = getPwaStatusCalls().at(-1)?.finishUpdate
-    await act(async () => {
-      await finishUpdate?.()
-    })
 
-    expect(mockUpdateServiceWorker).not.toHaveBeenCalled()
+    try {
+      await act(async () => {
+        await finishUpdate?.()
+      })
 
-    resolveSpy.mockRestore()
-    vi.unstubAllGlobals()
-    chatInput.remove()
+      expect(mockUpdateServiceWorker).not.toHaveBeenCalled()
+    } finally {
+      resolveSpy.mockRestore()
+      vi.unstubAllGlobals()
+      chatInput.remove()
+    }
   })
 })

@@ -14,18 +14,18 @@ vi.mock("~/atoms/updater", () => ({
 }))
 
 describe("pwa-updater", () => {
-  beforeEach(() => {
-    resetPwaUpdateCoordinatorForTests()
+  beforeEach(async () => {
+    await resetPwaUpdateCoordinatorForTests()
     vi.clearAllMocks()
   })
 
-  afterEach(() => {
-    resetPwaUpdateCoordinatorForTests()
+  afterEach(async () => {
+    await resetPwaUpdateCoordinatorForTests()
     vi.unstubAllGlobals()
   })
 
-  it("updates local updater state immediately when deferring", () => {
-    const updateId = beginPwaUpdateCycle()
+  it("updates local updater state immediately when deferring", async () => {
+    const updateId = await beginPwaUpdateCycle()
     const finishUpdate = vi.fn(async () => {})
     const status = createPwaUpdaterStatus("ready", finishUpdate, { updateId })
 
@@ -36,6 +36,13 @@ describe("pwa-updater", () => {
       status.deferUpdate?.()
     }
 
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0)
+    })
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0)
+    })
+
     expect(isPwaUpdateDeferredForSession(updateId)).toBe(true)
     expect(setUpdaterStatus).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -45,16 +52,23 @@ describe("pwa-updater", () => {
     )
   })
 
-  it("defers locally when BroadcastChannel is unavailable", () => {
+  it("defers locally when BroadcastChannel is unavailable", async () => {
     vi.stubGlobal("BroadcastChannel", undefined)
 
-    const updateId = beginPwaUpdateCycle()
+    const updateId = await beginPwaUpdateCycle()
     const finishUpdate = vi.fn(async () => {})
     const status = createPwaUpdaterStatus("ready", finishUpdate, { updateId })
 
     if (status.type === "pwa") {
       status.deferUpdate?.()
     }
+
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0)
+    })
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0)
+    })
 
     expect(isPwaUpdateDeferredForSession(updateId)).toBe(true)
     expect(setUpdaterStatus).toHaveBeenCalledWith(

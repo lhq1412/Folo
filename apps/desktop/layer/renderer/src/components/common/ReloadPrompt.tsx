@@ -19,6 +19,7 @@ import {
   deferPwaUpdateForSession,
   getCurrentPwaUpdateId,
   hasProcessedLifecycleCompletion,
+  hydratePwaUpdateState,
   isPwaUpdateDeferredForSession,
   isValidPwaUpdateLifecycleRecord,
   markLifecycleCompletionProcessed,
@@ -32,6 +33,10 @@ import {
 
 const UPDATE_CHECK_PERIOD_MS = 60 * 60 * 1000
 let pwaUpdateStarted = false
+
+export function resetPwaUpdateSessionForTests(): void {
+  pwaUpdateStarted = false
+}
 
 export function ReloadPrompt() {
   const updateServiceWorkerRef = useRef<((reloadPage?: boolean) => Promise<void>) | null>(null)
@@ -259,6 +264,10 @@ export function ReloadPrompt() {
   }
 
   useEffect(() => {
+    void hydratePwaUpdateState()
+  }, [])
+
+  useEffect(() => {
     const cleanupStorageSync = registerPwaUpdateStorageSync({
       onActiveUpdateIdChanged: () => {
         syncUpdaterStatusFromStorage()
@@ -312,7 +321,7 @@ export function ReloadPrompt() {
 
       switch (message.type) {
         case "deferred": {
-          deferPwaUpdateForSession(message.updateId)
+          await deferPwaUpdateForSession(message.updateId)
           setUpdaterStatus(
             createPwaUpdaterStatus("deferred", finishUpdate, { updateId: message.updateId }),
           )
@@ -442,7 +451,7 @@ async function performPwaUpdate(
   if (unsavedWork.hasUnsavedWork) {
     const confirmed = window.confirm(i18n.t("app.pwa.update_unsaved_confirm"))
     if (!confirmed) {
-      deferPwaUpdateForSession(activeUpdateId)
+      await deferPwaUpdateForSession(activeUpdateId)
       setUpdaterStatus(
         createPwaUpdaterStatus(
           "deferred",
@@ -479,7 +488,7 @@ async function performPwaUpdate(
   }
 
   pwaUpdateStarted = true
-  clearDeferredPwaUpdateForSession()
+  await clearDeferredPwaUpdateForSession()
   broadcastPwaUpdateMessage({ type: "update-started", updateId: activeUpdateId })
 
   setUpdaterStatus({
