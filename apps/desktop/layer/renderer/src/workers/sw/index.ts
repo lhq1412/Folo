@@ -129,5 +129,5 @@ registerRoute(({ request, url }) => {
     return false
   }
 
-  return shouldCacheAsArticleImage(url)
+  return shouldCacheAsArticleImage(url, self.location.origin)
 }, articleImageCache)

@@ -83,7 +83,14 @@ describe("cache-config", () => {
   it("routes approved article images to article cache", () => {
     const url = new URL("https://cdn.example.com/article/photo.jpg")
 
-    expect(shouldCacheAsArticleImage(url)).toBe(true)
+    expect(shouldCacheAsArticleImage(url, ORIGIN)).toBe(true)
+    expect(resolveRuntimeImageCacheRoute(url, ORIGIN)).toBe("articleImages")
+  })
+
+  it("routes cross-origin hashed asset images to article cache", () => {
+    const url = new URL("https://cdn.example.com/assets/logo-01234567abcdef.png")
+
+    expect(shouldCacheAsArticleImage(url, ORIGIN)).toBe(true)
     expect(resolveRuntimeImageCacheRoute(url, ORIGIN)).toBe("articleImages")
   })
 

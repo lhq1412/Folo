@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
 import {
+  clearInstallDismissalForReinstall,
   clearStaleInstalledHint,
   isPwaInstallCooldownActive,
   markPwaInstallDismissed,
@@ -25,7 +26,21 @@ describe("install-state", () => {
     const cleared = clearStaleInstalledHint()
 
     expect(cleared.installedAt).toBeNull()
+    expect(cleared.dismissedAt).toBeNull()
     expect(readPwaInstallRecord().installedAt).toBeNull()
+  })
+
+  it("does not set dismissedAt when marking installed", () => {
+    markPwaInstalled(1_000)
+    expect(readPwaInstallRecord().dismissedAt).toBeNull()
+  })
+
+  it("clears install dismissal when browser offers reinstall", () => {
+    markPwaInstallDismissed(1_000)
+    const cleared = clearInstallDismissalForReinstall()
+
+    expect(cleared.dismissedAt).toBeNull()
+    expect(isPwaInstallCooldownActive(cleared, 2_000)).toBe(false)
   })
 
   it("persists dismissal across reads", () => {

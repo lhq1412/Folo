@@ -141,6 +141,12 @@ describe("update-coordinator", () => {
     expect(shouldAcceptPwaUpdateCompletion(v2UpdateId)).toBe(false)
   })
 
+  it("accepts completion without persisting active id when storage is empty", () => {
+    expect(getCurrentPwaUpdateId()).toBeNull()
+    expect(shouldAcceptPwaUpdateCompletion("completed-update-id")).toBe(true)
+    expect(getCurrentPwaUpdateId()).toBeNull()
+  })
+
   it("accepts persisted update ids when module memory is stale", async () => {
     const staleUpdateId = createPwaUpdateIdFromWaitingWorker(FIXED_SW_URL, "rev-v2")
     const nextUpdateId = createPwaUpdateIdFromWaitingWorker(FIXED_SW_URL, "rev-v3")

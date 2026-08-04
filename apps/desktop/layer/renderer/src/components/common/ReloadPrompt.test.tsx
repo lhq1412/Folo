@@ -676,4 +676,132 @@ describe("ReloadPrompt cross-tab updates", () => {
     resolveSpy.mockRestore()
     registerListenerSpy.mockRestore()
   })
+
+  it("does not re-persist active update id when handling remote completion", async () => {
+    vi.stubGlobal("BroadcastChannel", undefined)
+
+    mockUseRegisterSW.mockImplementation((options) => {
+      options?.onRegisteredSW?.(WAITING_SW_URL, mockRegistration)
+      return {
+        needRefresh: [true],
+        updateServiceWorker: mockUpdateServiceWorker,
+      }
+    })
+
+    const chatInput = document.createElement("div")
+    chatInput.setAttribute("data-testid", "chat-input")
+    chatInput.textContent = "draft message"
+    document.body.append(chatInput)
+
+    const { root } = await renderReloadPrompt()
+    roots.push(root)
+    await act(async () => {})
+
+    const record = markPwaUpdateCompleted(sharedUpdateId)
+
+    window.dispatchEvent(
+      new StorageEvent("storage", {
+        key: PWA_UPDATE_LIFECYCLE_KEY,
+        newValue: JSON.stringify(record),
+        storageArea: localStorage,
+      }),
+    )
+
+    expect(reloadSpy).not.toHaveBeenCalled()
+    expect(localStorage.getItem(PWA_ACTIVE_UPDATE_ID_KEY)).toBeNull()
+    expect(getPwaStatusCalls().at(-1)).toMatchObject({
+      type: "pwa",
+      status: "ready",
+      reloadOnly: true,
+    })
+
+    chatInput.remove()
+  })
+
+  it("accepts update-started for a newer batch after completion cleared active state", async () => {
+    const v2UpdateId = createPwaUpdateIdFromWaitingWorker(WAITING_SW_URL, "mock-build-revision-v2")
+    const v3UpdateId = createPwaUpdateIdFromWaitingWorker(WAITING_SW_URL, "mock-build-revision-v3")
+
+    mockUseRegisterSW.mockImplementation((options) => {
+      options?.onRegisteredSW?.(WAITING_SW_URL, mockRegistration)
+      return {
+        needRefresh: [true],
+        updateServiceWorker: mockUpdateServiceWorker,
+      }
+    })
+
+    const chatInput = document.createElement("div")
+    chatInput.setAttribute("data-testid", "chat-input")
+    chatInput.textContent = "draft message"
+    document.body.append(chatInput)
+
+    const { root } = await renderReloadPrompt()
+    roots.push(root)
+    await act(async () => {})
+
+    const receiver = new MockBroadcastChannel("folo-pwa-update-v1")
+    receiver.postMessage({
+      type: "update-completed",
+      updateId: v2UpdateId,
+      nonce: "completion-nonce",
+      completedAt: Date.now(),
+    })
+
+    expect(localStorage.getItem(PWA_ACTIVE_UPDATE_ID_KEY)).toBeNull()
+
+    vi.mocked(setUpdaterStatus).mockClear()
+    receiver.postMessage({ type: "update-started", updateId: v3UpdateId })
+
+    expect(setUpdaterStatus).toHaveBeenCalledWith({
+      type: "pwa",
+      status: "updating",
+    })
+
+    receiver.close()
+    chatInput.remove()
+  })
+
+  it("re-validates canonical update id after unsaved-work confirmation", async () => {
+    const v2UpdateId = createPwaUpdateIdFromWaitingWorker(WAITING_SW_URL, "mock-build-revision-v2")
+    const v3UpdateId = createPwaUpdateIdFromWaitingWorker(WAITING_SW_URL, "mock-build-revision-v3")
+
+    let resolveCalls = 0
+    const resolveSpy = vi
+      .spyOn(updateCoordinator, "resolvePwaUpdateId")
+      .mockImplementation(async () => {
+        resolveCalls += 1
+        return resolveCalls === 1 ? v2UpdateId : v3UpdateId
+      })
+
+    const confirmMock = vi.fn().mockReturnValue(true)
+    vi.stubGlobal("confirm", confirmMock)
+
+    mockUseRegisterSW.mockImplementation((options) => {
+      options?.onRegisteredSW?.(WAITING_SW_URL, mockRegistration)
+      return {
+        needRefresh: [true],
+        updateServiceWorker: mockUpdateServiceWorker,
+      }
+    })
+
+    const chatInput = document.createElement("div")
+    chatInput.setAttribute("data-testid", "chat-input")
+    chatInput.textContent = "draft message"
+    document.body.append(chatInput)
+
+    const { root } = await renderReloadPrompt()
+    roots.push(root)
+    await act(async () => {})
+
+    const finishUpdate = getPwaStatusCalls().at(-1)?.finishUpdate
+    await act(async () => {
+      await finishUpdate?.()
+    })
+
+    expect(mockUpdateServiceWorker).not.toHaveBeenCalled()
+
+    resolveSpy.mockRestore()
+    vi.unstubAllGlobals()
+    chatInput.remove()
+  })
 })

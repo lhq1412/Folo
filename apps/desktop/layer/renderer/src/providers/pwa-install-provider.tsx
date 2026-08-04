@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 
 import type { PwaInstallStorageRecord } from "~/lib/pwa/install-state"
 import {
+  clearInstallDismissalForReinstall,
   clearStaleInstalledHint,
   hasPwaInstallEngagement,
   isPwaInstallCooldownActive,
@@ -81,9 +82,13 @@ export function PwaInstallProvider({ children }: PropsWithChildren) {
 
     const handleBeforeInstallPrompt = (event: Event) => {
       event.preventDefault()
-      if (readPwaInstallRecord().installedAt) {
-        setInstallRecord(clearStaleInstalledHint())
+      let record = readPwaInstallRecord()
+      if (record.installedAt) {
+        record = clearStaleInstalledHint()
+      } else if (record.dismissedAt) {
+        record = clearInstallDismissalForReinstall()
       }
+      setInstallRecord(record)
       setInstalled(false)
       setDeferredPrompt(event as BeforeInstallPromptEvent)
     }

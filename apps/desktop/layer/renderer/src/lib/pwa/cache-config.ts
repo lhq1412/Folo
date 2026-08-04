@@ -122,12 +122,12 @@ export function isFeedIconOrAvatar(url: URL): boolean {
   return FEED_ICON_FILENAME_STEM_PATTERN.test(stem)
 }
 
-export function shouldCacheAsArticleImage(url: URL): boolean {
+export function shouldCacheAsArticleImage(url: URL, appOrigin: string): boolean {
   if (!isSafeRuntimeImageUrl(url)) {
     return false
   }
 
-  if (isFeedIconOrAvatar(url) || isSameOriginStaticImage(url, url.origin)) {
+  if (isFeedIconOrAvatar(url) || isSameOriginStaticImage(url, appOrigin)) {
     return false
   }
 
@@ -147,7 +147,7 @@ export function resolveRuntimeImageCacheRoute(url: URL, origin: string): Runtime
     return "sameOriginStaticImages"
   }
 
-  if (shouldCacheAsArticleImage(url)) {
+  if (shouldCacheAsArticleImage(url, origin)) {
     return "articleImages"
   }
 

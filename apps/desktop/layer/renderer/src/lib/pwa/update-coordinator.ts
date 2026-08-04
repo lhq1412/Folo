@@ -234,7 +234,7 @@ export function acceptPwaUpdateId(updateId: string): boolean {
 export function shouldAcceptPwaUpdateCompletion(updateId: string): boolean {
   const activeUpdateId = getCurrentPwaUpdateId()
   if (!activeUpdateId) {
-    return acceptPwaUpdateId(updateId)
+    return true
   }
 
   return activeUpdateId === updateId

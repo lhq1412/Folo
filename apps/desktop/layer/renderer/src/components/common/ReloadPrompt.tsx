@@ -220,6 +220,7 @@ export function ReloadPrompt() {
     }
 
     markLifecycleCompletionProcessed(record.nonce)
+    clearActivePwaUpdateId()
     currentUpdateIdRef.current = record.updateId
     handleRemoteUpdateCompleted(record.updateId)
   }
@@ -289,6 +290,24 @@ export function ReloadPrompt() {
 
     const handleMessage = (event: MessageEvent<PwaUpdateBroadcastMessage>) => {
       const message = event.data
+
+      if (message.type === "update-completed") {
+        clearPwaUpdateLifecycleRecord()
+        clearActivePwaUpdateId()
+        if (pwaUpdateStarted) {
+          setUpdaterStatus(null)
+          return
+        }
+
+        handleLifecycleCompletion({
+          updateId: message.updateId,
+          state: "completed",
+          completedAt: message.completedAt,
+          nonce: message.nonce,
+        })
+        return
+      }
+
       if (!acceptPwaUpdateId(message.updateId)) {
         return
       }
@@ -307,22 +326,6 @@ export function ReloadPrompt() {
           setUpdaterStatus({
             type: "pwa",
             status: "updating",
-          })
-          break
-        }
-        case "update-completed": {
-          clearPwaUpdateLifecycleRecord()
-          clearActivePwaUpdateId()
-          if (pwaUpdateStarted) {
-            setUpdaterStatus(null)
-            break
-          }
-
-          handleLifecycleCompletion({
-            updateId: message.updateId,
-            state: "completed",
-            completedAt: message.completedAt,
-            nonce: message.nonce,
           })
           break
         }
@@ -397,7 +400,9 @@ function createFinishUpdateHandler(
       throw error
     }
 
-    await performPwaUpdate(updateServiceWorkerRef.current, updateId, registration)
+    await performPwaUpdate(updateServiceWorkerRef.current, updateId, registration, () => {
+      void reconcilePwaUpdateRef.current?.()
+    })
   }
 }
 
@@ -419,6 +424,7 @@ async function performPwaUpdate(
   updateServiceWorker: ((reloadPage?: boolean) => Promise<void>) | null,
   updateId: string | null,
   registration?: ServiceWorkerRegistration | null,
+  onStaleBatch?: () => void,
 ): Promise<void> {
   if (!updateServiceWorker || pwaUpdateStarted) {
     return
@@ -432,19 +438,6 @@ async function performPwaUpdate(
   const resolvedRegistration =
     registration ?? (await navigator.serviceWorker?.getRegistration()) ?? null
 
-  try {
-    const canonicalUpdateId = await resolvePwaUpdateId(resolvedRegistration)
-    if (canonicalUpdateId !== activeUpdateId) {
-      return
-    }
-  } catch (error) {
-    if (error instanceof PwaUpdateIdentityUnavailableError) {
-      return
-    }
-
-    throw error
-  }
-
   const unsavedWork = detectUnsavedWork()
   if (unsavedWork.hasUnsavedWork) {
     const confirmed = window.confirm(i18n.t("app.pwa.update_unsaved_confirm"))
@@ -453,7 +446,13 @@ async function performPwaUpdate(
       setUpdaterStatus(
         createPwaUpdaterStatus(
           "deferred",
-          () => performPwaUpdate(updateServiceWorker, activeUpdateId),
+          () =>
+            performPwaUpdate(
+              updateServiceWorker,
+              activeUpdateId,
+              resolvedRegistration,
+              onStaleBatch,
+            ),
           {
             updateId: activeUpdateId,
           },
@@ -462,6 +461,21 @@ async function performPwaUpdate(
       broadcastPwaUpdateMessage({ type: "deferred", updateId: activeUpdateId })
       return
     }
+  }
+
+  try {
+    const canonicalUpdateId = await resolvePwaUpdateId(resolvedRegistration)
+    if (canonicalUpdateId !== activeUpdateId) {
+      onStaleBatch?.()
+      return
+    }
+  } catch (error) {
+    if (error instanceof PwaUpdateIdentityUnavailableError) {
+      onStaleBatch?.()
+      return
+    }
+
+    throw error
   }
 
   pwaUpdateStarted = true
@@ -490,7 +504,8 @@ async function performPwaUpdate(
     setUpdaterStatus(
       createPwaUpdaterStatus(
         "failed",
-        () => performPwaUpdate(updateServiceWorker, activeUpdateId),
+        () =>
+          performPwaUpdate(updateServiceWorker, activeUpdateId, resolvedRegistration, onStaleBatch),
         {
           error: message,
           updateId: activeUpdateId,

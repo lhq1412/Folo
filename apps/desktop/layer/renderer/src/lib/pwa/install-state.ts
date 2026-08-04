@@ -68,7 +68,6 @@ export function markPwaInstallDismissed(now = Date.now()): PwaInstallStorageReco
 export function markPwaInstalled(now = Date.now()): PwaInstallStorageRecord {
   const record = readRecord()
   record.installedAt = now
-  record.dismissedAt = now
   writeRecord(record)
   return record
 }
@@ -80,6 +79,14 @@ export function clearStaleInstalledHint(): PwaInstallStorageRecord {
   }
 
   record.installedAt = null
+  record.dismissedAt = null
+  writeRecord(record)
+  return record
+}
+
+export function clearInstallDismissalForReinstall(): PwaInstallStorageRecord {
+  const record = readRecord()
+  record.dismissedAt = null
   writeRecord(record)
   return record
 }
