@@ -8,6 +8,7 @@ import { setUpdaterStatus } from "~/atoms/updater"
 import { PWA_BUILD_REVISION_REQUEST, PWA_BUILD_REVISION_RESPONSE } from "~/lib/pwa/pwa-sw-messages"
 import {
   createPwaUpdateIdFromWaitingWorker,
+  hasProcessedLifecycleCompletion,
   isPwaUpdateDeferredForSession,
   markPwaUpdateCompleted,
   PWA_ACTIVE_UPDATE_ID_KEY,
@@ -830,6 +831,7 @@ describe("ReloadPrompt cross-tab updates", () => {
     await flushAsyncUpdates()
 
     expect(localStorage.getItem(PWA_ACTIVE_UPDATE_ID_KEY)).toBe(v3UpdateId)
+    expect(hasProcessedLifecycleCompletion("stale-v2-completion")).toBe(false)
     expect(reloadSpy).not.toHaveBeenCalled()
     expect(setUpdaterStatus).not.toHaveBeenCalled()
 

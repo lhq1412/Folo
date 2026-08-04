@@ -13,9 +13,8 @@ import type {
 import {
   acceptPwaUpdateId,
   broadcastPwaUpdateMessage,
-  clearActivePwaUpdateIdIfMatching,
   clearDeferredPwaUpdateForSession,
-  clearPwaUpdateLifecycleRecordIfMatching,
+  consumePwaUpdateCompletion,
   createPwaUpdateChannel,
   deferPwaUpdateForSession,
   getCurrentPwaUpdateId,
@@ -29,7 +28,6 @@ import {
   registerPwaUpdateStorageSync,
   registerServiceWorkerUpdateListener,
   resolvePwaUpdateId,
-  shouldAcceptPwaUpdateCompletion,
 } from "~/lib/pwa/update-coordinator"
 
 const UPDATE_CHECK_PERIOD_MS = 60 * 60 * 1000
@@ -215,13 +213,12 @@ export function ReloadPrompt() {
       return
     }
 
-    if (!shouldAcceptPwaUpdateCompletion(record.updateId)) {
+    const consumption = await consumePwaUpdateCompletion(record)
+    if (consumption !== "accepted") {
       return
     }
 
     markLifecycleCompletionProcessed(record.nonce)
-    await clearActivePwaUpdateIdIfMatching(record.updateId)
-    await clearPwaUpdateLifecycleRecordIfMatching(record)
     currentUpdateIdRef.current = record.updateId
     handleRemoteUpdateCompleted(record.updateId)
   }
@@ -493,13 +490,15 @@ async function performPwaUpdate(
   try {
     await updateServiceWorker(true)
     const record = await markPwaUpdateCompleted(activeUpdateId)
-    await clearActivePwaUpdateIdIfMatching(activeUpdateId)
-    broadcastPwaUpdateMessage({
-      type: "update-completed",
-      updateId: activeUpdateId,
-      nonce: record.nonce,
-      completedAt: record.completedAt,
-    })
+    const consumption = await consumePwaUpdateCompletion(record)
+    if (consumption === "accepted") {
+      broadcastPwaUpdateMessage({
+        type: "update-completed",
+        updateId: activeUpdateId,
+        nonce: record.nonce,
+        completedAt: record.completedAt,
+      })
+    }
   } catch (error) {
     pwaUpdateStarted = false
     const message = error instanceof Error ? error.message : String(error)

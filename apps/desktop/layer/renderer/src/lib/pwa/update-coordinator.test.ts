@@ -8,6 +8,7 @@ import {
   clearActivePwaUpdateIdIfMatching,
   clearDeferredPwaUpdateForSession,
   clearPwaUpdateLifecycleRecordIfMatching,
+  consumePwaUpdateCompletion,
   createPwaUpdateIdFromWaitingWorker,
   deferPwaUpdateForSession,
   getCurrentPwaUpdateId,
@@ -195,6 +196,34 @@ describe("update-coordinator", () => {
     expect(readPwaUpdateLifecycleRecord()?.updateId).toBe("update-v3")
 
     expect(await clearPwaUpdateLifecycleRecordIfMatching(v3Record)).toBe(true)
+    expect(readPwaUpdateLifecycleRecord()).toBeNull()
+  })
+
+  it("consumes completion atomically and rejects stale batches", async () => {
+    const v2UpdateId = createPwaUpdateIdFromWaitingWorker(FIXED_SW_URL, "rev-v2")
+    const v3UpdateId = createPwaUpdateIdFromWaitingWorker(FIXED_SW_URL, "rev-v3")
+    const v2Record = {
+      updateId: v2UpdateId,
+      state: "completed" as const,
+      completedAt: Date.now(),
+      nonce: "v2-completion",
+    }
+
+    await resolvePwaUpdateId(createRegistration(FIXED_SW_URL, "rev-v3"), {
+      buildRevision: "rev-v3",
+    })
+
+    expect(await consumePwaUpdateCompletion(v2Record)).toBe("stale")
+    expect(getCurrentPwaUpdateId()).toBe(v3UpdateId)
+  })
+
+  it("accepts matching completion and clears shared state in one lock transaction", async () => {
+    const v2UpdateId = createPwaUpdateIdFromWaitingWorker(FIXED_SW_URL, "rev-v2")
+    const v2Record = await markPwaUpdateCompleted(v2UpdateId)
+    localStorage.setItem(PWA_ACTIVE_UPDATE_ID_KEY, v2UpdateId)
+
+    expect(await consumePwaUpdateCompletion(v2Record)).toBe("accepted")
+    expect(getCurrentPwaUpdateId()).toBeNull()
     expect(readPwaUpdateLifecycleRecord()).toBeNull()
   })
 

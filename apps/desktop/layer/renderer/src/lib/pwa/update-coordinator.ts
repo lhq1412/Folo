@@ -261,6 +261,43 @@ export function shouldAcceptPwaUpdateCompletion(updateId: string): boolean {
   return activeUpdateId === updateId
 }
 
+export type ConsumePwaUpdateCompletionResult = "accepted" | "stale"
+
+export async function consumePwaUpdateCompletion(
+  record: PwaUpdateLifecycleRecord,
+): Promise<ConsumePwaUpdateCompletionResult> {
+  return commitPwaUpdateState(async () => {
+    const activeUpdateId = readPersistedPwaUpdateId()
+    if (activeUpdateId && activeUpdateId !== record.updateId) {
+      return "stale"
+    }
+
+    if (pauseDuringPwaStateMutationForTests) {
+      await pauseDuringPwaStateMutationForTests()
+    }
+
+    const currentActiveUpdateId = readPersistedPwaUpdateId()
+    if (currentActiveUpdateId && currentActiveUpdateId !== record.updateId) {
+      return "stale"
+    }
+
+    if (currentActiveUpdateId === record.updateId) {
+      clearActivePwaUpdateId()
+    }
+
+    const existingLifecycleRecord = readPwaUpdateLifecycleRecord()
+    if (
+      existingLifecycleRecord &&
+      existingLifecycleRecord.updateId === record.updateId &&
+      existingLifecycleRecord.nonce === record.nonce
+    ) {
+      clearPwaUpdateLifecycleRecord()
+    }
+
+    return "accepted"
+  })
+}
+
 export function isMatchingPwaUpdateId(updateId: string): boolean {
   return getCurrentPwaUpdateId() === updateId
 }
