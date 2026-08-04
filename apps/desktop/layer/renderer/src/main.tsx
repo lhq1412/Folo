@@ -16,8 +16,11 @@ import { ElECTRON_CUSTOM_TITLEBAR_HEIGHT } from "./constants"
 import { initializeApp } from "./initialize"
 import { registerAppGlobalShortcuts } from "./initialize/global-shortcuts"
 import { followApi } from "./lib/api-client"
+import { registerPwaCoordinatorE2EHook } from "./lib/pwa/pwa-coordinator-e2e"
 import { queryClient } from "./lib/query-client"
 import { router } from "./router"
+
+registerPwaCoordinatorE2EHook()
 
 authClientContext.provide(authClient)
 queryClientContext.provide(queryClient)

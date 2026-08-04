@@ -13,6 +13,7 @@ export type PwaUpdateLifecycleRecord = {
   state: "completed"
   completedAt: number
   nonce: string
+  generation?: number
 }
 
 export type PwaUpdateCompletedTombstone = {
@@ -242,6 +243,10 @@ export async function hydratePwaUpdateState(): Promise<PwaUpdateStateRecord> {
   return state
 }
 
+export function getCachedPwaUpdateGeneration(): number {
+  return cachedState?.generation ?? 0
+}
+
 export function getCachedPwaUpdateState(): PwaUpdateStateRecord | null {
   return cachedState
 }
@@ -266,6 +271,7 @@ export function toLifecycleRecord(
     state: "completed",
     completedAt: tombstone.completedAt,
     nonce: tombstone.nonce,
+    generation: tombstone.generation,
   }
 }
 
@@ -414,6 +420,8 @@ export async function writePwaUpdateCompleted(updateId: string): Promise<PwaUpda
       nonce: record.nonce,
       completedAt: record.completedAt,
     }
+
+    record.generation = state.generation
 
     return record
   })

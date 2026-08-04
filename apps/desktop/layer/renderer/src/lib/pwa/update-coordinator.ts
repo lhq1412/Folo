@@ -1,5 +1,6 @@
 import type { PwaBuildRevisionResponseMessage } from "./pwa-sw-messages"
 import { PWA_BUILD_REVISION_REQUEST, PWA_BUILD_REVISION_RESPONSE } from "./pwa-sw-messages"
+import { logPwaUpdateDiagnostic } from "./pwa-update-diagnostics"
 import type {
   ConsumePwaUpdateCompletionResult,
   PwaUpdateLifecycleRecord,
@@ -11,6 +12,7 @@ import {
   consumePwaUpdateCompletionInStore,
   deferPwaUpdateInStore,
   getCachedActivePwaUpdateId,
+  getCachedPwaUpdateGeneration,
   hydratePwaUpdateState,
   isPwaUpdateDeferredInStore,
   isValidCompletionRecord,
@@ -23,6 +25,21 @@ import {
   setPauseDuringPwaStateMutationForTests,
   writePwaUpdateCompleted,
 } from "./update-state-store"
+
+/**
+ * PWA update coordinator state machine (IndexedDB is the source of truth):
+ *
+ * | State            | Trigger                         | Next state        |
+ * |------------------|---------------------------------|-------------------|
+ * | idle             | waiting worker detected         | active(updateId)  |
+ * | active           | defer                           | active+deferred   |
+ * | active           | update-started (local/remote)   | updating          |
+ * | updating         | SW activation succeeds          | completed tombstone|
+ * | completed        | TTL expiry                      | idle              |
+ * | active/completed | newer canonical updateId        | active(newId)     |
+ *
+ * BroadcastChannel and localStorage signal keys only notify tabs to re-read IDB.
+ */
 
 const PWA_UPDATE_CHANNEL_NAME = "folo-pwa-update-v1"
 export const PWA_UPDATE_DEFERRED_KEY = "folo-pwa-update-deferred-v1"
@@ -54,10 +71,28 @@ const REVISION_RETRY_ATTEMPTS = 3
 const REVISION_RETRY_BASE_DELAY_MS = 250
 
 export type PwaUpdateBroadcastMessage =
-  | { type: "deferred"; updateId: string }
-  | { type: "update-started"; updateId: string }
-  | { type: "update-completed"; updateId: string; nonce: string; completedAt: number }
-  | { type: "update-failed"; updateId: string; error: string }
+  | { type: "deferred"; updateId: string; generation: number }
+  | { type: "update-started"; updateId: string; generation: number }
+  | {
+      type: "update-completed"
+      updateId: string
+      nonce: string
+      completedAt: number
+      generation: number
+    }
+  | { type: "update-failed"; updateId: string; error: string; generation: number }
+
+export type PwaUpdateBroadcastMessageInput =
+  | { type: "deferred"; updateId: string; generation?: number }
+  | { type: "update-started"; updateId: string; generation?: number }
+  | {
+      type: "update-completed"
+      updateId: string
+      nonce: string
+      completedAt: number
+      generation?: number
+    }
+  | { type: "update-failed"; updateId: string; error: string; generation?: number }
 
 export type PwaUpdateStorageSyncHandlers = {
   onActiveUpdateIdChanged?: (updateId: string | null) => void
@@ -156,6 +191,10 @@ export async function resolvePwaUpdateId(
       return withPwaUpdateStateLock(() => persistCanonicalPwaUpdateId(updateId))
     }
 
+    logPwaUpdateDiagnostic({
+      event: "pwa_update_revision_handshake_failed",
+      generation: getCachedPwaUpdateGeneration(),
+    })
     throw new PwaUpdateIdentityUnavailableError()
   }
 
@@ -173,8 +212,19 @@ export function getCurrentPwaUpdateId(): string | null {
 
 export async function acceptPwaUpdateId(updateId: string): Promise<boolean> {
   await ensureHydrated()
-  return withPwaUpdateStateLock(() => adoptPwaUpdateIdInStore(updateId))
+  const accepted = await withPwaUpdateStateLock(() => adoptPwaUpdateIdInStore(updateId))
+  if (!accepted) {
+    logPwaUpdateDiagnostic({
+      event: "pwa_update_adoption_conflict",
+      updateId,
+      generation: getCachedPwaUpdateGeneration(),
+    })
+  }
+
+  return accepted
 }
+
+export { persistCanonicalPwaUpdateId }
 
 export function shouldAcceptPwaUpdateCompletion(updateId: string): boolean {
   const activeUpdateId = getCurrentPwaUpdateId()
@@ -194,7 +244,15 @@ export async function consumePwaUpdateCompletion(
   record: PwaUpdateLifecycleRecord,
 ): Promise<ConsumePwaUpdateCompletionResult> {
   await ensureHydrated()
-  return withPwaUpdateStateLock(() => consumePwaUpdateCompletionInStore(record))
+  const result = await withPwaUpdateStateLock(() => consumePwaUpdateCompletionInStore(record))
+  logPwaUpdateDiagnostic({
+    event: "pwa_update_completion_consumed",
+    result,
+    updateId: record.updateId,
+    generation: record.generation ?? getCachedPwaUpdateGeneration(),
+  })
+
+  return result
 }
 
 export function isMatchingPwaUpdateId(updateId: string): boolean {
@@ -335,10 +393,53 @@ export function createPwaUpdateChannel(): BroadcastChannel | null {
   return new BroadcastChannel(PWA_UPDATE_CHANNEL_NAME)
 }
 
-export function broadcastPwaUpdateMessage(message: PwaUpdateBroadcastMessage): void {
+export function broadcastPwaUpdateMessage(message: PwaUpdateBroadcastMessageInput): void {
+  const envelope = {
+    ...message,
+    generation: message.generation ?? getCachedPwaUpdateGeneration(),
+  } as PwaUpdateBroadcastMessage
+
   const channel = createPwaUpdateChannel()
-  channel?.postMessage(message)
+  if (!channel) {
+    logPwaUpdateDiagnostic({
+      event: "pwa_update_no_bc_fallback",
+      channel: "storage",
+      generation: envelope.generation,
+    })
+  }
+
+  channel?.postMessage(envelope)
   channel?.close()
+}
+
+export async function isBroadcastGenerationCurrent(generation?: number): Promise<boolean> {
+  if (generation === undefined) {
+    return true
+  }
+
+  await ensureHydrated()
+  if (generation < getCachedPwaUpdateGeneration()) {
+    return false
+  }
+
+  return true
+}
+
+export function logStaleBroadcastMessage(messageType: string, messageGeneration: number): void {
+  logPwaUpdateDiagnostic({
+    event: "pwa_update_broadcast_stale",
+    messageType,
+    messageGeneration,
+    generation: getCachedPwaUpdateGeneration(),
+  })
+}
+
+export function logStaleFinishClosure(updateId: string): void {
+  logPwaUpdateDiagnostic({
+    event: "pwa_update_stale_finish_closure",
+    updateId,
+    generation: getCachedPwaUpdateGeneration(),
+  })
 }
 
 export function registerPeriodicServiceWorkerCheck(

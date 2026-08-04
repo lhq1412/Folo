@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react"
 import { useRegisterSW } from "virtual:pwa-register/react"
 
 import { setUpdaterStatus } from "~/atoms/updater"
+import { logPwaUpdateDiagnostic } from "~/lib/pwa/pwa-update-diagnostics"
 import { createPwaUpdaterStatus } from "~/lib/pwa/pwa-updater"
 import { detectUnsavedWork } from "~/lib/pwa/unsaved-work-guard"
 import type {
@@ -20,8 +21,11 @@ import {
   getCurrentPwaUpdateId,
   hasProcessedLifecycleCompletion,
   hydratePwaUpdateState,
+  isBroadcastGenerationCurrent,
   isPwaUpdateDeferredForSession,
   isValidPwaUpdateLifecycleRecord,
+  logStaleBroadcastMessage,
+  logStaleFinishClosure,
   markLifecycleCompletionProcessed,
   markPwaUpdateCompleted,
   PwaUpdateIdentityUnavailableError,
@@ -215,6 +219,12 @@ export function ReloadPrompt() {
     }
 
     if (hasProcessedLifecycleCompletion(record.nonce)) {
+      logPwaUpdateDiagnostic({
+        event: "pwa_update_completion_consumed",
+        result: "duplicate",
+        updateId: record.updateId,
+        generation: record.generation ?? 0,
+      })
       return
     }
 
@@ -298,6 +308,11 @@ export function ReloadPrompt() {
     const handleMessage = async (event: MessageEvent<PwaUpdateBroadcastMessage>) => {
       const message = event.data
 
+      if (!(await isBroadcastGenerationCurrent(message.generation))) {
+        logStaleBroadcastMessage(message.type, message.generation)
+        return
+      }
+
       if (message.type === "update-completed") {
         if (pwaUpdateStarted) {
           setUpdaterStatus(null)
@@ -309,6 +324,7 @@ export function ReloadPrompt() {
           state: "completed",
           completedAt: message.completedAt,
           nonce: message.nonce,
+          generation: message.generation,
         })
         return
       }
@@ -397,6 +413,7 @@ function createFinishUpdateHandler(
     try {
       const canonicalUpdateId = await resolvePwaUpdateId(registration)
       if (canonicalUpdateId !== updateId) {
+        logStaleFinishClosure(updateId)
         void reconcilePwaUpdateRef.current?.()
         return
       }
@@ -475,6 +492,7 @@ async function performPwaUpdate(
   try {
     const canonicalUpdateId = await resolvePwaUpdateId(resolvedRegistration)
     if (canonicalUpdateId !== activeUpdateId) {
+      logStaleFinishClosure(activeUpdateId)
       onStaleBatch?.()
       return
     }
@@ -506,6 +524,7 @@ async function performPwaUpdate(
         updateId: activeUpdateId,
         nonce: record.nonce,
         completedAt: record.completedAt,
+        generation: record.generation,
       })
     }
   } catch (error) {

@@ -293,7 +293,7 @@ describe("update-coordinator", () => {
 
     broadcastPwaUpdateDeferred(updateId)
     await new Promise((resolve) => {
-      setTimeout(resolve, 0)
+      setTimeout(resolve, 50)
     })
 
     expect(listener).toHaveBeenCalled()

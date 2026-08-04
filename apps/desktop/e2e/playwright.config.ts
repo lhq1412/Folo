@@ -64,7 +64,10 @@ export default defineConfig({
     {
       name: "web",
       testMatch: /tests\/web\/.*\.spec\.ts/,
-      testIgnore: /tests\/web\/mobile-drawer-a11y\.spec\.ts/,
+      testIgnore: [
+        /tests\/web\/mobile-drawer-a11y\.spec\.ts/,
+        /tests\/web\/pwa-update-coordination\.spec\.ts/,
+      ],
       use: {
         ...devices["Desktop Chrome"],
         channel: "chromium",
@@ -72,6 +75,31 @@ export default defineConfig({
         launchOptions: {
           args: ["--disable-web-security"],
         },
+      },
+    },
+    {
+      name: "web-pwa",
+      testMatch: /tests\/web\/pwa-update-coordination\.spec\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        channel: "chromium",
+        ignoreHTTPSErrors: true,
+        serviceWorkers: "allow",
+        launchOptions: {
+          args: ["--disable-web-security"],
+        },
+      },
+      webServer: {
+        command: "pnpm run dev:web:pwa",
+        cwd: env.desktopAppDir,
+        env: {
+          ...process.env,
+          VITE_API_URL: process.env.FOLO_E2E_WEB_DEV_API_URL ?? env.apiURL,
+          VITE_WEB_URL: process.env.FOLO_E2E_WEB_DEV_WEB_URL ?? env.webURL,
+        },
+        url: env.webDevServerURL,
+        timeout: 120_000,
+        reuseExistingServer: !process.env.CI,
       },
     },
     {
