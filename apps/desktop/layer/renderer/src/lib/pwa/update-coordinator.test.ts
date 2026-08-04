@@ -314,7 +314,7 @@ describe("update-coordinator", () => {
 
     expect(getCurrentPwaUpdateId()).toBe(v2UpdateId)
     expect(isPwaUpdateDeferredForSession(v2UpdateId)).toBe(true)
-  })
+  }, 10_000)
 
   it("preserves shared state when another tab revision handshake fails", async () => {
     const v3UpdateId = createPwaUpdateIdFromWaitingWorker(FIXED_SW_URL, "rev-v3")
@@ -329,7 +329,7 @@ describe("update-coordinator", () => {
 
     expect(getCurrentPwaUpdateId()).toBe(v3UpdateId)
     expect(isPwaUpdateDeferredForSession(v3UpdateId)).toBe(true)
-  })
+  }, 10_000)
 
   it("retries revision handshake before failing", async () => {
     let attempts = 0

@@ -8,11 +8,12 @@ import { setUpdaterStatus } from "~/atoms/updater"
 import { PWA_BUILD_REVISION_REQUEST, PWA_BUILD_REVISION_RESPONSE } from "~/lib/pwa/pwa-sw-messages"
 import {
   createPwaUpdateIdFromWaitingWorker,
+  deferPwaUpdateForSession,
   hasProcessedLifecycleCompletion,
   isPwaUpdateDeferredForSession,
   markPwaUpdateCompleted,
+  persistCanonicalPwaUpdateId,
   PWA_ACTIVE_UPDATE_ID_KEY,
-  PWA_UPDATE_DEFERRED_KEY,
   PWA_UPDATE_LIFECYCLE_KEY,
   PWA_UPDATE_SIGNAL_KEY,
   resetPwaUpdateCoordinatorForTests,
@@ -131,6 +132,16 @@ const flushAsyncUpdates = async () => {
   }
 }
 
+const dispatchPwaUpdateSignal = () => {
+  window.dispatchEvent(
+    new StorageEvent("storage", {
+      key: PWA_UPDATE_SIGNAL_KEY,
+      newValue: crypto.randomUUID(),
+      storageArea: localStorage,
+    }),
+  )
+}
+
 describe("ReloadPrompt cross-tab updates", () => {
   const roots: Root[] = []
   let reloadSpy: ReturnType<typeof vi.spyOn> | null = null
@@ -173,8 +184,29 @@ describe("ReloadPrompt cross-tab updates", () => {
   })
 
   it("accepts update-started messages in a second tab context", async () => {
-    const { root } = await renderReloadPrompt()
-    roots.push(root)
+    mockUseRegisterSW.mockImplementation((options) => {
+      options?.onRegisteredSW?.(WAITING_SW_URL, mockRegistration)
+      return {
+        needRefresh: [true],
+        updateServiceWorker: mockUpdateServiceWorker,
+      }
+    })
+
+    const first = await renderReloadPrompt()
+    roots.push(first.root)
+    await flushAsyncUpdates()
+
+    mockUseRegisterSW.mockImplementation((options) => {
+      options?.onRegisteredSW?.(WAITING_SW_URL, mockRegistration)
+      return {
+        needRefresh: [false],
+        updateServiceWorker: mockUpdateServiceWorker,
+      }
+    })
+
+    const second = await renderReloadPrompt()
+    roots.push(second.root)
+    await flushAsyncUpdates()
 
     const receiver = new MockBroadcastChannel("folo-pwa-update-v1")
     receiver.postMessage({ type: "update-started", updateId: sharedUpdateId })
@@ -327,19 +359,8 @@ describe("ReloadPrompt cross-tab updates", () => {
     roots.push(root)
     await flushAsyncUpdates()
 
-    localStorage.setItem(PWA_ACTIVE_UPDATE_ID_KEY, sharedUpdateId)
-    localStorage.setItem(
-      PWA_UPDATE_DEFERRED_KEY,
-      JSON.stringify({ updateId: sharedUpdateId, deferredAt: Date.now() }),
-    )
-
-    window.dispatchEvent(
-      new StorageEvent("storage", {
-        key: PWA_UPDATE_DEFERRED_KEY,
-        newValue: JSON.stringify({ updateId: sharedUpdateId, deferredAt: Date.now() }),
-        storageArea: localStorage,
-      }),
-    )
+    await deferPwaUpdateForSession(sharedUpdateId)
+    dispatchPwaUpdateSignal()
     await flushAsyncUpdates()
 
     expect(isPwaUpdateDeferredForSession(sharedUpdateId)).toBe(true)
@@ -389,20 +410,13 @@ describe("ReloadPrompt cross-tab updates", () => {
       }
     })
 
-    const record = await markPwaUpdateCompleted(sharedUpdateId)
-    const lifecyclePayload = JSON.stringify(record)
+    await markPwaUpdateCompleted(sharedUpdateId)
 
     const first = await renderReloadPrompt()
     roots.push(first.root)
     await flushAsyncUpdates()
 
-    window.dispatchEvent(
-      new StorageEvent("storage", {
-        key: PWA_UPDATE_LIFECYCLE_KEY,
-        newValue: lifecyclePayload,
-        storageArea: localStorage,
-      }),
-    )
+    dispatchPwaUpdateSignal()
     await flushAsyncUpdates()
 
     expect(reloadSpy).toHaveBeenCalledTimes(1)
@@ -418,13 +432,7 @@ describe("ReloadPrompt cross-tab updates", () => {
     roots.push(second.root)
     await flushAsyncUpdates()
 
-    window.dispatchEvent(
-      new StorageEvent("storage", {
-        key: PWA_UPDATE_LIFECYCLE_KEY,
-        newValue: lifecyclePayload,
-        storageArea: localStorage,
-      }),
-    )
+    dispatchPwaUpdateSignal()
     await flushAsyncUpdates()
 
     expect(reloadSpy).toHaveBeenCalledTimes(1)
@@ -812,14 +820,8 @@ describe("ReloadPrompt cross-tab updates", () => {
     roots.push(root)
     await flushAsyncUpdates()
 
-    localStorage.setItem(PWA_ACTIVE_UPDATE_ID_KEY, v3UpdateId)
-    window.dispatchEvent(
-      new StorageEvent("storage", {
-        key: PWA_ACTIVE_UPDATE_ID_KEY,
-        newValue: v3UpdateId,
-        storageArea: localStorage,
-      }),
-    )
+    await persistCanonicalPwaUpdateId(v3UpdateId)
+    dispatchPwaUpdateSignal()
     await flushAsyncUpdates()
 
     reloadSpy?.mockClear()

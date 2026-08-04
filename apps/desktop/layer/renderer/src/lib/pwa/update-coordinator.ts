@@ -16,11 +16,11 @@ import {
   hydratePwaUpdateState,
   isPwaUpdateDeferredInStore,
   isValidCompletionRecord,
-  mergeLegacyMirrorIntoPwaUpdateState,
   persistCanonicalPwaUpdateId,
   PWA_UPDATE_LIFECYCLE_TTL_MS,
   PWA_UPDATE_SIGNAL_KEY,
   readCompletedLifecycleRecord,
+  refreshPwaUpdateState,
   resetPwaUpdateStateStoreForTests,
   setPauseDuringPwaStateMutationForTests,
   writePwaUpdateCompleted,
@@ -349,32 +349,11 @@ export function registerPwaUpdateStorageSync(handlers?: PwaUpdateStorageSyncHand
 
   const handleStorage = (event: StorageEvent) => {
     if (event.key === PWA_UPDATE_SIGNAL_KEY) {
-      void hydratePwaUpdateState().then(() => {
+      void refreshPwaUpdateState().then(() => {
         handlers?.onStateSignal?.()
         handlers?.onActiveUpdateIdChanged?.(getCurrentPwaUpdateId())
         handlers?.onDeferredStateChanged?.()
         handlers?.onLifecycleChanged?.(readPwaUpdateLifecycleRecord())
-      })
-      return
-    }
-
-    if (event.key === PWA_ACTIVE_UPDATE_ID_KEY) {
-      void mergeLegacyMirrorIntoPwaUpdateState().then(() => {
-        handlers?.onActiveUpdateIdChanged?.(getCurrentPwaUpdateId())
-      })
-    }
-
-    if (event.key === PWA_UPDATE_DEFERRED_KEY) {
-      void mergeLegacyMirrorIntoPwaUpdateState().then(() => {
-        handlers?.onDeferredStateChanged?.()
-      })
-    }
-
-    if (event.key === PWA_UPDATE_LIFECYCLE_KEY) {
-      void mergeLegacyMirrorIntoPwaUpdateState().then(() => {
-        handlers?.onLifecycleChanged?.(
-          readPwaUpdateLifecycleRecord() ?? parsePwaUpdateLifecycleRecord(event.newValue),
-        )
       })
     }
   }
@@ -417,7 +396,7 @@ export async function isBroadcastGenerationCurrent(generation?: number): Promise
     return true
   }
 
-  await ensureHydrated()
+  await refreshPwaUpdateState()
   if (generation < getCachedPwaUpdateGeneration()) {
     return false
   }
@@ -522,4 +501,9 @@ export function registerServiceWorkerUpdateListener(
   }
 }
 
-export { hydratePwaUpdateState, isValidTombstone, toLifecycleRecord } from "./update-state-store"
+export {
+  hydratePwaUpdateState,
+  isValidTombstone,
+  refreshPwaUpdateState,
+  toLifecycleRecord,
+} from "./update-state-store"

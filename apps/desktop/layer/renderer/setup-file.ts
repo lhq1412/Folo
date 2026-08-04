@@ -3,6 +3,21 @@ import "fake-indexeddb/auto"
 
 import { enableMapSet } from "immer"
 
+if (!globalThis.crypto?.randomUUID) {
+  Object.defineProperty(globalThis, "crypto", {
+    configurable: true,
+    value: {
+      randomUUID: () => {
+        return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (character) => {
+          const random = (Math.random() * 16) | 0
+          const value = character === "x" ? random : (random & 0x3) | 0x8
+          return value.toString(16)
+        })
+      },
+    },
+  })
+}
+
 const createMemoryStorage = () => {
   const data = new Map()
 

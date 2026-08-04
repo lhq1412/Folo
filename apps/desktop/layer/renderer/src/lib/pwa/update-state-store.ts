@@ -8,6 +8,8 @@ export const PWA_UPDATE_SIGNAL_KEY = "folo-pwa-update-signal-v2"
 
 export const PWA_UPDATE_LIFECYCLE_TTL_MS = 5 * 60 * 1000
 
+const LEGACY_MIGRATION_VERSION = 1
+
 export type PwaUpdateLifecycleRecord = {
   updateId: string
   state: "completed"
@@ -30,11 +32,12 @@ export type PwaUpdateDeferredState = {
 }
 
 export type PwaUpdateStateRecord = {
-  schemaVersion: 1
+  schemaVersion: 2
   generation: number
   activeUpdateId: string | null
   deferred: PwaUpdateDeferredState | null
   completed: PwaUpdateCompletedTombstone | null
+  legacyMigrationVersion: number
 }
 
 export type ConsumePwaUpdateCompletionResult = "accepted" | "stale" | "expired"
@@ -57,11 +60,12 @@ export function setPauseDuringPwaStateMutationForTests(
 
 function defaultState(): PwaUpdateStateRecord {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     generation: 0,
     activeUpdateId: null,
     deferred: null,
     completed: null,
+    legacyMigrationVersion: 0,
   }
 }
 
@@ -106,6 +110,7 @@ function readLegacyLifecycleRecord(): PwaUpdateLifecycleRecord | null {
 function migrateFromLegacyStorage(): PwaUpdateStateRecord {
   const state = defaultState()
   state.generation = 1
+  state.legacyMigrationVersion = LEGACY_MIGRATION_VERSION
 
   const activeUpdateId = localStorage.getItem(LEGACY_ACTIVE_KEY)
   if (activeUpdateId) {
@@ -141,6 +146,30 @@ function migrateFromLegacyStorage(): PwaUpdateStateRecord {
   }
 
   return state
+}
+
+function normalizePersistedState(existing: PwaUpdateStateRecord): PwaUpdateStateRecord {
+  if (existing.schemaVersion === 2) {
+    return existing
+  }
+
+  if (existing.schemaVersion === 1) {
+    return {
+      ...existing,
+      schemaVersion: 2,
+      legacyMigrationVersion: existing.legacyMigrationVersion ?? LEGACY_MIGRATION_VERSION,
+    }
+  }
+
+  return defaultState()
+}
+
+function resolveInitialState(existing: PwaUpdateStateRecord | undefined): PwaUpdateStateRecord {
+  if (existing) {
+    return normalizePersistedState(existing)
+  }
+
+  return migrateFromLegacyStorage()
 }
 
 function emitStateSignal(): void {
@@ -185,29 +214,57 @@ function syncLegacyStorageMirror(state: PwaUpdateStateRecord): void {
   }
 }
 
+function updateCachedStateFromRead(state: PwaUpdateStateRecord): void {
+  cachedState = state
+  syncLegacyStorageMirror(state)
+}
+
 function applyCachedState(state: PwaUpdateStateRecord): void {
   cachedState = state
   syncLegacyStorageMirror(state)
   emitStateSignal()
 }
 
-async function readStateFromDatabase(db: IDBDatabase): Promise<PwaUpdateStateRecord> {
+async function readPersistedState(db: IDBDatabase): Promise<PwaUpdateStateRecord | null> {
   const tx = db.transaction(STORE_NAME, "readonly")
   const store = tx.objectStore(STORE_NAME)
   const existing = (await promisifyRequest(store.get(STATE_KEY))) as
     PwaUpdateStateRecord | undefined
 
-  if (existing?.schemaVersion === 1) {
-    return existing
+  if (!existing) {
+    return null
   }
 
-  return migrateFromLegacyStorage()
+  return normalizePersistedState(existing)
 }
 
-async function writeStateToDatabase(db: IDBDatabase, state: PwaUpdateStateRecord): Promise<void> {
-  const tx = db.transaction(STORE_NAME, "readwrite")
-  const store = tx.objectStore(STORE_NAME)
-  await promisifyRequest(store.put(state, STATE_KEY))
+function runReadWriteTransaction<T>(
+  db: IDBDatabase,
+  mutator: (state: PwaUpdateStateRecord) => T,
+): Promise<{ state: PwaUpdateStateRecord; result: T }> {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readwrite")
+    const store = tx.objectStore(STORE_NAME)
+    let transactionState: PwaUpdateStateRecord
+    let transactionResult: T
+
+    const getRequest = store.get(STATE_KEY)
+
+    getRequest.onsuccess = () => {
+      const existing = getRequest.result as PwaUpdateStateRecord | undefined
+      transactionState = resolveInitialState(existing)
+      transactionResult = mutator(transactionState)
+      store.put(transactionState, STATE_KEY)
+    }
+
+    tx.oncomplete = () => {
+      resolve({ state: transactionState, result: transactionResult })
+    }
+
+    tx.onerror = () => {
+      reject(tx.error ?? new Error("PWA update state transaction failed"))
+    }
+  })
 }
 
 function enqueueMutation<T>(operation: () => Promise<T>): Promise<T> {
@@ -219,14 +276,12 @@ function enqueueMutation<T>(operation: () => Promise<T>): Promise<T> {
   return run
 }
 
-export async function mutatePwaUpdateState<T>(
-  mutator: (state: PwaUpdateStateRecord) => T | Promise<T>,
+export async function transactPwaUpdateState<T>(
+  mutator: (state: PwaUpdateStateRecord) => T,
 ): Promise<T> {
   return enqueueMutation(async () => {
     const db = await openDatabase()
-    const state = await readStateFromDatabase(db)
-    const result = await mutator(state)
-    await writeStateToDatabase(db, state)
+    const { state, result } = await runReadWriteTransaction(db, mutator)
     applyCachedState(state)
     return result
   })
@@ -238,9 +293,24 @@ export async function hydratePwaUpdateState(): Promise<PwaUpdateStateRecord> {
   }
 
   const db = await openDatabase()
-  const state = await readStateFromDatabase(db)
-  applyCachedState(state)
-  return state
+  const persisted = await readPersistedState(db)
+  if (persisted) {
+    updateCachedStateFromRead(persisted)
+    return persisted
+  }
+
+  return transactPwaUpdateState((state) => state)
+}
+
+export async function refreshPwaUpdateState(): Promise<PwaUpdateStateRecord> {
+  const db = await openDatabase()
+  const persisted = await readPersistedState(db)
+  if (persisted) {
+    updateCachedStateFromRead(persisted)
+    return persisted
+  }
+
+  return hydratePwaUpdateState()
 }
 
 export function getCachedPwaUpdateGeneration(): number {
@@ -291,48 +361,27 @@ function matchesTombstone(
   return tombstone.updateId === record.updateId && tombstone.nonce === record.nonce
 }
 
-export async function mergeLegacyMirrorIntoPwaUpdateState(): Promise<PwaUpdateStateRecord> {
-  return mutatePwaUpdateState((state) => {
-    const activeUpdateId = localStorage.getItem(LEGACY_ACTIVE_KEY)
-    if (activeUpdateId && activeUpdateId !== state.activeUpdateId) {
-      state.generation += 1
-      state.activeUpdateId = activeUpdateId
-    }
+function evaluateConsumeRejection(
+  state: PwaUpdateStateRecord,
+  record: PwaUpdateLifecycleRecord,
+): ConsumePwaUpdateCompletionResult | null {
+  if (state.activeUpdateId && state.activeUpdateId !== record.updateId) {
+    return "stale"
+  }
 
-    const deferredRaw = localStorage.getItem(LEGACY_DEFERRED_KEY)
-    if (deferredRaw) {
-      try {
-        const deferred = JSON.parse(deferredRaw) as { updateId: string; deferredAt: number }
-        state.deferred = {
-          updateId: deferred.updateId,
-          deferredAt: deferred.deferredAt,
-          generation: state.generation,
-        }
-      } catch {
-        state.deferred = {
-          updateId: deferredRaw,
-          deferredAt: Date.now(),
-          generation: state.generation,
-        }
-      }
+  if (state.completed) {
+    if (!isValidTombstone(state.completed)) {
+      state.completed = null
+    } else if (!matchesTombstone(state.completed, record)) {
+      return "stale"
     }
+  }
 
-    const lifecycle = readLegacyLifecycleRecord()
-    if (lifecycle && isValidCompletionRecord(lifecycle)) {
-      state.completed = {
-        updateId: lifecycle.updateId,
-        generation: state.generation,
-        nonce: lifecycle.nonce,
-        completedAt: lifecycle.completedAt,
-      }
-    }
-
-    return state
-  })
+  return null
 }
 
 export async function adoptPwaUpdateId(updateId: string): Promise<boolean> {
-  return mutatePwaUpdateState((state) => {
+  return transactPwaUpdateState((state) => {
     if (state.activeUpdateId && state.activeUpdateId !== updateId) {
       return false
     }
@@ -362,7 +411,7 @@ export async function adoptPwaUpdateId(updateId: string): Promise<boolean> {
 }
 
 export async function persistCanonicalPwaUpdateId(updateId: string): Promise<string> {
-  return mutatePwaUpdateState((state) => {
+  return transactPwaUpdateState((state) => {
     if (
       !state.activeUpdateId &&
       state.completed &&
@@ -388,7 +437,7 @@ export async function persistCanonicalPwaUpdateId(updateId: string): Promise<str
 }
 
 export async function claimFallbackPwaUpdateId(): Promise<string> {
-  return mutatePwaUpdateState((state) => {
+  return transactPwaUpdateState((state) => {
     if (state.activeUpdateId) {
       return state.activeUpdateId
     }
@@ -401,7 +450,7 @@ export async function claimFallbackPwaUpdateId(): Promise<string> {
 }
 
 export async function writePwaUpdateCompleted(updateId: string): Promise<PwaUpdateLifecycleRecord> {
-  return mutatePwaUpdateState((state) => {
+  return transactPwaUpdateState((state) => {
     const record: PwaUpdateLifecycleRecord = {
       updateId,
       state: "completed",
@@ -434,38 +483,30 @@ export async function consumePwaUpdateCompletionInStore(
     return "expired"
   }
 
-  return enqueueMutation(async () => {
-    const db = await openDatabase()
-    let state = await readStateFromDatabase(db)
+  const initialRejection = await transactPwaUpdateState((state) => {
+    return evaluateConsumeRejection(state, record)
+  })
 
-    const evaluate = (): ConsumePwaUpdateCompletionResult | null => {
-      if (state.activeUpdateId && state.activeUpdateId !== record.updateId) {
-        return "stale"
-      }
+  if (initialRejection) {
+    return initialRejection
+  }
 
-      if (state.completed) {
-        if (!isValidTombstone(state.completed)) {
-          state.completed = null
-        } else if (!matchesTombstone(state.completed, record)) {
-          return "stale"
-        }
-      }
+  if (pauseDuringMutationForTests) {
+    await pauseDuringMutationForTests()
 
-      return null
+    const rejectionAfterPause = await transactPwaUpdateState((state) => {
+      return evaluateConsumeRejection(state, record)
+    })
+
+    if (rejectionAfterPause) {
+      return rejectionAfterPause
     }
+  }
 
-    let rejection = evaluate()
+  return transactPwaUpdateState((state) => {
+    const rejection = evaluateConsumeRejection(state, record)
     if (rejection) {
       return rejection
-    }
-
-    if (pauseDuringMutationForTests) {
-      await pauseDuringMutationForTests()
-      state = await readStateFromDatabase(db)
-      rejection = evaluate()
-      if (rejection) {
-        return rejection
-      }
     }
 
     if (state.activeUpdateId === record.updateId) {
@@ -482,14 +523,12 @@ export async function consumePwaUpdateCompletionInStore(
       }
     }
 
-    await writeStateToDatabase(db, state)
-    applyCachedState(state)
     return "accepted"
   })
 }
 
 export async function deferPwaUpdateInStore(updateId: string): Promise<void> {
-  await mutatePwaUpdateState((state) => {
+  await transactPwaUpdateState((state) => {
     state.deferred = {
       updateId,
       deferredAt: Date.now(),
@@ -499,7 +538,7 @@ export async function deferPwaUpdateInStore(updateId: string): Promise<void> {
 }
 
 export async function clearDeferredPwaUpdateInStore(): Promise<void> {
-  await mutatePwaUpdateState((state) => {
+  await transactPwaUpdateState((state) => {
     state.deferred = null
   })
 }
