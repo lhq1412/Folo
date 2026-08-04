@@ -11,13 +11,17 @@ import {
   broadcastPwaUpdateMessage,
   clearActivePwaUpdateId,
   clearDeferredPwaUpdateForSession,
+  clearPwaUpdateLifecycleRecord,
   createPwaUpdateChannel,
   deferPwaUpdateForSession,
   getCurrentPwaUpdateId,
   isPwaUpdateDeferredForSession,
+  markPwaUpdateCompleted,
   PwaUpdateIdentityUnavailableError,
+  readPwaUpdateLifecycleRecord,
   registerPeriodicServiceWorkerCheck,
   registerPwaUpdateStorageSync,
+  registerServiceWorkerUpdateListener,
   resolvePwaUpdateId,
 } from "~/lib/pwa/update-coordinator"
 
@@ -29,8 +33,11 @@ export function ReloadPrompt() {
   const registrationRef = useRef<ServiceWorkerRegistration | null>(null)
   const cleanupPeriodicCheckRef = useRef<(() => void) | null>(null)
   const cleanupWorkerListenerRef = useRef<(() => void) | null>(null)
+  const cleanupUpdateListenerRef = useRef<(() => void) | null>(null)
   const currentUpdateIdRef = useRef<string | null>(null)
   const needRefreshRef = useRef(false)
+  const reconcileInFlightRef = useRef<Promise<void> | null>(null)
+  const reconcilePwaUpdateRef = useRef<(() => Promise<void>) | null>(null)
 
   const {
     needRefresh: [needRefresh],
@@ -50,12 +57,20 @@ export function ReloadPrompt() {
         return
       }
 
+      cleanupUpdateListenerRef.current?.()
+      cleanupUpdateListenerRef.current = registerServiceWorkerUpdateListener(registration, () => {
+        void reconcilePwaUpdateRef.current?.()
+      })
+
       const startPeriodicCheck = () => {
         cleanupPeriodicCheckRef.current?.()
         cleanupPeriodicCheckRef.current = registerPeriodicServiceWorkerCheck(
           UPDATE_CHECK_PERIOD_MS,
           swUrl,
           registration,
+          () => {
+            void reconcilePwaUpdateRef.current?.()
+          },
         )
       }
 
@@ -86,8 +101,94 @@ export function ReloadPrompt() {
   updateServiceWorkerRef.current = updateServiceWorker
   needRefreshRef.current = needRefresh
 
-  const syncUpdaterStatusFromStorage = () => {
+  reconcilePwaUpdateRef.current = async () => {
     if (!needRefreshRef.current || pwaUpdateStarted) {
+      return
+    }
+
+    if (reconcileInFlightRef.current) {
+      await reconcileInFlightRef.current
+      return
+    }
+
+    const reconcileTask = (async () => {
+      const registration =
+        registrationRef.current ?? (await navigator.serviceWorker?.getRegistration()) ?? null
+
+      try {
+        const updateId = await resolvePwaUpdateId(registration)
+        currentUpdateIdRef.current = updateId
+
+        const finishUpdate = async () => {
+          await performPwaUpdate(updateServiceWorkerRef.current, updateId)
+        }
+
+        setUpdaterStatus(
+          createPwaUpdaterStatus(
+            isPwaUpdateDeferredForSession(updateId) ? "deferred" : "ready",
+            finishUpdate,
+            { updateId },
+          ),
+        )
+      } catch (error) {
+        if (error instanceof PwaUpdateIdentityUnavailableError) {
+          setUpdaterStatus(
+            createPwaUpdaterStatus(
+              "failed",
+              async () => {
+                await reconcilePwaUpdateRef.current?.()
+              },
+              {
+                error: i18n.t("app.pwa.update_identity_unavailable"),
+              },
+            ),
+          )
+          return
+        }
+
+        throw error
+      }
+    })()
+
+    reconcileInFlightRef.current = reconcileTask
+    try {
+      await reconcileTask
+    } finally {
+      reconcileInFlightRef.current = null
+    }
+  }
+
+  const handleRemoteUpdateCompleted = (updateId: string) => {
+    const reloadPage = createReloadPageHandler()
+
+    if (detectUnsavedWork().hasUnsavedWork) {
+      setUpdaterStatus(
+        createPwaUpdaterStatus("ready", reloadPage, {
+          updateId,
+          reloadOnly: true,
+        }),
+      )
+      return
+    }
+
+    void reloadPage()
+  }
+
+  const syncUpdaterStatusFromStorage = () => {
+    if (pwaUpdateStarted) {
+      return
+    }
+
+    const lifecycleRecord = readPwaUpdateLifecycleRecord()
+    if (lifecycleRecord?.state === "completed") {
+      clearPwaUpdateLifecycleRecord()
+      if (!pwaUpdateStarted) {
+        handleRemoteUpdateCompleted(lifecycleRecord.updateId)
+      }
+      return
+    }
+
+    if (!needRefreshRef.current) {
       return
     }
 
@@ -117,6 +218,9 @@ export function ReloadPrompt() {
         syncUpdaterStatusFromStorage()
       },
       onDeferredStateChanged: () => {
+        syncUpdaterStatusFromStorage()
+      },
+      onLifecycleChanged: () => {
         syncUpdaterStatusFromStorage()
       },
     })
@@ -157,6 +261,7 @@ export function ReloadPrompt() {
           break
         }
         case "update-completed": {
+          clearPwaUpdateLifecycleRecord()
           clearActivePwaUpdateId()
           if (pwaUpdateStarted) {
             setUpdaterStatus(null)
@@ -191,6 +296,8 @@ export function ReloadPrompt() {
       cleanupPeriodicCheckRef.current = null
       cleanupWorkerListenerRef.current?.()
       cleanupWorkerListenerRef.current = null
+      cleanupUpdateListenerRef.current?.()
+      cleanupUpdateListenerRef.current = null
     }
   }, [])
 
@@ -199,74 +306,10 @@ export function ReloadPrompt() {
       return
     }
 
-    let cancelled = false
-
-    const applyNeedRefresh = async () => {
-      const registration =
-        registrationRef.current ?? (await navigator.serviceWorker?.getRegistration()) ?? null
-      if (cancelled) {
-        return
-      }
-
-      try {
-        const updateId = await resolvePwaUpdateId(registration)
-        currentUpdateIdRef.current = updateId
-
-        const finishUpdate = async () => {
-          await performPwaUpdate(updateServiceWorkerRef.current, updateId)
-        }
-
-        setUpdaterStatus(
-          createPwaUpdaterStatus(
-            isPwaUpdateDeferredForSession(updateId) ? "deferred" : "ready",
-            finishUpdate,
-            { updateId },
-          ),
-        )
-      } catch (error) {
-        if (error instanceof PwaUpdateIdentityUnavailableError) {
-          setUpdaterStatus(
-            createPwaUpdaterStatus(
-              "failed",
-              async () => {
-                await applyNeedRefresh()
-              },
-              {
-                error: i18n.t("app.pwa.update_identity_unavailable"),
-              },
-            ),
-          )
-          return
-        }
-
-        throw error
-      }
-    }
-
-    void applyNeedRefresh()
-
-    return () => {
-      cancelled = true
-    }
+    void reconcilePwaUpdateRef.current?.()
   }, [needRefresh])
 
   return null
-}
-
-function handleRemoteUpdateCompleted(updateId: string): void {
-  const reloadPage = createReloadPageHandler()
-
-  if (detectUnsavedWork().hasUnsavedWork) {
-    setUpdaterStatus(
-      createPwaUpdaterStatus("ready", reloadPage, {
-        updateId,
-        reloadOnly: true,
-      }),
-    )
-    return
-  }
-
-  void reloadPage()
 }
 
 function createReloadPageHandler(): () => Promise<void> {
@@ -326,6 +369,7 @@ async function performPwaUpdate(
 
   try {
     await updateServiceWorker(true)
+    markPwaUpdateCompleted(activeUpdateId)
     clearActivePwaUpdateId()
     broadcastPwaUpdateMessage({ type: "update-completed", updateId: activeUpdateId })
   } catch (error) {

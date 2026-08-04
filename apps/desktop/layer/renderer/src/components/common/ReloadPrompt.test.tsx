@@ -9,8 +9,10 @@ import { PWA_BUILD_REVISION_REQUEST, PWA_BUILD_REVISION_RESPONSE } from "~/lib/p
 import {
   createPwaUpdateIdFromWaitingWorker,
   isPwaUpdateDeferredForSession,
+  markPwaUpdateCompleted,
   PWA_ACTIVE_UPDATE_ID_KEY,
   PWA_UPDATE_DEFERRED_KEY,
+  PWA_UPDATE_LIFECYCLE_KEY,
   resetPwaUpdateCoordinatorForTests,
 } from "~/lib/pwa/update-coordinator"
 
@@ -24,6 +26,8 @@ const WAITING_SW_BUILD_REVISION = "mock-build-revision-v2"
 const sharedUpdateId = createPwaUpdateIdFromWaitingWorker(WAITING_SW_URL, WAITING_SW_BUILD_REVISION)
 
 const mockRegistration = {
+  active: { state: "activated" },
+  installing: null,
   waiting: {
     scriptURL: WAITING_SW_URL,
     postMessage: (message: { type?: string }, transfer: Transferable[]) => {
@@ -38,7 +42,9 @@ const mockRegistration = {
       })
     },
   },
-} as ServiceWorkerRegistration
+  addEventListener: vi.fn(),
+  removeEventListener: vi.fn(),
+} as unknown as ServiceWorkerRegistration
 
 vi.mock("virtual:pwa-register/react", () => ({
   useRegisterSW: (options: {
@@ -312,5 +318,37 @@ describe("ReloadPrompt cross-tab updates", () => {
       type: "pwa",
       status: "deferred",
     })
+  })
+
+  it("handles remote completion via lifecycle record when BroadcastChannel is unavailable", async () => {
+    vi.stubGlobal("BroadcastChannel", undefined)
+
+    mockUseRegisterSW.mockImplementation((options) => {
+      options?.onRegisteredSW?.(WAITING_SW_URL, mockRegistration)
+      return {
+        needRefresh: [true],
+        updateServiceWorker: mockUpdateServiceWorker,
+      }
+    })
+
+    const { root } = await renderReloadPrompt()
+    roots.push(root)
+    await act(async () => {})
+
+    markPwaUpdateCompleted(sharedUpdateId)
+
+    window.dispatchEvent(
+      new StorageEvent("storage", {
+        key: PWA_UPDATE_LIFECYCLE_KEY,
+        newValue: JSON.stringify({
+          updateId: sharedUpdateId,
+          state: "completed",
+          completedAt: Date.now(),
+        }),
+        storageArea: localStorage,
+      }),
+    )
+
+    expect(reloadSpy).toHaveBeenCalled()
   })
 })

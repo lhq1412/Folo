@@ -4,6 +4,7 @@ import { PWA_BUILD_REVISION_REQUEST, PWA_BUILD_REVISION_RESPONSE } from "./pwa-s
 const PWA_UPDATE_CHANNEL_NAME = "folo-pwa-update-v1"
 export const PWA_UPDATE_DEFERRED_KEY = "folo-pwa-update-deferred-v1"
 export const PWA_ACTIVE_UPDATE_ID_KEY = "folo-pwa-active-update-id-v1"
+export const PWA_UPDATE_LIFECYCLE_KEY = "folo-pwa-update-lifecycle-v1"
 const PWA_UPDATE_CLAIM_LOCK = "folo-pwa-update-claim-v1"
 const REVISION_REQUEST_TIMEOUT_MS = 2000
 const REVISION_RETRY_ATTEMPTS = 3
@@ -18,11 +19,18 @@ export type PwaUpdateBroadcastMessage =
 export type PwaUpdateStorageSyncHandlers = {
   onActiveUpdateIdChanged?: (updateId: string | null) => void
   onDeferredStateChanged?: () => void
+  onLifecycleChanged?: () => void
 }
 
 type DeferredUpdateRecord = {
   updateId: string
   deferredAt: number
+}
+
+export type PwaUpdateLifecycleRecord = {
+  updateId: string
+  state: "completed"
+  completedAt: number
 }
 
 export class PwaUpdateIdentityUnavailableError extends Error {
@@ -185,8 +193,6 @@ export async function resolvePwaUpdateId(
       return updateId
     }
 
-    clearActivePwaUpdateId()
-    clearDeferredPwaUpdateForSession()
     throw new PwaUpdateIdentityUnavailableError()
   }
 
@@ -226,6 +232,33 @@ export function resetPwaUpdateCoordinatorForTests(): void {
   currentPwaUpdateId = null
   localStorage.removeItem(PWA_ACTIVE_UPDATE_ID_KEY)
   localStorage.removeItem(PWA_UPDATE_DEFERRED_KEY)
+  localStorage.removeItem(PWA_UPDATE_LIFECYCLE_KEY)
+}
+
+export function markPwaUpdateCompleted(updateId: string): void {
+  const record: PwaUpdateLifecycleRecord = {
+    updateId,
+    state: "completed",
+    completedAt: Date.now(),
+  }
+  localStorage.setItem(PWA_UPDATE_LIFECYCLE_KEY, JSON.stringify(record))
+}
+
+export function readPwaUpdateLifecycleRecord(): PwaUpdateLifecycleRecord | null {
+  const raw = localStorage.getItem(PWA_UPDATE_LIFECYCLE_KEY)
+  if (!raw) {
+    return null
+  }
+
+  try {
+    return JSON.parse(raw) as PwaUpdateLifecycleRecord
+  } catch {
+    return null
+  }
+}
+
+export function clearPwaUpdateLifecycleRecord(): void {
+  localStorage.removeItem(PWA_UPDATE_LIFECYCLE_KEY)
 }
 
 export function deferPwaUpdateForSession(updateId?: string): void {
@@ -266,6 +299,10 @@ export function registerPwaUpdateStorageSync(handlers?: PwaUpdateStorageSyncHand
     if (event.key === PWA_UPDATE_DEFERRED_KEY) {
       handlers?.onDeferredStateChanged?.()
     }
+
+    if (event.key === PWA_UPDATE_LIFECYCLE_KEY) {
+      handlers?.onLifecycleChanged?.()
+    }
   }
 
   window.addEventListener("storage", handleStorage)
@@ -297,6 +334,7 @@ export function registerPeriodicServiceWorkerCheck(
   period: number,
   swUrl: string,
   registration: ServiceWorkerRegistration,
+  onUpdateChecked?: () => void,
 ): () => void {
   if (period <= 0) {
     return () => {}
@@ -318,6 +356,7 @@ export function registerPeriodicServiceWorkerCheck(
 
       if (response.status === 200) {
         await registration.update()
+        onUpdateChecked?.()
       }
     } catch (error) {
       console.error("[PWA] Service worker update check failed:", error)
@@ -326,5 +365,47 @@ export function registerPeriodicServiceWorkerCheck(
 
   return () => {
     clearInterval(intervalId)
+  }
+}
+
+export function registerServiceWorkerUpdateListener(
+  registration: ServiceWorkerRegistration,
+  onWaitingWorkerReady: () => void,
+): () => void {
+  if (typeof registration.addEventListener !== "function") {
+    return () => {}
+  }
+
+  const handleInstallingWorker = (worker: ServiceWorker) => {
+    const handleStateChange = () => {
+      if (worker.state === "installed" && registration.waiting) {
+        onWaitingWorkerReady()
+      }
+    }
+
+    worker.addEventListener("statechange", handleStateChange)
+    return () => {
+      worker.removeEventListener("statechange", handleStateChange)
+    }
+  }
+
+  let cleanupInstallingListener: (() => void) | null = null
+
+  const handleUpdateFound = () => {
+    cleanupInstallingListener?.()
+    const installingWorker = registration.installing
+    if (!installingWorker) {
+      return
+    }
+
+    cleanupInstallingListener = handleInstallingWorker(installingWorker)
+  }
+
+  registration.addEventListener("updatefound", handleUpdateFound)
+
+  return () => {
+    registration.removeEventListener("updatefound", handleUpdateFound)
+    cleanupInstallingListener?.()
+    cleanupInstallingListener = null
   }
 }

@@ -12,6 +12,7 @@ import {
   isMatchingPwaUpdateId,
   isPwaUpdateDeferredForSession,
   PwaUpdateIdentityUnavailableError,
+  registerServiceWorkerUpdateListener,
   requestWaitingWorkerBuildRevisionWithRetry,
   resetPwaUpdateCoordinatorForTests,
   resolvePwaUpdateId,
@@ -204,7 +205,7 @@ describe("update-coordinator", () => {
     receiver.close()
   })
 
-  it("does not inherit deferred state when revision handshake fails", async () => {
+  it("preserves shared state when revision handshake fails locally", async () => {
     vi.useFakeTimers()
 
     const v2UpdateId = createPwaUpdateIdFromWaitingWorker(FIXED_SW_URL, "rev-v2")
@@ -216,8 +217,28 @@ describe("update-coordinator", () => {
     await vi.runAllTimersAsync()
     await assertion
 
-    expect(getCurrentPwaUpdateId()).toBeNull()
-    expect(isPwaUpdateDeferredForSession(v2UpdateId)).toBe(false)
+    expect(getCurrentPwaUpdateId()).toBe(v2UpdateId)
+    expect(isPwaUpdateDeferredForSession(v2UpdateId)).toBe(true)
+
+    vi.useRealTimers()
+  })
+
+  it("preserves shared state when another tab revision handshake fails", async () => {
+    vi.useFakeTimers()
+
+    const v3UpdateId = createPwaUpdateIdFromWaitingWorker(FIXED_SW_URL, "rev-v3")
+    await resolvePwaUpdateId(createRegistration(FIXED_SW_URL, "rev-v3"), {
+      buildRevision: "rev-v3",
+    })
+    deferPwaUpdateForSession(v3UpdateId)
+
+    const pending = resolvePwaUpdateId(createSilentRegistration(FIXED_SW_URL))
+    const assertion = expect(pending).rejects.toBeInstanceOf(PwaUpdateIdentityUnavailableError)
+    await vi.runAllTimersAsync()
+    await assertion
+
+    expect(getCurrentPwaUpdateId()).toBe(v3UpdateId)
+    expect(isPwaUpdateDeferredForSession(v3UpdateId)).toBe(true)
 
     vi.useRealTimers()
   })
@@ -284,5 +305,44 @@ describe("update-coordinator", () => {
     expect(getCurrentPwaUpdateId()).toBe(updateId)
 
     vi.useRealTimers()
+  })
+
+  it("notifies when a newly installed worker becomes waiting", () => {
+    const onReady = vi.fn()
+    const handlers: {
+      updateFound: (() => void) | null
+      stateChange: (() => void) | null
+    } = {
+      updateFound: null,
+      stateChange: null,
+    }
+
+    const installingWorker = {
+      state: "installing",
+      addEventListener: (type: string, handler: () => void) => {
+        if (type === "statechange") {
+          handlers.stateChange = handler
+        }
+      },
+      removeEventListener: vi.fn(),
+    }
+
+    const registration = {
+      waiting: { scriptURL: FIXED_SW_URL },
+      installing: installingWorker,
+      addEventListener: (type: string, handler: () => void) => {
+        if (type === "updatefound") {
+          handlers.updateFound = handler
+        }
+      },
+      removeEventListener: vi.fn(),
+    } as unknown as ServiceWorkerRegistration
+
+    registerServiceWorkerUpdateListener(registration, onReady)
+    handlers.updateFound?.()
+    installingWorker.state = "installed"
+    handlers.stateChange?.()
+
+    expect(onReady).toHaveBeenCalled()
   })
 })
