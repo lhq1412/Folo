@@ -5,7 +5,29 @@ const PWA_UPDATE_CHANNEL_NAME = "folo-pwa-update-v1"
 export const PWA_UPDATE_DEFERRED_KEY = "folo-pwa-update-deferred-v1"
 export const PWA_ACTIVE_UPDATE_ID_KEY = "folo-pwa-active-update-id-v1"
 export const PWA_UPDATE_LIFECYCLE_KEY = "folo-pwa-update-lifecycle-v1"
-const PWA_UPDATE_CLAIM_LOCK = "folo-pwa-update-claim-v1"
+const PWA_UPDATE_STATE_LOCK = "folo-pwa-update-state-v1"
+let pauseDuringPwaStateMutationForTests: (() => void | Promise<void>) | null = null
+
+export function setPauseDuringPwaStateMutationForTests(
+  pause: (() => void | Promise<void>) | null,
+): void {
+  pauseDuringPwaStateMutationForTests = pause
+}
+
+export async function withPwaUpdateStateLock<T>(operation: () => T | Promise<T>): Promise<T> {
+  if (typeof navigator !== "undefined" && "locks" in navigator) {
+    return navigator.locks.request(PWA_UPDATE_STATE_LOCK, operation)
+  }
+
+  return Promise.resolve(operation())
+}
+
+async function commitPwaUpdateState<T>(operation: () => T | Promise<T>): Promise<T> {
+  return withPwaUpdateStateLock(async () => {
+    syncCurrentPwaUpdateIdFromStorage()
+    return operation()
+  })
+}
 const REVISION_REQUEST_TIMEOUT_MS = 2000
 const REVISION_RETRY_ATTEMPTS = 3
 const REVISION_RETRY_BASE_DELAY_MS = 250
@@ -112,13 +134,7 @@ function claimFallbackUpdateIdSync(): string {
 }
 
 async function claimFallbackUpdateId(): Promise<string> {
-  const claim = () => claimFallbackUpdateIdSync()
-
-  if (typeof navigator !== "undefined" && "locks" in navigator) {
-    return navigator.locks.request(PWA_UPDATE_CLAIM_LOCK, claim)
-  }
-
-  return claim()
+  return commitPwaUpdateState(() => claimFallbackUpdateIdSync())
 }
 
 export function createPwaUpdateIdFromWaitingWorker(
@@ -199,9 +215,12 @@ export async function resolvePwaUpdateId(
       options?.buildRevision ?? (await requestWaitingWorkerBuildRevisionWithRetry(waitingWorker))
     if (buildRevision) {
       const updateId = createPwaUpdateIdFromWaitingWorker(waitingWorker.scriptURL, buildRevision)
-      invalidateStaleLifecycleRecord(updateId)
-      clearStaleDeferredForUpdateId(updateId)
-      persistPwaUpdateId(updateId)
+      await commitPwaUpdateState(() => {
+        invalidateStaleLifecycleRecord(updateId)
+        clearStaleDeferredForUpdateId(updateId)
+        persistPwaUpdateId(updateId)
+        return updateId
+      })
       return updateId
     }
 
@@ -219,16 +238,18 @@ export function getCurrentPwaUpdateId(): string | null {
   return syncCurrentPwaUpdateIdFromStorage() ?? currentPwaUpdateId
 }
 
-export function acceptPwaUpdateId(updateId: string): boolean {
-  const persistedUpdateId = syncCurrentPwaUpdateIdFromStorage()
-  const activeUpdateId = persistedUpdateId ?? currentPwaUpdateId
+export async function acceptPwaUpdateId(updateId: string): Promise<boolean> {
+  return commitPwaUpdateState(() => {
+    const persistedUpdateId = readPersistedPwaUpdateId()
+    const activeUpdateId = persistedUpdateId ?? currentPwaUpdateId
 
-  if (activeUpdateId && activeUpdateId !== updateId) {
-    return false
-  }
+    if (activeUpdateId && activeUpdateId !== updateId) {
+      return false
+    }
 
-  persistPwaUpdateId(updateId)
-  return true
+    persistPwaUpdateId(updateId)
+    return true
+  })
 }
 
 export function shouldAcceptPwaUpdateCompletion(updateId: string): boolean {
@@ -249,14 +270,25 @@ export function clearActivePwaUpdateId(): void {
   localStorage.removeItem(PWA_ACTIVE_UPDATE_ID_KEY)
 }
 
-export function clearActivePwaUpdateIdIfMatching(updateId: string): boolean {
-  const activeUpdateId = getCurrentPwaUpdateId()
-  if (activeUpdateId && activeUpdateId !== updateId) {
-    return false
-  }
+export async function clearActivePwaUpdateIdIfMatching(updateId: string): Promise<boolean> {
+  return commitPwaUpdateState(async () => {
+    const activeUpdateId = readPersistedPwaUpdateId()
+    if (activeUpdateId && activeUpdateId !== updateId) {
+      return false
+    }
 
-  clearActivePwaUpdateId()
-  return true
+    if (pauseDuringPwaStateMutationForTests) {
+      await pauseDuringPwaStateMutationForTests()
+    }
+
+    const currentActiveUpdateId = readPersistedPwaUpdateId()
+    if (currentActiveUpdateId && currentActiveUpdateId !== updateId) {
+      return false
+    }
+
+    clearActivePwaUpdateId()
+    return true
+  })
 }
 
 export function resetPwaUpdateCoordinatorForTests(): void {
@@ -267,15 +299,17 @@ export function resetPwaUpdateCoordinatorForTests(): void {
   sessionStorage.removeItem(PWA_PROCESSED_LIFECYCLE_KEY)
 }
 
-export function markPwaUpdateCompleted(updateId: string): PwaUpdateLifecycleRecord {
-  const record: PwaUpdateLifecycleRecord = {
-    updateId,
-    state: "completed",
-    completedAt: Date.now(),
-    nonce: crypto.randomUUID(),
-  }
-  localStorage.setItem(PWA_UPDATE_LIFECYCLE_KEY, JSON.stringify(record))
-  return record
+export async function markPwaUpdateCompleted(updateId: string): Promise<PwaUpdateLifecycleRecord> {
+  return commitPwaUpdateState(() => {
+    const record: PwaUpdateLifecycleRecord = {
+      updateId,
+      state: "completed",
+      completedAt: Date.now(),
+      nonce: crypto.randomUUID(),
+    }
+    localStorage.setItem(PWA_UPDATE_LIFECYCLE_KEY, JSON.stringify(record))
+    return record
+  })
 }
 
 export function parsePwaUpdateLifecycleRecord(raw: string | null): PwaUpdateLifecycleRecord | null {
@@ -335,18 +369,31 @@ export function clearPwaUpdateLifecycleRecord(): void {
   localStorage.removeItem(PWA_UPDATE_LIFECYCLE_KEY)
 }
 
-export function clearPwaUpdateLifecycleRecordIfMatching(record: PwaUpdateLifecycleRecord): boolean {
-  const existing = readPwaUpdateLifecycleRecord()
-  if (!existing) {
-    return false
-  }
+export async function clearPwaUpdateLifecycleRecordIfMatching(
+  record: PwaUpdateLifecycleRecord,
+): Promise<boolean> {
+  return commitPwaUpdateState(async () => {
+    const existing = readPwaUpdateLifecycleRecord()
+    if (!existing) {
+      return false
+    }
 
-  if (existing.updateId !== record.updateId || existing.nonce !== record.nonce) {
-    return false
-  }
+    if (existing.updateId !== record.updateId || existing.nonce !== record.nonce) {
+      return false
+    }
 
-  clearPwaUpdateLifecycleRecord()
-  return true
+    if (pauseDuringPwaStateMutationForTests) {
+      await pauseDuringPwaStateMutationForTests()
+    }
+
+    const current = readPwaUpdateLifecycleRecord()
+    if (!current || current.updateId !== record.updateId || current.nonce !== record.nonce) {
+      return false
+    }
+
+    clearPwaUpdateLifecycleRecord()
+    return true
+  })
 }
 
 export function deferPwaUpdateForSession(updateId?: string): void {

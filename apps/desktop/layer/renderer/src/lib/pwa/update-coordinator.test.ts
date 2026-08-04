@@ -18,6 +18,7 @@ import {
   markLifecycleCompletionProcessed,
   markPwaUpdateCompleted,
   parsePwaUpdateLifecycleRecord,
+  PWA_ACTIVE_UPDATE_ID_KEY,
   PWA_UPDATE_LIFECYCLE_KEY,
   PwaUpdateIdentityUnavailableError,
   readPwaUpdateLifecycleRecord,
@@ -25,6 +26,7 @@ import {
   requestWaitingWorkerBuildRevisionWithRetry,
   resetPwaUpdateCoordinatorForTests,
   resolvePwaUpdateId,
+  setPauseDuringPwaStateMutationForTests,
   shouldAcceptPwaUpdateCompletion,
 } from "./update-coordinator"
 
@@ -90,14 +92,27 @@ const createSilentRegistration = (scriptUrl: string) =>
     },
   }) as unknown as ServiceWorkerRegistration
 
+let lockChain = Promise.resolve()
+
 describe("update-coordinator", () => {
   beforeEach(() => {
     resetPwaUpdateCoordinatorForTests()
     MockBroadcastChannel.channels.clear()
     vi.stubGlobal("BroadcastChannel", MockBroadcastChannel)
+    lockChain = Promise.resolve()
+    vi.stubGlobal("navigator", {
+      locks: {
+        request: async (_name: string, callback: () => unknown) => {
+          const run = lockChain.then(() => callback())
+          lockChain = run.then(() => undefined).catch(() => undefined)
+          return run
+        },
+      },
+    })
   })
 
   afterEach(() => {
+    setPauseDuringPwaStateMutationForTests(null)
     resetPwaUpdateCoordinatorForTests()
     MockBroadcastChannel.channels.clear()
     vi.unstubAllGlobals()
@@ -117,11 +132,11 @@ describe("update-coordinator", () => {
     expect(isPwaUpdateDeferredForSession("update-1")).toBe(false)
   })
 
-  it("adopts remote update ids in non-origin tabs", () => {
+  it("adopts remote update ids in non-origin tabs", async () => {
     resetPwaUpdateCoordinatorForTests()
 
     expect(getCurrentPwaUpdateId()).toBeNull()
-    expect(acceptPwaUpdateId("remote-update-id")).toBe(true)
+    expect(await acceptPwaUpdateId("remote-update-id")).toBe(true)
     expect(getCurrentPwaUpdateId()).toBe("remote-update-id")
     expect(isMatchingPwaUpdateId("remote-update-id")).toBe(true)
   })
@@ -129,7 +144,9 @@ describe("update-coordinator", () => {
   it("rejects conflicting update ids from another batch", async () => {
     await resolvePwaUpdateId(createRegistration(FIXED_SW_URL, "rev-a"), { buildRevision: "rev-a" })
 
-    expect(acceptPwaUpdateId(createPwaUpdateIdFromWaitingWorker(FIXED_SW_URL, "rev-b"))).toBe(false)
+    expect(await acceptPwaUpdateId(createPwaUpdateIdFromWaitingWorker(FIXED_SW_URL, "rev-b"))).toBe(
+      false,
+    )
   })
 
   it("rejects completion from an older update batch when a newer id is active", async () => {
@@ -158,17 +175,17 @@ describe("update-coordinator", () => {
       buildRevision: "rev-v3",
     })
 
-    expect(clearActivePwaUpdateIdIfMatching(v2UpdateId)).toBe(false)
+    expect(await clearActivePwaUpdateIdIfMatching(v2UpdateId)).toBe(false)
     expect(getCurrentPwaUpdateId()).toBe(v3UpdateId)
-    expect(clearActivePwaUpdateIdIfMatching(v3UpdateId)).toBe(true)
+    expect(await clearActivePwaUpdateIdIfMatching(v3UpdateId)).toBe(true)
     expect(getCurrentPwaUpdateId()).toBeNull()
   })
 
-  it("clears lifecycle records only when update id and nonce match", () => {
-    const v3Record = markPwaUpdateCompleted("update-v3")
+  it("clears lifecycle records only when update id and nonce match", async () => {
+    const v3Record = await markPwaUpdateCompleted("update-v3")
 
     expect(
-      clearPwaUpdateLifecycleRecordIfMatching({
+      await clearPwaUpdateLifecycleRecordIfMatching({
         updateId: "update-v2",
         state: "completed",
         completedAt: Date.now(),
@@ -177,8 +194,37 @@ describe("update-coordinator", () => {
     ).toBe(false)
     expect(readPwaUpdateLifecycleRecord()?.updateId).toBe("update-v3")
 
-    expect(clearPwaUpdateLifecycleRecordIfMatching(v3Record)).toBe(true)
+    expect(await clearPwaUpdateLifecycleRecordIfMatching(v3Record)).toBe(true)
     expect(readPwaUpdateLifecycleRecord()).toBeNull()
+  })
+
+  it("preserves v3 when v2 clear pauses and v3 persist is queued on the state lock", async () => {
+    const v2UpdateId = createPwaUpdateIdFromWaitingWorker(FIXED_SW_URL, "rev-v2")
+    const v3UpdateId = createPwaUpdateIdFromWaitingWorker(FIXED_SW_URL, "rev-v3")
+    localStorage.setItem(PWA_ACTIVE_UPDATE_ID_KEY, v2UpdateId)
+
+    let resumePause: () => void = () => {}
+    const pause = new Promise<void>((resolve) => {
+      resumePause = resolve
+    })
+
+    setPauseDuringPwaStateMutationForTests(() => pause)
+    const clearPromise = clearActivePwaUpdateIdIfMatching(v2UpdateId)
+    const persistPromise = resolvePwaUpdateId(createRegistration(FIXED_SW_URL, "rev-v3"), {
+      buildRevision: "rev-v3",
+    })
+
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0)
+    })
+    expect(getCurrentPwaUpdateId()).toBe(v2UpdateId)
+
+    resumePause()
+    await clearPromise
+    const persistedUpdateId = await persistPromise
+
+    expect(persistedUpdateId).toBe(v3UpdateId)
+    expect(getCurrentPwaUpdateId()).toBe(v3UpdateId)
   })
 
   it("accepts persisted update ids when module memory is stale", async () => {
@@ -190,13 +236,13 @@ describe("update-coordinator", () => {
     })
     localStorage.setItem("folo-pwa-active-update-id-v1", nextUpdateId)
 
-    expect(acceptPwaUpdateId(nextUpdateId)).toBe(true)
-    expect(acceptPwaUpdateId(staleUpdateId)).toBe(false)
+    expect(await acceptPwaUpdateId(nextUpdateId)).toBe(true)
+    expect(await acceptPwaUpdateId(staleUpdateId)).toBe(false)
     expect(getCurrentPwaUpdateId()).toBe(nextUpdateId)
   })
 
-  it("reuses persisted update ids when a tab later detects needRefresh", () => {
-    acceptPwaUpdateId("remote-update-id")
+  it("reuses persisted update ids when a tab later detects needRefresh", async () => {
+    await acceptPwaUpdateId("remote-update-id")
 
     expect(beginPwaUpdateCycle()).toBe("remote-update-id")
   })
@@ -368,7 +414,7 @@ describe("update-coordinator", () => {
 
   it("invalidates stale lifecycle records when a newer update id resolves", async () => {
     const v2UpdateId = createPwaUpdateIdFromWaitingWorker(FIXED_SW_URL, "rev-v2")
-    markPwaUpdateCompleted(v2UpdateId)
+    await markPwaUpdateCompleted(v2UpdateId)
 
     await resolvePwaUpdateId(createRegistration(FIXED_SW_URL, "rev-v3"), {
       buildRevision: "rev-v3",
@@ -377,18 +423,18 @@ describe("update-coordinator", () => {
     expect(localStorage.getItem(PWA_UPDATE_LIFECYCLE_KEY)).toBeNull()
   })
 
-  it("parses lifecycle records with nonce from storage events", () => {
-    const record = markPwaUpdateCompleted("update-1")
+  it("parses lifecycle records with nonce from storage events", async () => {
+    const record = await markPwaUpdateCompleted("update-1")
     const parsed = parsePwaUpdateLifecycleRecord(JSON.stringify(record))
 
     expect(parsed).toEqual(record)
     expect(parsed?.nonce).toBeTruthy()
   })
 
-  it("rejects expired lifecycle records", () => {
+  it("rejects expired lifecycle records", async () => {
     vi.useFakeTimers()
 
-    const record = markPwaUpdateCompleted("update-1")
+    const record = await markPwaUpdateCompleted("update-1")
     vi.advanceTimersByTime(5 * 60 * 1000 + 1)
 
     expect(isValidPwaUpdateLifecycleRecord(record)).toBe(false)
@@ -396,8 +442,8 @@ describe("update-coordinator", () => {
     vi.useRealTimers()
   })
 
-  it("deduplicates lifecycle completion per tab session", () => {
-    const record = markPwaUpdateCompleted("update-1")
+  it("deduplicates lifecycle completion per tab session", async () => {
+    const record = await markPwaUpdateCompleted("update-1")
 
     expect(hasProcessedLifecycleCompletion(record.nonce)).toBe(false)
     markLifecycleCompletionProcessed(record.nonce)

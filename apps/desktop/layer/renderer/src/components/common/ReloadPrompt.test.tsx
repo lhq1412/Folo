@@ -118,9 +118,17 @@ const getPwaStatusCalls = () => {
   return statuses
 }
 
+const flushAsyncUpdates = async () => {
+  await act(async () => {
+    await Promise.resolve()
+    await Promise.resolve()
+  })
+}
+
 describe("ReloadPrompt cross-tab updates", () => {
   const roots: Root[] = []
   let reloadSpy: ReturnType<typeof vi.spyOn> | null = null
+  let lockChain = Promise.resolve()
 
   beforeEach(() => {
     resetPwaUpdateCoordinatorForTests()
@@ -128,6 +136,16 @@ describe("ReloadPrompt cross-tab updates", () => {
     sessionStorage.clear()
     MockBroadcastChannel.channels.clear()
     vi.stubGlobal("BroadcastChannel", MockBroadcastChannel)
+    lockChain = Promise.resolve()
+    vi.stubGlobal("navigator", {
+      locks: {
+        request: async (_name: string, callback: () => unknown) => {
+          const run = lockChain.then(() => callback())
+          lockChain = run.then(() => undefined).catch(() => undefined)
+          return run
+        },
+      },
+    })
     vi.clearAllMocks()
 
     reloadSpy = vi.spyOn(window.location, "reload").mockImplementation(() => {})
@@ -162,6 +180,7 @@ describe("ReloadPrompt cross-tab updates", () => {
 
     const receiver = new MockBroadcastChannel("folo-pwa-update-v1")
     receiver.postMessage({ type: "update-started", updateId: sharedUpdateId })
+    await flushAsyncUpdates()
 
     expect(setUpdaterStatus).toHaveBeenCalledWith({
       type: "pwa",
@@ -181,6 +200,7 @@ describe("ReloadPrompt cross-tab updates", () => {
       updateId: sharedUpdateId,
       error: "network",
     })
+    await flushAsyncUpdates()
 
     const lastCall = getPwaStatusCalls().at(-1)
     expect(lastCall).toMatchObject({
@@ -227,6 +247,7 @@ describe("ReloadPrompt cross-tab updates", () => {
 
     const receiver = new MockBroadcastChannel("folo-pwa-update-v1")
     receiver.postMessage({ type: "deferred", updateId: sharedUpdateId })
+    await flushAsyncUpdates()
 
     expect(isPwaUpdateDeferredForSession(sharedUpdateId)).toBe(true)
     expect(getPwaStatusCalls().at(-1)).toMatchObject({
@@ -253,6 +274,7 @@ describe("ReloadPrompt cross-tab updates", () => {
 
     const receiver = new MockBroadcastChannel("folo-pwa-update-v1")
     receiver.postMessage({ type: "update-started", updateId: sharedUpdateId })
+    await flushAsyncUpdates()
 
     expect(setUpdaterStatus).toHaveBeenCalledWith({
       type: "pwa",
@@ -278,6 +300,7 @@ describe("ReloadPrompt cross-tab updates", () => {
       nonce: "completed-nonce",
       completedAt: Date.now(),
     })
+    await flushAsyncUpdates()
 
     expect(reloadSpy).not.toHaveBeenCalled()
     expect(getPwaStatusCalls().at(-1)).toMatchObject({
@@ -342,7 +365,7 @@ describe("ReloadPrompt cross-tab updates", () => {
     roots.push(root)
     await act(async () => {})
 
-    const record = markPwaUpdateCompleted(sharedUpdateId)
+    const record = await markPwaUpdateCompleted(sharedUpdateId)
 
     window.dispatchEvent(
       new StorageEvent("storage", {
@@ -351,6 +374,7 @@ describe("ReloadPrompt cross-tab updates", () => {
         storageArea: localStorage,
       }),
     )
+    await flushAsyncUpdates()
 
     expect(reloadSpy).toHaveBeenCalled()
   })
@@ -366,7 +390,7 @@ describe("ReloadPrompt cross-tab updates", () => {
       }
     })
 
-    const record = markPwaUpdateCompleted(sharedUpdateId)
+    const record = await markPwaUpdateCompleted(sharedUpdateId)
     const lifecyclePayload = JSON.stringify(record)
 
     const first = await renderReloadPrompt()
@@ -380,6 +404,7 @@ describe("ReloadPrompt cross-tab updates", () => {
         storageArea: localStorage,
       }),
     )
+    await flushAsyncUpdates()
 
     expect(reloadSpy).toHaveBeenCalledTimes(1)
 
@@ -401,6 +426,7 @@ describe("ReloadPrompt cross-tab updates", () => {
         storageArea: localStorage,
       }),
     )
+    await flushAsyncUpdates()
 
     expect(reloadSpy).toHaveBeenCalledTimes(1)
   })
@@ -601,6 +627,7 @@ describe("ReloadPrompt cross-tab updates", () => {
         storageArea: localStorage,
       }),
     )
+    await flushAsyncUpdates()
 
     const receiver = new MockBroadcastChannel("folo-pwa-update-v1")
     receiver.postMessage({
@@ -609,6 +636,7 @@ describe("ReloadPrompt cross-tab updates", () => {
       nonce: record.nonce,
       completedAt: record.completedAt,
     })
+    await flushAsyncUpdates()
 
     expect(reloadSpy).toHaveBeenCalledTimes(1)
     receiver.close()
@@ -697,7 +725,7 @@ describe("ReloadPrompt cross-tab updates", () => {
     roots.push(root)
     await act(async () => {})
 
-    const record = markPwaUpdateCompleted(sharedUpdateId)
+    const record = await markPwaUpdateCompleted(sharedUpdateId)
 
     window.dispatchEvent(
       new StorageEvent("storage", {
@@ -706,6 +734,7 @@ describe("ReloadPrompt cross-tab updates", () => {
         storageArea: localStorage,
       }),
     )
+    await flushAsyncUpdates()
 
     expect(reloadSpy).not.toHaveBeenCalled()
     expect(localStorage.getItem(PWA_ACTIVE_UPDATE_ID_KEY)).toBeNull()
@@ -746,11 +775,13 @@ describe("ReloadPrompt cross-tab updates", () => {
       nonce: "completion-nonce",
       completedAt: Date.now(),
     })
+    await flushAsyncUpdates()
 
     expect(localStorage.getItem(PWA_ACTIVE_UPDATE_ID_KEY)).toBeNull()
 
     vi.mocked(setUpdaterStatus).mockClear()
     receiver.postMessage({ type: "update-started", updateId: v3UpdateId })
+    await flushAsyncUpdates()
 
     expect(setUpdaterStatus).toHaveBeenCalledWith({
       type: "pwa",
@@ -796,6 +827,7 @@ describe("ReloadPrompt cross-tab updates", () => {
       nonce: "stale-v2-completion",
       completedAt: Date.now(),
     })
+    await flushAsyncUpdates()
 
     expect(localStorage.getItem(PWA_ACTIVE_UPDATE_ID_KEY)).toBe(v3UpdateId)
     expect(reloadSpy).not.toHaveBeenCalled()

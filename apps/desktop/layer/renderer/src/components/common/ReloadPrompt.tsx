@@ -202,7 +202,7 @@ export function ReloadPrompt() {
     void reloadPage()
   }
 
-  const handleLifecycleCompletion = (record: PwaUpdateLifecycleRecord | null) => {
+  const handleLifecycleCompletion = async (record: PwaUpdateLifecycleRecord | null) => {
     if (!record || pwaUpdateStarted) {
       return
     }
@@ -220,8 +220,8 @@ export function ReloadPrompt() {
     }
 
     markLifecycleCompletionProcessed(record.nonce)
-    clearActivePwaUpdateIdIfMatching(record.updateId)
-    clearPwaUpdateLifecycleRecordIfMatching(record)
+    await clearActivePwaUpdateIdIfMatching(record.updateId)
+    await clearPwaUpdateLifecycleRecordIfMatching(record)
     currentUpdateIdRef.current = record.updateId
     handleRemoteUpdateCompleted(record.updateId)
   }
@@ -270,7 +270,7 @@ export function ReloadPrompt() {
         syncUpdaterStatusFromStorage()
       },
       onLifecycleChanged: (record) => {
-        handleLifecycleCompletion(record)
+        void handleLifecycleCompletion(record)
       },
     })
     return cleanupStorageSync
@@ -289,7 +289,7 @@ export function ReloadPrompt() {
       reconcilePwaUpdateRef,
     )
 
-    const handleMessage = (event: MessageEvent<PwaUpdateBroadcastMessage>) => {
+    const handleMessage = async (event: MessageEvent<PwaUpdateBroadcastMessage>) => {
       const message = event.data
 
       if (message.type === "update-completed") {
@@ -298,7 +298,7 @@ export function ReloadPrompt() {
           return
         }
 
-        handleLifecycleCompletion({
+        await handleLifecycleCompletion({
           updateId: message.updateId,
           state: "completed",
           completedAt: message.completedAt,
@@ -307,7 +307,7 @@ export function ReloadPrompt() {
         return
       }
 
-      if (!acceptPwaUpdateId(message.updateId)) {
+      if (!(await acceptPwaUpdateId(message.updateId))) {
         return
       }
 
@@ -340,9 +340,13 @@ export function ReloadPrompt() {
       }
     }
 
-    channel.addEventListener("message", handleMessage)
+    const dispatchMessage = (event: MessageEvent<PwaUpdateBroadcastMessage>) => {
+      void handleMessage(event)
+    }
+
+    channel.addEventListener("message", dispatchMessage)
     return () => {
-      channel.removeEventListener("message", handleMessage)
+      channel.removeEventListener("message", dispatchMessage)
       channel.close()
     }
   }, [])
@@ -488,8 +492,8 @@ async function performPwaUpdate(
 
   try {
     await updateServiceWorker(true)
-    const record = markPwaUpdateCompleted(activeUpdateId)
-    clearActivePwaUpdateIdIfMatching(activeUpdateId)
+    const record = await markPwaUpdateCompleted(activeUpdateId)
+    await clearActivePwaUpdateIdIfMatching(activeUpdateId)
     broadcastPwaUpdateMessage({
       type: "update-completed",
       updateId: activeUpdateId,
