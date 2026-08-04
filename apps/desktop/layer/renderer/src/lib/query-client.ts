@@ -9,6 +9,12 @@ import { QUERY_PERSIST_KEY } from "../constants/app"
 
 const defaultStaleTime = 600_000 // 10min
 const DO_NOT_RETRY_CODES = new Set([400, 401, 403, 404, 422, 402])
+
+/**
+ * React Query persistence is part of the first-stage offline experience, but it is not a full
+ * offline article database. Only queries explicitly marked with `meta.persist` are dehydrated,
+ * successful single-page responses are kept, and the cache expires after seven days.
+ */
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {

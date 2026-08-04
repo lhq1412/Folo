@@ -166,9 +166,7 @@ export default ({ mode }) => {
           injectRegister: false,
 
           injectManifest: {
-            globPatterns: [
-              "**/*.{js,json,css,html,txt,svg,png,ico,webp,woff,woff2,ttf,eot,otf,wasm}",
-            ],
+            globPatterns: ["**/*.{js,json,css,html,txt,svg,png,ico,webp,woff,woff2,ttf,eot,otf}"],
 
             injectionPoint: FOLLO_PRECACHE_MANIFEST_INJECTION_POINT,
 
@@ -187,7 +185,7 @@ export default ({ mode }) => {
           },
 
           manifest: {
-            id: typedEnv.VITE_WEB_URL || "https://app.folo.is",
+            id: "/",
             name: "Folo",
             short_name: "Folo",
             description:
@@ -195,7 +193,6 @@ export default ({ mode }) => {
             start_url: "/",
             scope: "/",
             display: "standalone",
-            orientation: "portrait-primary",
             theme_color: "#ffffff",
             background_color: "#ffffff",
             icons: [

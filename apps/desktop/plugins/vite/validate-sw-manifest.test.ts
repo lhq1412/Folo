@@ -11,11 +11,19 @@ import {
   extractActualPrecachePayload,
   resetPrecacheManifestSnapshot,
 } from "./precache-manifest-snapshot"
-import { assertServiceWorkerBuild, assertServiceWorkerFileExists } from "./validate-sw-manifest"
+import {
+  assertPwaBuildRevisionResponder,
+  assertServiceWorkerBuild,
+  assertServiceWorkerFileExists,
+} from "./validate-sw-manifest"
 
 const tempDirs: string[] = []
 
 const boundaryAnchor = `("${FOLLO_PRECACHE_MANIFEST_BOUNDARY}")`
+const revisionResponderSnippet =
+  'addEventListener("message",(e)=>{if(e.data?.type!=="folo-pwa-build-revision-request-v1")return;e.ports[0]?.postMessage({type:"folo-pwa-build-revision-response-v1",revision:"1.0.0-abc"})});'
+
+const swWithRevisionResponder = (body: string) => `${body}${revisionResponderSnippet}`
 
 afterEach(() => {
   resetPrecacheManifestSnapshot()
@@ -147,7 +155,9 @@ describe("assertServiceWorkerBuild", () => {
   it("passes when snapshot and injected sw.js agree", () => {
     expect(() =>
       assertServiceWorkerBuild({
-        swContent: `xt([{"revision":"abc123","url":"index.html"},{"revision":null,"url":"/sw.js?pwa=true"}]);${boundaryAnchor};`,
+        swContent: swWithRevisionResponder(
+          `xt([{"revision":"abc123","url":"index.html"},{"revision":null,"url":"/sw.js?pwa=true"}]);${boundaryAnchor};`,
+        ),
         precacheManifest: [
           { url: "index.html", revision: "abc123" },
           { url: "/sw.js?pwa=true", revision: null },
@@ -172,5 +182,25 @@ describe("assertServiceWorkerBuild", () => {
         precacheManifest: [],
       }),
     ).toThrow(/snapshot is empty or missing/)
+  })
+})
+
+describe("assertPwaBuildRevisionResponder", () => {
+  it("passes when sw.js includes the revision request/response protocol", () => {
+    expect(() => assertPwaBuildRevisionResponder(revisionResponderSnippet)).not.toThrow()
+  })
+
+  it("fails when the revision request handler is missing", () => {
+    expect(() =>
+      assertPwaBuildRevisionResponder(revisionResponderSnippet.replace("request-v1", "missing")),
+    ).toThrow(/revision-request-v1 handler is missing/)
+  })
+
+  it("fails when the revision value is not injected", () => {
+    expect(() =>
+      assertPwaBuildRevisionResponder(
+        'addEventListener("message",(e)=>{if(e.data?.type!=="folo-pwa-build-revision-request-v1")return;e.ports[0]?.postMessage({type:"folo-pwa-build-revision-response-v1"})});',
+      ),
+    ).toThrow(/revision injection is missing/)
   })
 })

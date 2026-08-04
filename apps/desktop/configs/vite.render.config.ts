@@ -82,6 +82,9 @@ export const viteRenderBaseConfig = {
     APP_DEV_CWD: JSON.stringify(process.cwd()),
 
     GIT_COMMIT_SHA: JSON.stringify(process.env.VERCEL_GIT_COMMIT_SHA || getGitHash()),
+    PWA_BUILD_REVISION: JSON.stringify(
+      `${pkg.version}-${process.env.VERCEL_GIT_COMMIT_SHA || getGitHash()}`,
+    ),
 
     RELEASE_CHANNEL: JSON.stringify((prerelease(pkg.version)?.[0] as string) || "stable"),
 

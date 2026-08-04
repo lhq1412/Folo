@@ -1,4 +1,4 @@
-import { createElement, lazy, Suspense, useState } from "react"
+import { lazy } from "react"
 
 const LazyContextMenuProvider = lazy(() =>
   import("./../context-menu-provider").then((res) => ({
@@ -23,42 +23,24 @@ const LazyReloadPrompt = lazy(() =>
   })),
 )
 
-const LazyPWAPromptImport = lazy(() => import("react-ios-pwa-prompt"))
-
-const LazyPWAInstallPromptImport = lazy(() =>
-  import("~/components/common/PWAInstallPrompt").then((module) => ({
-    default: module.PWAInstallPrompt,
+const LazyPwaInstallSurface = lazy(() =>
+  import("~/components/common/PwaInstallSurface").then((module) => ({
+    default: module.PwaInstallSurface,
   })),
 )
 
-const LazyPWAPrompt = () => {
-  const [show, setShow] = useState(true)
-  if (!show) return null
-  return createElement(
-    Suspense,
-    null,
-    createElement(LazyPWAPromptImport, {
-      onClose() {
-        setTimeout(() => {
-          setShow(false)
-        }, 250)
-      },
-
-      appIconPath: `${window.location.origin}/apple-touch-icon-180x180.png`,
-    }),
-  )
-}
-
-const LazyPWAInstallPrompt = () => {
-  return createElement(Suspense, null, createElement(LazyPWAInstallPromptImport))
-}
+const LazyOfflineStatusBanner = lazy(() =>
+  import("~/components/common/OfflineStatusBanner").then((module) => ({
+    default: module.OfflineStatusBanner,
+  })),
+)
 
 export {
   LazyContextMenuProvider,
   LazyExtensionExposeProvider,
+  LazyOfflineStatusBanner,
   LazyPopoverProvider,
-  LazyPWAInstallPrompt,
-  LazyPWAPrompt,
+  LazyPwaInstallSurface,
   LazyReloadPrompt,
 }
 
