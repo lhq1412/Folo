@@ -154,9 +154,7 @@ export function PwaInstallProvider({ children }: PropsWithChildren) {
     setDeferredPrompt(null)
 
     if (outcome === "accepted") {
-      const nextRecord = markPwaInstalled()
-      setInstallRecord(nextRecord)
-      setInstalled(true)
+      setDismissedInSession(true)
       return
     }
 

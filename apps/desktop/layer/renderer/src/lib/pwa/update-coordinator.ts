@@ -15,6 +15,9 @@ export function setPauseDuringPwaStateMutationForTests(
 }
 
 export async function withPwaUpdateStateLock<T>(operation: () => T | Promise<T>): Promise<T> {
+  // Web Locks coordinate mutations within a single browser profile, but HTML does not
+  // guarantee cross-agent-cluster ordering. When locks are unavailable we run inline as a
+  // best-effort fallback only; callers must not assume multi-tab atomicity in that case.
   if (typeof navigator !== "undefined" && "locks" in navigator) {
     return navigator.locks.request(PWA_UPDATE_STATE_LOCK, operation)
   }

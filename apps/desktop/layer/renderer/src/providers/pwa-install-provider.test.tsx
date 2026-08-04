@@ -7,12 +7,21 @@ import {
   isPwaInstallCooldownActive,
   markPwaInstallDismissed,
   markPwaInstalled,
+  PWA_INSTALL_ENGAGEMENT_DELAY_MS,
   readPwaInstallRecord,
   recordPwaVisit,
   resetPwaInstallRecordForTests,
 } from "~/lib/pwa/install-state"
 
-import { PwaInstallProvider } from "./pwa-install-provider"
+import { PwaInstallProvider, usePwaInstall } from "./pwa-install-provider"
+
+let installHandler: (() => Promise<void>) | null = null
+
+function InstallProbe() {
+  const { install } = usePwaInstall()
+  installHandler = install
+  return null
+}
 
 vi.mock("~/lib/pwa/platform", () => ({
   isStandaloneDisplayMode: vi.fn(() => false),
@@ -29,6 +38,8 @@ describe("PwaInstallProvider beforeinstallprompt handling", () => {
   const roots: Root[] = []
 
   afterEach(async () => {
+    vi.useRealTimers()
+    installHandler = null
     for (const root of roots.splice(0)) {
       await act(async () => {
         root.unmount()
@@ -52,6 +63,23 @@ describe("PwaInstallProvider beforeinstallprompt handling", () => {
       root.render(
         <PwaInstallProvider>
           <div />
+        </PwaInstallProvider>,
+      )
+    })
+
+    roots.push(root)
+    return root
+  }
+
+  const renderProviderWithInstallProbe = async () => {
+    const container = document.createElement("div")
+    document.body.append(container)
+
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(
+        <PwaInstallProvider>
+          <InstallProbe />
         </PwaInstallProvider>,
       )
     })
@@ -105,5 +133,38 @@ describe("PwaInstallProvider beforeinstallprompt handling", () => {
     const record = readPwaInstallRecord()
     expect(record.installedAt).toBeNull()
     expect(record.dismissedAt).toBeNull()
+  })
+
+  it("marks installed only after appinstalled, not when userChoice is accepted", async () => {
+    vi.useFakeTimers()
+    recordPwaVisit()
+    recordPwaVisit()
+
+    const prompt = vi.fn(async () => {})
+    const deferredPrompt = Object.assign(new Event("beforeinstallprompt"), {
+      prompt,
+      userChoice: Promise.resolve({ outcome: "accepted" as const, platform: "web" }),
+    })
+
+    await renderProviderWithInstallProbe()
+    await act(async () => {
+      vi.advanceTimersByTime(PWA_INSTALL_ENGAGEMENT_DELAY_MS)
+    })
+    await act(async () => {
+      window.dispatchEvent(deferredPrompt)
+    })
+
+    await act(async () => {
+      await installHandler?.()
+    })
+
+    expect(prompt).toHaveBeenCalled()
+    expect(readPwaInstallRecord().installedAt).toBeNull()
+
+    await act(async () => {
+      window.dispatchEvent(new Event("appinstalled"))
+    })
+
+    expect(readPwaInstallRecord().installedAt).not.toBeNull()
   })
 })

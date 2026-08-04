@@ -60,7 +60,6 @@ export function markPwaInstallDismissed(now = Date.now()): PwaInstallStorageReco
   const record = readRecord()
   record.dismissedAt = now
   record.lastPromptAt = now
-  record.promptCount += 1
   writeRecord(record)
   return record
 }

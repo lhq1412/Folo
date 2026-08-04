@@ -11,6 +11,9 @@ import {
   consumePrecacheManifestSnapshot,
 } from "./precache-manifest-snapshot"
 
+const PWA_BUILD_REVISION_REQUEST = "folo-pwa-build-revision-request-v1"
+const PWA_BUILD_REVISION_RESPONSE = "folo-pwa-build-revision-response-v1"
+
 export function reportPrecacheManifestStats({
   precacheManifest,
   outDir,
@@ -54,6 +57,26 @@ export function assertServiceWorkerFileExists(swPath: string): void {
   }
 }
 
+export function assertPwaBuildRevisionResponder(swContent: string): void {
+  if (!swContent.includes(PWA_BUILD_REVISION_REQUEST)) {
+    throw new Error(
+      `Service worker build failed: ${PWA_BUILD_REVISION_REQUEST} handler is missing from sw.js.`,
+    )
+  }
+
+  if (!swContent.includes(PWA_BUILD_REVISION_RESPONSE)) {
+    throw new Error(
+      `Service worker build failed: ${PWA_BUILD_REVISION_RESPONSE} responder is missing from sw.js.`,
+    )
+  }
+
+  if (!/revision\s*:\s*["'`][^"'`]+["'`]/.test(swContent)) {
+    throw new Error(
+      "Service worker build failed: PWA build revision injection is missing from sw.js.",
+    )
+  }
+}
+
 export function assertServiceWorkerBuild({
   swContent,
   precacheManifest,
@@ -69,6 +92,7 @@ export function assertServiceWorkerBuild({
 
   assertPrecacheManifestSnapshot(precacheManifest)
   assertPrecacheManifestInjectedIntoServiceWorker(swContent, precacheManifest)
+  assertPwaBuildRevisionResponder(swContent)
 }
 
 export function validateServiceWorkerManifestPlugin(): Plugin {

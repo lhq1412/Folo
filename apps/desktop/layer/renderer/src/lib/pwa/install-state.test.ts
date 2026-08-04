@@ -5,6 +5,7 @@ import {
   isPwaInstallCooldownActive,
   markPwaInstallDismissed,
   markPwaInstalled,
+  markPwaPromptShown,
   PWA_INSTALL_COOLDOWN_MS,
   readPwaInstallRecord,
   recordPwaVisit,
@@ -57,7 +58,15 @@ describe("install-state", () => {
     markPwaInstallDismissed(1_000)
     const record = readPwaInstallRecord()
     expect(record.dismissedAt).toBe(1_000)
-    expect(record.promptCount).toBe(1)
+    expect(record.promptCount).toBe(0)
+  })
+
+  it("does not double-count prompt displays on dismiss", () => {
+    const shown = markPwaPromptShown(1_000)
+    expect(shown.promptCount).toBe(1)
+
+    const dismissed = markPwaInstallDismissed(2_000)
+    expect(dismissed.promptCount).toBe(1)
   })
 
   it("tracks visit count", () => {
