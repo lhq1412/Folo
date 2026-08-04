@@ -249,6 +249,16 @@ export function clearActivePwaUpdateId(): void {
   localStorage.removeItem(PWA_ACTIVE_UPDATE_ID_KEY)
 }
 
+export function clearActivePwaUpdateIdIfMatching(updateId: string): boolean {
+  const activeUpdateId = getCurrentPwaUpdateId()
+  if (activeUpdateId && activeUpdateId !== updateId) {
+    return false
+  }
+
+  clearActivePwaUpdateId()
+  return true
+}
+
 export function resetPwaUpdateCoordinatorForTests(): void {
   currentPwaUpdateId = null
   localStorage.removeItem(PWA_ACTIVE_UPDATE_ID_KEY)
@@ -323,6 +333,20 @@ export function markLifecycleCompletionProcessed(nonce: string): void {
 
 export function clearPwaUpdateLifecycleRecord(): void {
   localStorage.removeItem(PWA_UPDATE_LIFECYCLE_KEY)
+}
+
+export function clearPwaUpdateLifecycleRecordIfMatching(record: PwaUpdateLifecycleRecord): boolean {
+  const existing = readPwaUpdateLifecycleRecord()
+  if (!existing) {
+    return false
+  }
+
+  if (existing.updateId !== record.updateId || existing.nonce !== record.nonce) {
+    return false
+  }
+
+  clearPwaUpdateLifecycleRecord()
+  return true
 }
 
 export function deferPwaUpdateForSession(updateId?: string): void {

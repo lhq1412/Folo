@@ -84,13 +84,6 @@ export function clearStaleInstalledHint(): PwaInstallStorageRecord {
   return record
 }
 
-export function clearInstallDismissalForReinstall(): PwaInstallStorageRecord {
-  const record = readRecord()
-  record.dismissedAt = null
-  writeRecord(record)
-  return record
-}
-
 export function markPwaPromptShown(now = Date.now()): PwaInstallStorageRecord {
   const record = readRecord()
   record.lastPromptAt = now

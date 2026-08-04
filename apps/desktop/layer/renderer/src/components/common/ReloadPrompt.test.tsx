@@ -761,6 +761,49 @@ describe("ReloadPrompt cross-tab updates", () => {
     chatInput.remove()
   })
 
+  it("ignores stale v2 update-completed when v3 is already the active batch", async () => {
+    const v2UpdateId = createPwaUpdateIdFromWaitingWorker(WAITING_SW_URL, "mock-build-revision-v2")
+    const v3UpdateId = createPwaUpdateIdFromWaitingWorker(WAITING_SW_URL, "mock-build-revision-v3")
+
+    mockUseRegisterSW.mockImplementation((options) => {
+      options?.onRegisteredSW?.(WAITING_SW_URL, mockRegistration)
+      return {
+        needRefresh: [true],
+        updateServiceWorker: mockUpdateServiceWorker,
+      }
+    })
+
+    const { root } = await renderReloadPrompt()
+    roots.push(root)
+    await act(async () => {})
+
+    localStorage.setItem(PWA_ACTIVE_UPDATE_ID_KEY, v3UpdateId)
+    window.dispatchEvent(
+      new StorageEvent("storage", {
+        key: PWA_ACTIVE_UPDATE_ID_KEY,
+        newValue: v3UpdateId,
+        storageArea: localStorage,
+      }),
+    )
+
+    reloadSpy?.mockClear()
+    vi.mocked(setUpdaterStatus).mockClear()
+
+    const receiver = new MockBroadcastChannel("folo-pwa-update-v1")
+    receiver.postMessage({
+      type: "update-completed",
+      updateId: v2UpdateId,
+      nonce: "stale-v2-completion",
+      completedAt: Date.now(),
+    })
+
+    expect(localStorage.getItem(PWA_ACTIVE_UPDATE_ID_KEY)).toBe(v3UpdateId)
+    expect(reloadSpy).not.toHaveBeenCalled()
+    expect(setUpdaterStatus).not.toHaveBeenCalled()
+
+    receiver.close()
+  })
+
   it("re-validates canonical update id after unsaved-work confirmation", async () => {
     const v2UpdateId = createPwaUpdateIdFromWaitingWorker(WAITING_SW_URL, "mock-build-revision-v2")
     const v3UpdateId = createPwaUpdateIdFromWaitingWorker(WAITING_SW_URL, "mock-build-revision-v3")

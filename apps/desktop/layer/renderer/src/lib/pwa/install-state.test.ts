@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
 import {
-  clearInstallDismissalForReinstall,
   clearStaleInstalledHint,
   isPwaInstallCooldownActive,
   markPwaInstallDismissed,
@@ -35,12 +34,23 @@ describe("install-state", () => {
     expect(readPwaInstallRecord().dismissedAt).toBeNull()
   })
 
-  it("clears install dismissal when browser offers reinstall", () => {
-    markPwaInstallDismissed(1_000)
-    const cleared = clearInstallDismissalForReinstall()
+  it("clears legacy install-derived dismissal when removing stale installed hints", () => {
+    localStorage.setItem(
+      "folo-pwa-install-v1",
+      JSON.stringify({
+        version: 1,
+        installedAt: 1_000,
+        dismissedAt: 2_000,
+        lastPromptAt: 2_000,
+        promptCount: 1,
+        visitCount: 2,
+      }),
+    )
 
+    const cleared = clearStaleInstalledHint()
+
+    expect(cleared.installedAt).toBeNull()
     expect(cleared.dismissedAt).toBeNull()
-    expect(isPwaInstallCooldownActive(cleared, 2_000)).toBe(false)
   })
 
   it("persists dismissal across reads", () => {

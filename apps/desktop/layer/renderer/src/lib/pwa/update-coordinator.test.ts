@@ -5,7 +5,9 @@ import {
   acceptPwaUpdateId,
   beginPwaUpdateCycle,
   broadcastPwaUpdateDeferred,
+  clearActivePwaUpdateIdIfMatching,
   clearDeferredPwaUpdateForSession,
+  clearPwaUpdateLifecycleRecordIfMatching,
   createPwaUpdateIdFromWaitingWorker,
   deferPwaUpdateForSession,
   getCurrentPwaUpdateId,
@@ -18,6 +20,7 @@ import {
   parsePwaUpdateLifecycleRecord,
   PWA_UPDATE_LIFECYCLE_KEY,
   PwaUpdateIdentityUnavailableError,
+  readPwaUpdateLifecycleRecord,
   registerServiceWorkerUpdateListener,
   requestWaitingWorkerBuildRevisionWithRetry,
   resetPwaUpdateCoordinatorForTests,
@@ -145,6 +148,37 @@ describe("update-coordinator", () => {
     expect(getCurrentPwaUpdateId()).toBeNull()
     expect(shouldAcceptPwaUpdateCompletion("completed-update-id")).toBe(true)
     expect(getCurrentPwaUpdateId()).toBeNull()
+  })
+
+  it("clears active id only when it matches the completed batch", async () => {
+    const v2UpdateId = createPwaUpdateIdFromWaitingWorker(FIXED_SW_URL, "rev-v2")
+    const v3UpdateId = createPwaUpdateIdFromWaitingWorker(FIXED_SW_URL, "rev-v3")
+
+    await resolvePwaUpdateId(createRegistration(FIXED_SW_URL, "rev-v3"), {
+      buildRevision: "rev-v3",
+    })
+
+    expect(clearActivePwaUpdateIdIfMatching(v2UpdateId)).toBe(false)
+    expect(getCurrentPwaUpdateId()).toBe(v3UpdateId)
+    expect(clearActivePwaUpdateIdIfMatching(v3UpdateId)).toBe(true)
+    expect(getCurrentPwaUpdateId()).toBeNull()
+  })
+
+  it("clears lifecycle records only when update id and nonce match", () => {
+    const v3Record = markPwaUpdateCompleted("update-v3")
+
+    expect(
+      clearPwaUpdateLifecycleRecordIfMatching({
+        updateId: "update-v2",
+        state: "completed",
+        completedAt: Date.now(),
+        nonce: "stale-nonce",
+      }),
+    ).toBe(false)
+    expect(readPwaUpdateLifecycleRecord()?.updateId).toBe("update-v3")
+
+    expect(clearPwaUpdateLifecycleRecordIfMatching(v3Record)).toBe(true)
+    expect(readPwaUpdateLifecycleRecord()).toBeNull()
   })
 
   it("accepts persisted update ids when module memory is stale", async () => {

@@ -13,9 +13,9 @@ import type {
 import {
   acceptPwaUpdateId,
   broadcastPwaUpdateMessage,
-  clearActivePwaUpdateId,
+  clearActivePwaUpdateIdIfMatching,
   clearDeferredPwaUpdateForSession,
-  clearPwaUpdateLifecycleRecord,
+  clearPwaUpdateLifecycleRecordIfMatching,
   createPwaUpdateChannel,
   deferPwaUpdateForSession,
   getCurrentPwaUpdateId,
@@ -220,7 +220,8 @@ export function ReloadPrompt() {
     }
 
     markLifecycleCompletionProcessed(record.nonce)
-    clearActivePwaUpdateId()
+    clearActivePwaUpdateIdIfMatching(record.updateId)
+    clearPwaUpdateLifecycleRecordIfMatching(record)
     currentUpdateIdRef.current = record.updateId
     handleRemoteUpdateCompleted(record.updateId)
   }
@@ -292,8 +293,6 @@ export function ReloadPrompt() {
       const message = event.data
 
       if (message.type === "update-completed") {
-        clearPwaUpdateLifecycleRecord()
-        clearActivePwaUpdateId()
         if (pwaUpdateStarted) {
           setUpdaterStatus(null)
           return
@@ -490,7 +489,7 @@ async function performPwaUpdate(
   try {
     await updateServiceWorker(true)
     const record = markPwaUpdateCompleted(activeUpdateId)
-    clearActivePwaUpdateId()
+    clearActivePwaUpdateIdIfMatching(activeUpdateId)
     broadcastPwaUpdateMessage({
       type: "update-completed",
       updateId: activeUpdateId,
