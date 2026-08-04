@@ -272,7 +272,12 @@ describe("ReloadPrompt cross-tab updates", () => {
     document.body.append(chatInput)
 
     const receiver = new MockBroadcastChannel("folo-pwa-update-v1")
-    receiver.postMessage({ type: "update-completed", updateId: sharedUpdateId })
+    receiver.postMessage({
+      type: "update-completed",
+      updateId: sharedUpdateId,
+      nonce: "completed-nonce",
+      completedAt: Date.now(),
+    })
 
     expect(reloadSpy).not.toHaveBeenCalled()
     expect(getPwaStatusCalls().at(-1)).toMatchObject({
@@ -507,6 +512,167 @@ describe("ReloadPrompt cross-tab updates", () => {
       status: "ready",
     })
 
+    resolveSpy.mockRestore()
+    registerListenerSpy.mockRestore()
+  })
+
+  it("ignores a stale lifecycle event when the tab already coordinates to a newer update", async () => {
+    vi.stubGlobal("BroadcastChannel", undefined)
+
+    const staleUpdateId = createPwaUpdateIdFromWaitingWorker(
+      WAITING_SW_URL,
+      "mock-build-revision-v2",
+    )
+    const nextUpdateId = createPwaUpdateIdFromWaitingWorker(
+      WAITING_SW_URL,
+      "mock-build-revision-v3",
+    )
+
+    mockUseRegisterSW.mockImplementation((options) => {
+      options?.onRegisteredSW?.(WAITING_SW_URL, mockRegistration)
+      return {
+        needRefresh: [true],
+        updateServiceWorker: mockUpdateServiceWorker,
+      }
+    })
+
+    const { root } = await renderReloadPrompt()
+    roots.push(root)
+    await act(async () => {})
+
+    localStorage.setItem(PWA_ACTIVE_UPDATE_ID_KEY, nextUpdateId)
+    window.dispatchEvent(
+      new StorageEvent("storage", {
+        key: PWA_ACTIVE_UPDATE_ID_KEY,
+        newValue: nextUpdateId,
+        storageArea: localStorage,
+      }),
+    )
+
+    reloadSpy?.mockClear()
+
+    window.dispatchEvent(
+      new StorageEvent("storage", {
+        key: PWA_UPDATE_LIFECYCLE_KEY,
+        newValue: JSON.stringify({
+          updateId: staleUpdateId,
+          state: "completed",
+          completedAt: Date.now(),
+          nonce: "late-v2-lifecycle",
+        }),
+        storageArea: localStorage,
+      }),
+    )
+
+    expect(reloadSpy).not.toHaveBeenCalled()
+    expect(getPwaStatusCalls().at(-1)).toMatchObject({
+      type: "pwa",
+      status: "ready",
+    })
+  })
+
+  it("deduplicates completion delivered via lifecycle storage and BroadcastChannel", async () => {
+    const record = {
+      updateId: sharedUpdateId,
+      state: "completed" as const,
+      completedAt: Date.now(),
+      nonce: "shared-completion-nonce",
+    }
+
+    mockUseRegisterSW.mockImplementation((options) => {
+      options?.onRegisteredSW?.(WAITING_SW_URL, mockRegistration)
+      return {
+        needRefresh: [true],
+        updateServiceWorker: mockUpdateServiceWorker,
+      }
+    })
+
+    const { root } = await renderReloadPrompt()
+    roots.push(root)
+    await act(async () => {})
+
+    localStorage.setItem(PWA_ACTIVE_UPDATE_ID_KEY, sharedUpdateId)
+    reloadSpy?.mockClear()
+
+    window.dispatchEvent(
+      new StorageEvent("storage", {
+        key: PWA_UPDATE_LIFECYCLE_KEY,
+        newValue: JSON.stringify(record),
+        storageArea: localStorage,
+      }),
+    )
+
+    const receiver = new MockBroadcastChannel("folo-pwa-update-v1")
+    receiver.postMessage({
+      type: "update-completed",
+      updateId: record.updateId,
+      nonce: record.nonce,
+      completedAt: record.completedAt,
+    })
+
+    expect(reloadSpy).toHaveBeenCalledTimes(1)
+    receiver.close()
+  })
+
+  it("does not activate a stale update batch while a newer waiting worker is reconciling", async () => {
+    const { registerServiceWorkerUpdateListener: realRegisterListener } = await vi.importActual<
+      typeof updateCoordinator
+    >("~/lib/pwa/update-coordinator")
+
+    const v2UpdateId = createPwaUpdateIdFromWaitingWorker(WAITING_SW_URL, "mock-build-revision-v2")
+    const v3UpdateId = createPwaUpdateIdFromWaitingWorker(WAITING_SW_URL, "mock-build-revision-v3")
+
+    let releaseSecondResolve: () => void = () => {}
+    const secondResolveGate = new Promise<void>((resolve) => {
+      releaseSecondResolve = resolve
+    })
+
+    let resolveCalls = 0
+    const resolveSpy = vi
+      .spyOn(updateCoordinator, "resolvePwaUpdateId")
+      .mockImplementation(async () => {
+        resolveCalls += 1
+        if (resolveCalls === 1) {
+          return v2UpdateId
+        }
+        if (resolveCalls === 2) {
+          await secondResolveGate
+          return v3UpdateId
+        }
+        return v3UpdateId
+      })
+
+    let triggerWaitingWorkerReady: () => void = () => {}
+    const registerListenerSpy = vi
+      .spyOn(updateCoordinator, "registerServiceWorkerUpdateListener")
+      .mockImplementation((registration, onReady) => {
+        triggerWaitingWorkerReady = onReady
+        return realRegisterListener(registration, onReady)
+      })
+
+    mockUseRegisterSW.mockImplementation((options) => {
+      options?.onRegisteredSW?.(WAITING_SW_URL, mockRegistration)
+      return {
+        needRefresh: [true],
+        updateServiceWorker: mockUpdateServiceWorker,
+      }
+    })
+
+    const { root } = await renderReloadPrompt()
+    roots.push(root)
+    await act(async () => {})
+
+    const staleFinishUpdate = getPwaStatusCalls().at(-1)?.finishUpdate
+    expect(typeof staleFinishUpdate).toBe("function")
+
+    triggerWaitingWorkerReady()
+    await act(async () => {
+      await staleFinishUpdate?.()
+    })
+
+    expect(mockUpdateServiceWorker).not.toHaveBeenCalled()
+
+    releaseSecondResolve()
     resolveSpy.mockRestore()
     registerListenerSpy.mockRestore()
   })

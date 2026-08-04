@@ -1,4 +1,5 @@
 import i18n from "i18next"
+import type { RefObject } from "react"
 import { useEffect, useRef } from "react"
 import { useRegisterSW } from "virtual:pwa-register/react"
 
@@ -28,6 +29,7 @@ import {
   registerPwaUpdateStorageSync,
   registerServiceWorkerUpdateListener,
   resolvePwaUpdateId,
+  shouldAcceptPwaUpdateCompletion,
 } from "~/lib/pwa/update-coordinator"
 
 const UPDATE_CHECK_PERIOD_MS = 60 * 60 * 1000
@@ -124,11 +126,23 @@ export function ReloadPrompt() {
 
           try {
             const updateId = await resolvePwaUpdateId(registration)
+
+            if (pwaUpdateStarted) {
+              return
+            }
+
+            if (reconcilePendingRef.current) {
+              continue
+            }
+
             currentUpdateIdRef.current = updateId
 
-            const finishUpdate = async () => {
-              await performPwaUpdate(updateServiceWorkerRef.current, updateId)
-            }
+            const finishUpdate = createFinishUpdateHandler(
+              updateId,
+              updateServiceWorkerRef,
+              registrationRef,
+              reconcilePwaUpdateRef,
+            )
 
             setUpdaterStatus(
               createPwaUpdaterStatus(
@@ -139,6 +153,10 @@ export function ReloadPrompt() {
             )
           } catch (error) {
             if (error instanceof PwaUpdateIdentityUnavailableError) {
+              if (pwaUpdateStarted) {
+                return
+              }
+
               setUpdaterStatus(
                 createPwaUpdaterStatus(
                   "failed",
@@ -197,7 +215,12 @@ export function ReloadPrompt() {
       return
     }
 
+    if (!shouldAcceptPwaUpdateCompletion(record.updateId)) {
+      return
+    }
+
     markLifecycleCompletionProcessed(record.nonce)
+    currentUpdateIdRef.current = record.updateId
     handleRemoteUpdateCompleted(record.updateId)
   }
 
@@ -214,7 +237,17 @@ export function ReloadPrompt() {
     currentUpdateIdRef.current = updateId
 
     const finishUpdate = async () => {
-      await performPwaUpdate(updateServiceWorkerRef.current, updateId)
+      const updateId = getCurrentPwaUpdateId()
+      if (!updateId) {
+        return
+      }
+
+      await createFinishUpdateHandler(
+        updateId,
+        updateServiceWorkerRef,
+        registrationRef,
+        reconcilePwaUpdateRef,
+      )()
     }
 
     setUpdaterStatus(
@@ -247,9 +280,12 @@ export function ReloadPrompt() {
       return
     }
 
-    const finishUpdate = async () => {
-      await performPwaUpdate(updateServiceWorkerRef.current, currentUpdateIdRef.current)
-    }
+    const finishUpdate = createFinishUpdateHandler(
+      () => currentUpdateIdRef.current,
+      updateServiceWorkerRef,
+      registrationRef,
+      reconcilePwaUpdateRef,
+    )
 
     const handleMessage = (event: MessageEvent<PwaUpdateBroadcastMessage>) => {
       const message = event.data
@@ -282,7 +318,12 @@ export function ReloadPrompt() {
             break
           }
 
-          handleRemoteUpdateCompleted(message.updateId)
+          handleLifecycleCompletion({
+            updateId: message.updateId,
+            state: "completed",
+            completedAt: message.completedAt,
+            nonce: message.nonce,
+          })
           break
         }
         case "update-failed": {
@@ -326,6 +367,40 @@ export function ReloadPrompt() {
   return null
 }
 
+function createFinishUpdateHandler(
+  updateIdOrGetter: string | (() => string | null),
+  updateServiceWorkerRef: RefObject<((reloadPage?: boolean) => Promise<void>) | null>,
+  registrationRef: RefObject<ServiceWorkerRegistration | null>,
+  reconcilePwaUpdateRef: RefObject<(() => Promise<void>) | null>,
+): () => Promise<void> {
+  return async () => {
+    const updateId = typeof updateIdOrGetter === "function" ? updateIdOrGetter() : updateIdOrGetter
+    if (!updateId) {
+      return
+    }
+
+    const registration =
+      registrationRef.current ?? (await navigator.serviceWorker?.getRegistration()) ?? null
+
+    try {
+      const canonicalUpdateId = await resolvePwaUpdateId(registration)
+      if (canonicalUpdateId !== updateId) {
+        void reconcilePwaUpdateRef.current?.()
+        return
+      }
+    } catch (error) {
+      if (error instanceof PwaUpdateIdentityUnavailableError) {
+        void reconcilePwaUpdateRef.current?.()
+        return
+      }
+
+      throw error
+    }
+
+    await performPwaUpdate(updateServiceWorkerRef.current, updateId, registration)
+  }
+}
+
 function createReloadPageHandler(): () => Promise<void> {
   return async () => {
     const unsavedWork = detectUnsavedWork()
@@ -343,6 +418,7 @@ function createReloadPageHandler(): () => Promise<void> {
 async function performPwaUpdate(
   updateServiceWorker: ((reloadPage?: boolean) => Promise<void>) | null,
   updateId: string | null,
+  registration?: ServiceWorkerRegistration | null,
 ): Promise<void> {
   if (!updateServiceWorker || pwaUpdateStarted) {
     return
@@ -351,6 +427,22 @@ async function performPwaUpdate(
   const activeUpdateId = updateId ?? getCurrentPwaUpdateId()
   if (!activeUpdateId) {
     return
+  }
+
+  const resolvedRegistration =
+    registration ?? (await navigator.serviceWorker?.getRegistration()) ?? null
+
+  try {
+    const canonicalUpdateId = await resolvePwaUpdateId(resolvedRegistration)
+    if (canonicalUpdateId !== activeUpdateId) {
+      return
+    }
+  } catch (error) {
+    if (error instanceof PwaUpdateIdentityUnavailableError) {
+      return
+    }
+
+    throw error
   }
 
   const unsavedWork = detectUnsavedWork()
@@ -383,9 +475,14 @@ async function performPwaUpdate(
 
   try {
     await updateServiceWorker(true)
-    markPwaUpdateCompleted(activeUpdateId)
+    const record = markPwaUpdateCompleted(activeUpdateId)
     clearActivePwaUpdateId()
-    broadcastPwaUpdateMessage({ type: "update-completed", updateId: activeUpdateId })
+    broadcastPwaUpdateMessage({
+      type: "update-completed",
+      updateId: activeUpdateId,
+      nonce: record.nonce,
+      completedAt: record.completedAt,
+    })
   } catch (error) {
     pwaUpdateStarted = false
     const message = error instanceof Error ? error.message : String(error)

@@ -22,6 +22,7 @@ import {
   requestWaitingWorkerBuildRevisionWithRetry,
   resetPwaUpdateCoordinatorForTests,
   resolvePwaUpdateId,
+  shouldAcceptPwaUpdateCompletion,
 } from "./update-coordinator"
 
 class MockBroadcastChannel {
@@ -126,6 +127,18 @@ describe("update-coordinator", () => {
     await resolvePwaUpdateId(createRegistration(FIXED_SW_URL, "rev-a"), { buildRevision: "rev-a" })
 
     expect(acceptPwaUpdateId(createPwaUpdateIdFromWaitingWorker(FIXED_SW_URL, "rev-b"))).toBe(false)
+  })
+
+  it("rejects completion from an older update batch when a newer id is active", async () => {
+    const v2UpdateId = createPwaUpdateIdFromWaitingWorker(FIXED_SW_URL, "rev-v2")
+    const v3UpdateId = createPwaUpdateIdFromWaitingWorker(FIXED_SW_URL, "rev-v3")
+
+    await resolvePwaUpdateId(createRegistration(FIXED_SW_URL, "rev-v3"), {
+      buildRevision: "rev-v3",
+    })
+
+    expect(shouldAcceptPwaUpdateCompletion(v3UpdateId)).toBe(true)
+    expect(shouldAcceptPwaUpdateCompletion(v2UpdateId)).toBe(false)
   })
 
   it("accepts persisted update ids when module memory is stale", async () => {

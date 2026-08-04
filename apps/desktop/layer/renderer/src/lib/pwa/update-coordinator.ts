@@ -13,7 +13,7 @@ const REVISION_RETRY_BASE_DELAY_MS = 250
 export type PwaUpdateBroadcastMessage =
   | { type: "deferred"; updateId: string }
   | { type: "update-started"; updateId: string }
-  | { type: "update-completed"; updateId: string }
+  | { type: "update-completed"; updateId: string; nonce: string; completedAt: number }
   | { type: "update-failed"; updateId: string; error: string }
 
 export type PwaUpdateStorageSyncHandlers = {
@@ -229,6 +229,15 @@ export function acceptPwaUpdateId(updateId: string): boolean {
 
   persistPwaUpdateId(updateId)
   return true
+}
+
+export function shouldAcceptPwaUpdateCompletion(updateId: string): boolean {
+  const activeUpdateId = getCurrentPwaUpdateId()
+  if (!activeUpdateId) {
+    return acceptPwaUpdateId(updateId)
+  }
+
+  return activeUpdateId === updateId
 }
 
 export function isMatchingPwaUpdateId(updateId: string): boolean {
