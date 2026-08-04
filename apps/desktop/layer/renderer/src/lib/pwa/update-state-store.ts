@@ -469,9 +469,7 @@ export async function completePwaUpdateInStore(
     const completedAt = Date.now()
 
     state.generation += 1
-    if (state.activeUpdateId === params.updateId) {
-      state.activeUpdateId = null
-    }
+    state.activeUpdateId = null
     state.deferred = null
 
     state.completed = {
@@ -497,23 +495,7 @@ function isOriginCompleteStale(
   state: PwaUpdateStateRecord,
   params: CompletePwaUpdateParams,
 ): boolean {
-  if (state.generation !== params.expectedGeneration) {
-    return true
-  }
-
-  if (state.activeUpdateId !== null && state.activeUpdateId !== params.updateId) {
-    return true
-  }
-
-  if (
-    state.completed &&
-    isValidTombstone(state.completed) &&
-    state.completed.updateId !== params.updateId
-  ) {
-    return true
-  }
-
-  return false
+  return state.activeUpdateId !== params.updateId || state.generation !== params.expectedGeneration
 }
 
 export async function consumePwaUpdateCompletionInStore(

@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-import { createPwaUpdateIdFromWaitingWorker, PWA_ACTIVE_UPDATE_ID_KEY } from "./update-coordinator"
+import {
+  createPwaUpdateIdFromWaitingWorker,
+  PWA_ACTIVE_UPDATE_ID_KEY,
+  PWA_UPDATE_DEFERRED_KEY,
+  PWA_UPDATE_LIFECYCLE_KEY,
+} from "./update-coordinator"
 import {
   claimFallbackPwaUpdateId,
   completePwaUpdateInStore,
@@ -82,6 +87,27 @@ describe("update-state-store", () => {
       completedAt: outcome.record.completedAt,
     })
     expect(state?.generation).toBe(expectedGeneration + 1)
+  })
+
+  it("rejects origin completion when no active batch matches", async () => {
+    const v2UpdateId = createPwaUpdateIdFromWaitingWorker(FIXED_SW_URL, "rev-v2")
+
+    await hydratePwaUpdateState()
+    const before = snapshotState()
+    const legacyActive = localStorage.getItem(PWA_ACTIVE_UPDATE_ID_KEY)
+    const legacyDeferred = localStorage.getItem(PWA_UPDATE_DEFERRED_KEY)
+    const legacyLifecycle = localStorage.getItem(PWA_UPDATE_LIFECYCLE_KEY)
+
+    const outcome = await completePwaUpdateInStore({
+      updateId: v2UpdateId,
+      expectedGeneration: before?.generation ?? 0,
+    })
+
+    expect(outcome.result).toBe("stale")
+    expect(snapshotState()).toEqual(before)
+    expect(localStorage.getItem(PWA_ACTIVE_UPDATE_ID_KEY)).toBe(legacyActive)
+    expect(localStorage.getItem(PWA_UPDATE_DEFERRED_KEY)).toBe(legacyDeferred)
+    expect(localStorage.getItem(PWA_UPDATE_LIFECYCLE_KEY)).toBe(legacyLifecycle)
   })
 
   it("rejects stale origin completion with zero writes when a newer active batch exists", async () => {
