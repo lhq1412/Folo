@@ -6,9 +6,11 @@ import {
   beginPwaUpdateCycle,
   broadcastPwaUpdateDeferred,
   clearDeferredPwaUpdateForSession,
+  completePwaUpdate,
   consumePwaUpdateCompletion,
   createPwaUpdateIdFromWaitingWorker,
   deferPwaUpdateForSession,
+  getCachedPwaUpdateGeneration,
   getCurrentPwaUpdateId,
   hasProcessedLifecycleCompletion,
   hydratePwaUpdateState,
@@ -16,7 +18,6 @@ import {
   isPwaUpdateDeferredForSession,
   isValidPwaUpdateLifecycleRecord,
   markLifecycleCompletionProcessed,
-  markPwaUpdateCompleted,
   parsePwaUpdateLifecycleRecord,
   PWA_ACTIVE_UPDATE_ID_KEY,
   PWA_UPDATE_DEFERRED_KEY,
@@ -67,6 +68,18 @@ class MockBroadcastChannel {
 }
 
 const FIXED_SW_URL = "https://app.folo.is/sw.js"
+
+async function completeActiveUpdate(updateId: string) {
+  const outcome = await completePwaUpdate({
+    updateId,
+    expectedGeneration: getCachedPwaUpdateGeneration(),
+  })
+  if (outcome.result !== "accepted") {
+    throw new Error(`Expected accepted completion, received ${outcome.result}`)
+  }
+
+  return outcome.record
+}
 
 const createRegistration = (scriptUrl: string, buildRevision: string) =>
   ({
@@ -190,7 +203,8 @@ describe("update-coordinator", () => {
 
   it("accepts matching completion and retains the shared tombstone", async () => {
     const v2UpdateId = createPwaUpdateIdFromWaitingWorker(FIXED_SW_URL, "rev-v2")
-    const v2Record = await markPwaUpdateCompleted(v2UpdateId)
+    await persistCanonicalPwaUpdateId(v2UpdateId)
+    const v2Record = await completeActiveUpdate(v2UpdateId)
 
     expect(await consumePwaUpdateCompletion(v2Record)).toBe("accepted")
     expect(getCurrentPwaUpdateId()).toBeNull()
@@ -202,7 +216,7 @@ describe("update-coordinator", () => {
     const v3UpdateId = createPwaUpdateIdFromWaitingWorker(FIXED_SW_URL, "rev-v3")
 
     await persistCanonicalPwaUpdateId(v3UpdateId)
-    const completed = await markPwaUpdateCompleted(v3UpdateId)
+    const completed = await completeActiveUpdate(v3UpdateId)
     await consumePwaUpdateCompletion(completed)
 
     expect(
@@ -391,7 +405,8 @@ describe("update-coordinator", () => {
 
   it("invalidates stale lifecycle records when a newer update id resolves", async () => {
     const v2UpdateId = createPwaUpdateIdFromWaitingWorker(FIXED_SW_URL, "rev-v2")
-    await markPwaUpdateCompleted(v2UpdateId)
+    await persistCanonicalPwaUpdateId(v2UpdateId)
+    await completeActiveUpdate(v2UpdateId)
 
     await resolvePwaUpdateId(createRegistration(FIXED_SW_URL, "rev-v3"), {
       buildRevision: "rev-v3",
@@ -401,7 +416,8 @@ describe("update-coordinator", () => {
   })
 
   it("parses lifecycle records with nonce from storage events", async () => {
-    const record = await markPwaUpdateCompleted("update-1")
+    await persistCanonicalPwaUpdateId("update-1")
+    const record = await completeActiveUpdate("update-1")
     const parsed = parsePwaUpdateLifecycleRecord(JSON.stringify(record))
 
     expect(parsed).toEqual(record)
@@ -420,7 +436,8 @@ describe("update-coordinator", () => {
   })
 
   it("deduplicates lifecycle completion per tab session", async () => {
-    const record = await markPwaUpdateCompleted("update-1")
+    await persistCanonicalPwaUpdateId("update-1")
+    const record = await completeActiveUpdate("update-1")
 
     expect(hasProcessedLifecycleCompletion(record.nonce)).toBe(false)
     markLifecycleCompletionProcessed(record.nonce)

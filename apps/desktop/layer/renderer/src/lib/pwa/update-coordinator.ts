@@ -2,6 +2,7 @@ import type { PwaBuildRevisionResponseMessage } from "./pwa-sw-messages"
 import { PWA_BUILD_REVISION_REQUEST, PWA_BUILD_REVISION_RESPONSE } from "./pwa-sw-messages"
 import { logPwaUpdateDiagnostic } from "./pwa-update-diagnostics"
 import type {
+  CompletePwaUpdateOutcome,
   ConsumePwaUpdateCompletionResult,
   PwaUpdateLifecycleRecord,
 } from "./update-state-store"
@@ -9,6 +10,7 @@ import {
   adoptPwaUpdateId as adoptPwaUpdateIdInStore,
   claimFallbackPwaUpdateId,
   clearDeferredPwaUpdateInStore,
+  completePwaUpdateInStore,
   consumePwaUpdateCompletionInStore,
   deferPwaUpdateInStore,
   getCachedActivePwaUpdateId,
@@ -23,7 +25,6 @@ import {
   refreshPwaUpdateState,
   resetPwaUpdateStateStoreForTests,
   setPauseDuringPwaStateMutationForTests,
-  writePwaUpdateCompleted,
 } from "./update-state-store"
 
 /**
@@ -47,7 +48,7 @@ export const PWA_ACTIVE_UPDATE_ID_KEY = "folo-pwa-active-update-id-v1"
 export const PWA_UPDATE_LIFECYCLE_KEY = "folo-pwa-update-lifecycle-v1"
 const PWA_PROCESSED_LIFECYCLE_KEY = "folo-pwa-processed-lifecycle-v1"
 
-export type { ConsumePwaUpdateCompletionResult, PwaUpdateLifecycleRecord }
+export type { CompletePwaUpdateOutcome, ConsumePwaUpdateCompletionResult, PwaUpdateLifecycleRecord }
 export { PWA_UPDATE_LIFECYCLE_TTL_MS, PWA_UPDATE_SIGNAL_KEY }
 
 export function setPauseDuringPwaUpdateStateMutationForTests(
@@ -264,9 +265,21 @@ export async function resetPwaUpdateCoordinatorForTests(): Promise<void> {
   await resetPwaUpdateStateStoreForTests()
 }
 
-export async function markPwaUpdateCompleted(updateId: string): Promise<PwaUpdateLifecycleRecord> {
+export async function completePwaUpdate(params: {
+  updateId: string
+  expectedGeneration: number
+}): Promise<CompletePwaUpdateOutcome> {
   await ensureHydrated()
-  return withPwaUpdateStateLock(() => writePwaUpdateCompleted(updateId))
+  const outcome = await withPwaUpdateStateLock(() => completePwaUpdateInStore(params))
+  logPwaUpdateDiagnostic({
+    event: "pwa_update_origin_completed",
+    result: outcome.result,
+    updateId: params.updateId,
+    expectedGeneration: params.expectedGeneration,
+    generation: getCachedPwaUpdateGeneration(),
+  })
+
+  return outcome
 }
 
 export function parsePwaUpdateLifecycleRecord(raw: string | null): PwaUpdateLifecycleRecord | null {
@@ -502,6 +515,7 @@ export function registerServiceWorkerUpdateListener(
 }
 
 export {
+  getCachedPwaUpdateGeneration,
   hydratePwaUpdateState,
   isValidTombstone,
   refreshPwaUpdateState,

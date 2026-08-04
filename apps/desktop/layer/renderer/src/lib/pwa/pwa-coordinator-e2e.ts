@@ -1,10 +1,11 @@
 import {
+  completePwaUpdate,
   consumePwaUpdateCompletion,
   getCurrentPwaUpdateId,
   hasProcessedLifecycleCompletion,
   hydratePwaUpdateState,
-  markPwaUpdateCompleted,
   persistCanonicalPwaUpdateId,
+  refreshPwaUpdateState,
   resetPwaUpdateCoordinatorForTests,
 } from "./update-coordinator"
 import { getCachedPwaUpdateState } from "./update-state-store"
@@ -27,12 +28,20 @@ export type PwaCoordinatorE2ESnapshot = {
 
 export type PwaCoordinatorE2EApi = {
   hydrate: () => Promise<void>
+  refresh: () => Promise<void>
   reset: () => Promise<void>
   persistCanonical: (updateId: string) => Promise<string>
-  markCompleted: (updateId: string) => Promise<{
-    updateId: string
-    nonce: string
-    completedAt: number
+  complete: (
+    updateId: string,
+    expectedGeneration: number,
+  ) => Promise<{
+    result: "accepted" | "stale"
+    record?: {
+      updateId: string
+      nonce: string
+      completedAt: number
+      generation?: number
+    }
   }>
   consumeCompletion: (record: {
     updateId: string
@@ -77,19 +86,30 @@ export function registerPwaCoordinatorE2EHook(): void {
     hydrate: async () => {
       await hydratePwaUpdateState()
     },
+    refresh: async () => {
+      await refreshPwaUpdateState()
+    },
     reset: async () => {
       await resetPwaUpdateCoordinatorForTests()
     },
     persistCanonical: async (updateId: string) => {
       return persistCanonicalPwaUpdateId(updateId)
     },
-    markCompleted: async (updateId: string) => {
-      const record = await markPwaUpdateCompleted(updateId)
-      return {
-        updateId: record.updateId,
-        nonce: record.nonce,
-        completedAt: record.completedAt,
+    complete: async (updateId: string, expectedGeneration: number) => {
+      const outcome = await completePwaUpdate({ updateId, expectedGeneration })
+      if (outcome.result === "accepted") {
+        return {
+          result: outcome.result,
+          record: {
+            updateId: outcome.record.updateId,
+            nonce: outcome.record.nonce,
+            completedAt: outcome.record.completedAt,
+            generation: outcome.record.generation,
+          },
+        }
       }
+
+      return { result: outcome.result }
     },
     consumeCompletion: async (record) => {
       return consumePwaUpdateCompletion({

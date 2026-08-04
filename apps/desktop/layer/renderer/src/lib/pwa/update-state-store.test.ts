@@ -3,18 +3,35 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { createPwaUpdateIdFromWaitingWorker, PWA_ACTIVE_UPDATE_ID_KEY } from "./update-coordinator"
 import {
   claimFallbackPwaUpdateId,
+  completePwaUpdateInStore,
   consumePwaUpdateCompletionInStore,
+  deferPwaUpdateInStore,
   getCachedActivePwaUpdateId,
+  getCachedPwaUpdateState,
   hydratePwaUpdateState,
   persistCanonicalPwaUpdateId,
   refreshPwaUpdateState,
   resetPwaUpdateStateStoreForTests,
   setPauseDuringPwaStateMutationForTests,
   transactPwaUpdateState,
-  writePwaUpdateCompleted,
 } from "./update-state-store"
 
 const FIXED_SW_URL = "https://app.folo.is/sw.js"
+
+function snapshotState() {
+  const state = getCachedPwaUpdateState()
+  return state ? structuredClone(state) : null
+}
+
+async function completeActiveUpdate(updateId: string) {
+  const expectedGeneration = getCachedPwaUpdateState()?.generation ?? 0
+  const outcome = await completePwaUpdateInStore({ updateId, expectedGeneration })
+  if (outcome.result !== "accepted") {
+    throw new Error(`Expected accepted completion, received ${outcome.result}`)
+  }
+
+  return outcome.record
+}
 
 describe("update-state-store", () => {
   beforeEach(async () => {
@@ -38,6 +55,83 @@ describe("update-state-store", () => {
     expect(localStorage.getItem(PWA_ACTIVE_UPDATE_ID_KEY)).toBe(v3UpdateId)
   })
 
+  it("accepts origin completion for the matching active batch", async () => {
+    const v2UpdateId = createPwaUpdateIdFromWaitingWorker(FIXED_SW_URL, "rev-v2")
+
+    await persistCanonicalPwaUpdateId(v2UpdateId)
+    await deferPwaUpdateInStore(v2UpdateId)
+    const expectedGeneration = getCachedPwaUpdateState()?.generation ?? 0
+
+    const outcome = await completePwaUpdateInStore({
+      updateId: v2UpdateId,
+      expectedGeneration,
+    })
+
+    expect(outcome.result).toBe("accepted")
+    if (outcome.result !== "accepted") {
+      return
+    }
+
+    const state = getCachedPwaUpdateState()
+    expect(state?.activeUpdateId).toBeNull()
+    expect(state?.deferred).toBeNull()
+    expect(state?.completed).toMatchObject({
+      updateId: v2UpdateId,
+      nonce: outcome.record.nonce,
+      generation: outcome.record.generation,
+      completedAt: outcome.record.completedAt,
+    })
+    expect(state?.generation).toBe(expectedGeneration + 1)
+  })
+
+  it("rejects stale origin completion with zero writes when a newer active batch exists", async () => {
+    const v2UpdateId = createPwaUpdateIdFromWaitingWorker(FIXED_SW_URL, "rev-v2")
+    const v3UpdateId = createPwaUpdateIdFromWaitingWorker(FIXED_SW_URL, "rev-v3")
+
+    await persistCanonicalPwaUpdateId(v2UpdateId)
+    const v2Generation = getCachedPwaUpdateState()?.generation ?? 0
+    await deferPwaUpdateInStore(v2UpdateId)
+
+    await persistCanonicalPwaUpdateId(v3UpdateId)
+    await deferPwaUpdateInStore(v3UpdateId)
+    const before = snapshotState()
+
+    const outcome = await completePwaUpdateInStore({
+      updateId: v2UpdateId,
+      expectedGeneration: v2Generation,
+    })
+
+    expect(outcome.result).toBe("stale")
+    expect(snapshotState()).toEqual(before)
+    expect(localStorage.getItem(PWA_ACTIVE_UPDATE_ID_KEY)).toBe(v3UpdateId)
+  })
+
+  it("rejects late v2 origin completion when v3 tombstone already exists", async () => {
+    const v2UpdateId = createPwaUpdateIdFromWaitingWorker(FIXED_SW_URL, "rev-v2")
+    const v3UpdateId = createPwaUpdateIdFromWaitingWorker(FIXED_SW_URL, "rev-v3")
+
+    await persistCanonicalPwaUpdateId(v2UpdateId)
+    const v2Generation = getCachedPwaUpdateState()?.generation ?? 0
+
+    await persistCanonicalPwaUpdateId(v3UpdateId)
+    const v3Record = await completeActiveUpdate(v3UpdateId)
+    const before = snapshotState()
+
+    const outcome = await completePwaUpdateInStore({
+      updateId: v2UpdateId,
+      expectedGeneration: v2Generation,
+    })
+
+    expect(outcome.result).toBe("stale")
+    expect(snapshotState()).toEqual(before)
+    expect(getCachedPwaUpdateState()?.completed).toMatchObject({
+      updateId: v3UpdateId,
+      nonce: v3Record.nonce,
+      generation: v3Record.generation,
+      completedAt: v3Record.completedAt,
+    })
+  })
+
   it("rejects stale completion when a newer active batch exists", async () => {
     const v2UpdateId = createPwaUpdateIdFromWaitingWorker(FIXED_SW_URL, "rev-v2")
     const v3UpdateId = createPwaUpdateIdFromWaitingWorker(FIXED_SW_URL, "rev-v3")
@@ -59,7 +153,7 @@ describe("update-state-store", () => {
     const v3UpdateId = createPwaUpdateIdFromWaitingWorker(FIXED_SW_URL, "rev-v3")
 
     await persistCanonicalPwaUpdateId(v3UpdateId)
-    await writePwaUpdateCompleted(v3UpdateId)
+    await completeActiveUpdate(v3UpdateId)
 
     expect(localStorage.getItem(PWA_ACTIVE_UPDATE_ID_KEY)).toBeNull()
 
@@ -73,7 +167,7 @@ describe("update-state-store", () => {
     const v2UpdateId = createPwaUpdateIdFromWaitingWorker(FIXED_SW_URL, "rev-v2")
 
     await persistCanonicalPwaUpdateId(v3UpdateId)
-    const completed = await writePwaUpdateCompleted(v3UpdateId)
+    const completed = await completeActiveUpdate(v3UpdateId)
 
     expect(localStorage.getItem(PWA_ACTIVE_UPDATE_ID_KEY)).toBeNull()
 

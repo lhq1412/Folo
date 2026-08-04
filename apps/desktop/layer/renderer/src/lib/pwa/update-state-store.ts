@@ -42,6 +42,14 @@ export type PwaUpdateStateRecord = {
 
 export type ConsumePwaUpdateCompletionResult = "accepted" | "stale" | "expired"
 
+export type CompletePwaUpdateParams = {
+  updateId: string
+  expectedGeneration: number
+}
+
+export type CompletePwaUpdateOutcome =
+  { result: "accepted"; record: PwaUpdateLifecycleRecord } | { result: "stale" }
+
 const LEGACY_ACTIVE_KEY = "folo-pwa-active-update-id-v1"
 const LEGACY_DEFERRED_KEY = "folo-pwa-update-deferred-v1"
 const LEGACY_LIFECYCLE_KEY = "folo-pwa-update-lifecycle-v1"
@@ -449,31 +457,63 @@ export async function claimFallbackPwaUpdateId(): Promise<string> {
   })
 }
 
-export async function writePwaUpdateCompleted(updateId: string): Promise<PwaUpdateLifecycleRecord> {
+export async function completePwaUpdateInStore(
+  params: CompletePwaUpdateParams,
+): Promise<CompletePwaUpdateOutcome> {
   return transactPwaUpdateState((state) => {
-    const record: PwaUpdateLifecycleRecord = {
-      updateId,
-      state: "completed",
-      completedAt: Date.now(),
-      nonce: crypto.randomUUID(),
+    if (isOriginCompleteStale(state, params)) {
+      return { result: "stale" as const }
     }
+
+    const nonce = crypto.randomUUID()
+    const completedAt = Date.now()
 
     state.generation += 1
-    if (state.activeUpdateId === updateId) {
+    if (state.activeUpdateId === params.updateId) {
       state.activeUpdateId = null
     }
+    state.deferred = null
 
     state.completed = {
-      updateId: record.updateId,
+      updateId: params.updateId,
       generation: state.generation,
-      nonce: record.nonce,
-      completedAt: record.completedAt,
+      nonce,
+      completedAt,
     }
 
-    record.generation = state.generation
+    const record: PwaUpdateLifecycleRecord = {
+      updateId: params.updateId,
+      state: "completed",
+      completedAt,
+      nonce,
+      generation: state.generation,
+    }
 
-    return record
+    return { result: "accepted" as const, record }
   })
+}
+
+function isOriginCompleteStale(
+  state: PwaUpdateStateRecord,
+  params: CompletePwaUpdateParams,
+): boolean {
+  if (state.generation !== params.expectedGeneration) {
+    return true
+  }
+
+  if (state.activeUpdateId !== null && state.activeUpdateId !== params.updateId) {
+    return true
+  }
+
+  if (
+    state.completed &&
+    isValidTombstone(state.completed) &&
+    state.completed.updateId !== params.updateId
+  ) {
+    return true
+  }
+
+  return false
 }
 
 export async function consumePwaUpdateCompletionInStore(

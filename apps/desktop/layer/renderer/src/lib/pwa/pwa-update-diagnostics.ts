@@ -33,6 +33,13 @@ export type PwaUpdateDiagnosticEvent =
       generation: number
     }
   | {
+      event: "pwa_update_origin_completed"
+      result: "accepted" | "stale"
+      updateId: string
+      expectedGeneration: number
+      generation: number
+    }
+  | {
       event: "pwa_update_state_store_failure"
       operation: string
       generation: number

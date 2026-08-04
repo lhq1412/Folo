@@ -7,11 +7,13 @@ import type { UpdaterStatusAtom } from "~/atoms/updater"
 import { setUpdaterStatus } from "~/atoms/updater"
 import { PWA_BUILD_REVISION_REQUEST, PWA_BUILD_REVISION_RESPONSE } from "~/lib/pwa/pwa-sw-messages"
 import {
+  completePwaUpdate,
   createPwaUpdateIdFromWaitingWorker,
   deferPwaUpdateForSession,
+  getCachedPwaUpdateGeneration,
+  getCurrentPwaUpdateId,
   hasProcessedLifecycleCompletion,
   isPwaUpdateDeferredForSession,
-  markPwaUpdateCompleted,
   persistCanonicalPwaUpdateId,
   PWA_ACTIVE_UPDATE_ID_KEY,
   PWA_UPDATE_LIFECYCLE_KEY,
@@ -140,6 +142,19 @@ const dispatchPwaUpdateSignal = () => {
       storageArea: localStorage,
     }),
   )
+}
+
+async function completeActiveUpdate(updateId: string) {
+  await persistCanonicalPwaUpdateId(updateId)
+  const outcome = await completePwaUpdate({
+    updateId,
+    expectedGeneration: getCachedPwaUpdateGeneration(),
+  })
+  if (outcome.result !== "accepted") {
+    throw new Error(`Expected accepted completion, received ${outcome.result}`)
+  }
+
+  return outcome.record
 }
 
 describe("ReloadPrompt cross-tab updates", () => {
@@ -385,7 +400,7 @@ describe("ReloadPrompt cross-tab updates", () => {
     roots.push(root)
     await flushAsyncUpdates()
 
-    await markPwaUpdateCompleted(sharedUpdateId)
+    await completeActiveUpdate(sharedUpdateId)
 
     window.dispatchEvent(
       new StorageEvent("storage", {
@@ -410,7 +425,7 @@ describe("ReloadPrompt cross-tab updates", () => {
       }
     })
 
-    await markPwaUpdateCompleted(sharedUpdateId)
+    await completeActiveUpdate(sharedUpdateId)
 
     const first = await renderReloadPrompt()
     roots.push(first.root)
@@ -737,7 +752,7 @@ describe("ReloadPrompt cross-tab updates", () => {
     roots.push(root)
     await flushAsyncUpdates()
 
-    await markPwaUpdateCompleted(sharedUpdateId)
+    await completeActiveUpdate(sharedUpdateId)
 
     window.dispatchEvent(
       new StorageEvent("storage", {
@@ -844,6 +859,72 @@ describe("ReloadPrompt cross-tab updates", () => {
     receiver.close()
   })
 
+  it("does not broadcast or reload when a stale origin completion resolves", async () => {
+    const v2UpdateId = sharedUpdateId
+    const v3UpdateId = createPwaUpdateIdFromWaitingWorker(WAITING_SW_URL, "mock-build-revision-v3")
+
+    let releaseUpdate: () => void = () => {}
+    const updateGate = new Promise<void>((resolve) => {
+      releaseUpdate = resolve
+    })
+    mockUpdateServiceWorker.mockImplementation(async () => {
+      await updateGate
+    })
+
+    const resolveSpy = vi
+      .spyOn(updateCoordinator, "resolvePwaUpdateId")
+      .mockImplementation(async () => {
+        return getCurrentPwaUpdateId() === v3UpdateId ? v3UpdateId : v2UpdateId
+      })
+
+    const broadcastSpy = vi.spyOn(updateCoordinator, "broadcastPwaUpdateMessage")
+    const completeSpy = vi.spyOn(updateCoordinator, "completePwaUpdate")
+
+    mockUseRegisterSW.mockImplementation((options) => {
+      options?.onRegisteredSW?.(WAITING_SW_URL, mockRegistration)
+      return {
+        needRefresh: [true],
+        updateServiceWorker: mockUpdateServiceWorker,
+      }
+    })
+
+    const { root } = await renderReloadPrompt()
+    roots.push(root)
+    await flushAsyncUpdates()
+
+    const finishUpdate = getPwaStatusCalls().at(-1)?.finishUpdate
+
+    try {
+      await act(async () => {
+        const updatePromise = finishUpdate?.()
+        await vi.waitFor(() => {
+          expect(mockUpdateServiceWorker).toHaveBeenCalled()
+        })
+        await persistCanonicalPwaUpdateId(v3UpdateId)
+        releaseUpdate()
+        await updatePromise
+      })
+      await flushAsyncUpdates()
+
+      expect(
+        broadcastSpy.mock.calls.some(
+          ([message]) => message.type === "update-completed" && message.updateId === v2UpdateId,
+        ),
+      ).toBe(false)
+      expect(reloadSpy).not.toHaveBeenCalled()
+      expect(localStorage.getItem(PWA_ACTIVE_UPDATE_ID_KEY)).toBe(v3UpdateId)
+      expect(completeSpy).toHaveBeenCalledWith({
+        updateId: v2UpdateId,
+        expectedGeneration: 1,
+      })
+      await expect(completeSpy.mock.results.at(-1)?.value).resolves.toEqual({ result: "stale" })
+    } finally {
+      broadcastSpy.mockRestore()
+      completeSpy.mockRestore()
+      resolveSpy.mockRestore()
+    }
+  })
+
   it("does not override reloadOnly UI when a stale completion arrives after tombstone is established", async () => {
     const staleUpdateId = createPwaUpdateIdFromWaitingWorker(
       WAITING_SW_URL,
@@ -869,7 +950,7 @@ describe("ReloadPrompt cross-tab updates", () => {
     roots.push(root)
     await flushAsyncUpdates()
 
-    await markPwaUpdateCompleted(sharedUpdateId)
+    await completeActiveUpdate(sharedUpdateId)
 
     window.dispatchEvent(
       new StorageEvent("storage", {

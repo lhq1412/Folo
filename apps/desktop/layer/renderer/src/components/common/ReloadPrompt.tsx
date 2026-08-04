@@ -15,9 +15,11 @@ import {
   acceptPwaUpdateId,
   broadcastPwaUpdateMessage,
   clearDeferredPwaUpdateForSession,
+  completePwaUpdate,
   consumePwaUpdateCompletion,
   createPwaUpdateChannel,
   deferPwaUpdateForSession,
+  getCachedPwaUpdateGeneration,
   getCurrentPwaUpdateId,
   hasProcessedLifecycleCompletion,
   hydratePwaUpdateState,
@@ -27,7 +29,6 @@ import {
   logStaleBroadcastMessage,
   logStaleFinishClosure,
   markLifecycleCompletionProcessed,
-  markPwaUpdateCompleted,
   PwaUpdateIdentityUnavailableError,
   registerPeriodicServiceWorkerCheck,
   registerPwaUpdateStorageSync,
@@ -506,6 +507,7 @@ async function performPwaUpdate(
   }
 
   pwaUpdateStarted = true
+  const expectedGeneration = getCachedPwaUpdateGeneration()
   await clearDeferredPwaUpdateForSession()
   broadcastPwaUpdateMessage({ type: "update-started", updateId: activeUpdateId })
 
@@ -516,16 +518,22 @@ async function performPwaUpdate(
 
   try {
     await updateServiceWorker(true)
-    const record = await markPwaUpdateCompleted(activeUpdateId)
-    const consumption = await consumePwaUpdateCompletion(record)
-    if (consumption === "accepted") {
+    const completion = await completePwaUpdate({
+      updateId: activeUpdateId,
+      expectedGeneration,
+    })
+    if (completion.result === "accepted") {
+      markLifecycleCompletionProcessed(completion.record.nonce)
       broadcastPwaUpdateMessage({
         type: "update-completed",
         updateId: activeUpdateId,
-        nonce: record.nonce,
-        completedAt: record.completedAt,
-        generation: record.generation,
+        nonce: completion.record.nonce,
+        completedAt: completion.record.completedAt,
+        generation: completion.record.generation,
       })
+    } else {
+      pwaUpdateStarted = false
+      onStaleBatch?.()
     }
   } catch (error) {
     pwaUpdateStarted = false
