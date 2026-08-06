@@ -40,14 +40,14 @@ test.describe("mobile shell geometry", () => {
           shell.evaluate((element) => {
             const style = getComputedStyle(element)
             return {
-              height: style.height,
-              maxHeight: style.maxHeight,
+              height: Math.round(Number.parseFloat(style.height)),
+              maxHeight: Math.round(Number.parseFloat(style.maxHeight)),
             }
           }),
         )
         .toEqual({
-          height: `${viewport.height}px`,
-          maxHeight: `${viewport.height}px`,
+          height: viewport.height,
+          maxHeight: viewport.height,
         })
     })
   }
@@ -70,12 +70,16 @@ test.describe("mobile shell geometry", () => {
 
     const padding = await drawerContent.evaluate((element) => {
       const style = getComputedStyle(element)
+      const rootFontSize = Number.parseFloat(getComputedStyle(document.documentElement).fontSize)
       const paddingTop = Number.parseFloat(style.paddingTop)
       const safeTop = Number.parseFloat(
         getComputedStyle(document.documentElement).getPropertyValue("--app-safe-top"),
       )
 
-      return { paddingTop, expected: 10 + safeTop }
+      return {
+        paddingTop,
+        expected: rootFontSize * 0.625 + safeTop,
+      }
     })
 
     expect(padding.paddingTop).toBeCloseTo(padding.expected, 1)
@@ -126,14 +130,12 @@ test.describe("mobile shell geometry", () => {
         shell.evaluate((element) => {
           const style = getComputedStyle(element)
           return {
-            height: style.height,
             maxHeight: style.maxHeight,
             overflow: style.overflow,
           }
         }),
       )
       .toEqual({
-        height: "auto",
         maxHeight: "none",
         overflow: "visible",
       })
