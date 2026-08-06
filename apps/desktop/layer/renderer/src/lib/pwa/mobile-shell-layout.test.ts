@@ -49,6 +49,15 @@ describe("mobile shell layout ownership", () => {
     expect(mobileTimelineLayout).not.toContain("safe-area-inset")
   })
 
+  test("uses non-overlay iOS PWA status bar mode", () => {
+    const indexHtml = readFileSync(join(rendererRoot, "../index.html"), "utf8")
+
+    expect(indexHtml).toContain(
+      '<meta name="apple-mobile-web-app-status-bar-style" content="default" />',
+    )
+    expect(indexHtml).not.toContain("black-translucent")
+  })
+
   test("documents safe-area owners for main and drawer render paths", () => {
     const mainLayout = readRendererSource("modules/app-layout/MainDestopLayout.tsx")
     const subscriptionColumnContainer = readRendererSource(
@@ -58,8 +67,9 @@ describe("mobile shell layout ownership", () => {
 
     expect(mainLayout).toContain('data-safe-area-owner="main-top"')
     expect(mainLayout).toContain("max-lg:app-safe-top")
-    expect(subscriptionColumnContainer).toContain('"mobile-drawer-shell"')
-    expect(subscriptionColumnContainer).toContain("top-[var(--app-safe-top)]")
+    expect(subscriptionColumnContainer).toContain('"mobile-drawer-bottom"')
+    expect(subscriptionColumnContainer).toContain("inset-y-0")
+    expect(subscriptionColumnContainer).not.toContain("top-[var(--app-safe-top)]")
     expect(subscriptionColumnContainer).toContain("pb-[var(--app-safe-bottom)]")
     expect(subscriptionColumn).not.toContain("var(--app-safe-top)")
     expect(subscriptionColumn).toContain("pt-2.5")

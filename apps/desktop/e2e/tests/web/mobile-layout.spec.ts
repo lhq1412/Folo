@@ -84,7 +84,9 @@ test.describe("mobile shell geometry", () => {
     expect(padding.paddingTop).toBeCloseTo(padding.expected, 1)
   })
 
-  test("mobile drawer shell top aligns with injected safe-area top", async ({ page }) => {
+  test("mobile drawer shell spans viewport top without extra safe-area offset", async ({
+    page,
+  }) => {
     await page.setViewportSize({ width: 390, height: 844 })
     await openWebApp(page, env)
 
@@ -92,25 +94,29 @@ test.describe("mobile shell geometry", () => {
       document.documentElement.style.setProperty("--app-safe-top", "47px")
     })
 
-    const drawerShell = page.locator('[data-safe-area-owner="mobile-drawer-shell"]')
+    const drawerShell = page.locator('[data-safe-area-owner="mobile-drawer-bottom"]')
     await expect(drawerShell).toBeVisible()
 
     await expect
       .poll(() =>
         drawerShell.evaluate((element) => Math.round(element.getBoundingClientRect().top)),
       )
-      .toBe(47)
+      .toBe(0)
 
-    const shellStyles = await drawerShell.evaluate((element) => {
+    const shellGeometry = await drawerShell.evaluate((element) => {
       const style = getComputedStyle(element)
+      const rect = element.getBoundingClientRect()
       return {
         paddingTop: style.paddingTop,
         top: style.top,
+        bottom: Math.round(rect.bottom),
+        viewportHeight: window.innerHeight,
       }
     })
 
-    expect(shellStyles.paddingTop).toBe("0px")
-    expect(shellStyles.top).toBe("47px")
+    expect(shellGeometry.paddingTop).toBe("0px")
+    expect(shellGeometry.top).toBe("0px")
+    expect(shellGeometry.bottom).toBe(shellGeometry.viewportHeight)
   })
 
   test("mobile drawer shell bottom respects injected safe-area bottom", async ({ page }) => {
@@ -121,8 +127,12 @@ test.describe("mobile shell geometry", () => {
       document.documentElement.style.setProperty("--app-safe-bottom", "34px")
     })
 
-    const drawerShell = page.locator('[data-safe-area-owner="mobile-drawer-shell"]')
+    const drawerShell = page.locator('[data-safe-area-owner="mobile-drawer-bottom"]')
     await expect(drawerShell).toBeVisible()
+
+    await expect
+      .poll(() => drawerShell.evaluate((element) => getComputedStyle(element).paddingBottom))
+      .toBe("34px")
 
     const shellStyles = await drawerShell.evaluate((element) => {
       const style = getComputedStyle(element)
@@ -196,6 +206,6 @@ test.describe("mobile shell geometry", () => {
 })
 
 /**
- * WebKit DOM/CSS invariants only. This does not reproduce iOS Home Screen standalone
- * status-bar and safe-area behavior exactly.
+ * WebKit/Chromium DOM/CSS ownership invariants only. These tests do not reproduce
+ * iOS Home Screen standalone status-bar and safe-area behavior exactly.
  */
