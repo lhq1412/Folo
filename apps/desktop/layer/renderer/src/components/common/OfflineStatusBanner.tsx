@@ -16,7 +16,7 @@ export function OfflineStatusBanner() {
           exit={{ y: -12, opacity: 0 }}
           className={cn(
             "pointer-events-none fixed inset-x-0 top-0 z-[120] flex justify-center px-3",
-            "pt-[calc(0.5rem+env(safe-area-inset-top,0px))]",
+            "pt-[calc(0.5rem+var(--app-safe-top))]",
           )}
         >
           <div className="rounded-full border border-fill bg-material-thick px-3 py-1.5 text-xs text-text-secondary shadow-md backdrop-blur-xl">

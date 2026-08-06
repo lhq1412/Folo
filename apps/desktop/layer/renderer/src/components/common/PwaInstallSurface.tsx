@@ -34,7 +34,7 @@ export function PwaInstallSurface() {
       exit={{ y: 24, opacity: 0 }}
       className={cn(
         "fixed left-4 right-4 z-[100] mx-auto max-w-md",
-        "bottom-[calc(1rem+env(safe-area-inset-bottom,0px))]",
+        "bottom-[calc(1rem+var(--app-safe-bottom))]",
       )}
     >
       <div

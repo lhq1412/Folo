@@ -16,6 +16,7 @@ import { appLog } from "../lib/log"
 import { registerHistoryStack } from "./history"
 import { doMigration } from "./migrates"
 import { initializeMobileLayout } from "./mobile-layout"
+import { initializePwaLayout } from "./pwa-layout"
 import { initializeSettings } from "./settings"
 
 declare global {
@@ -79,6 +80,7 @@ export const initializeApp = async () => {
 
   apm("initializeSettings", initializeSettings)
   apm("initializeMobileLayout", initializeMobileLayout)
+  apm("initializePwaLayout", initializePwaLayout)
 
   await apm("i18n", initI18n)
 

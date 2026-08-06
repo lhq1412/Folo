@@ -62,10 +62,33 @@ export default defineConfig({
       },
     },
     {
+      name: "web-mobile-layout",
+      testMatch: /tests\/web\/mobile-layout\.spec\.ts/,
+      use: {
+        ...devices["Pixel 7"],
+        channel: "chromium",
+        ignoreHTTPSErrors: true,
+        launchOptions: {
+          args: ["--disable-web-security"],
+        },
+      },
+    },
+    {
+      name: "web-mobile-webkit",
+      testMatch: /tests\/web\/mobile-layout\.spec\.ts/,
+      use: {
+        ...devices["iPhone 14"],
+        browserName: "webkit",
+        serviceWorkers: "block",
+        ignoreHTTPSErrors: true,
+      },
+    },
+    {
       name: "web",
       testMatch: /tests\/web\/.*\.spec\.ts/,
       testIgnore: [
         /tests\/web\/mobile-drawer-a11y\.spec\.ts/,
+        /tests\/web\/mobile-layout\.spec\.ts/,
         /tests\/web\/pwa-update-coordination\.spec\.ts/,
       ],
       use: {
