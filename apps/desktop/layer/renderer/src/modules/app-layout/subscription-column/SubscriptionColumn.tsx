@@ -237,11 +237,11 @@ const FeedResponsiveResizerContainer = ({
         aria-hidden={isMobileViewport && drawerAccessibilityHidden ? true : undefined}
         inert={isMobileViewport && drawerAccessibilityHidden ? true : undefined}
         data-hide-in-print
-        data-safe-area-owner={isMobileViewport ? "mobile-drawer-shell" : undefined}
+        data-safe-area-owner={isMobileViewport ? "mobile-drawer-bottom" : undefined}
         className={cn(
           "z-[2] shrink-0 overflow-hidden",
           isMobileViewport
-            ? "fixed bottom-0 left-0 top-[var(--app-safe-top)] w-[min(82vw,320px)] pb-[var(--app-safe-bottom)]"
+            ? "fixed inset-y-0 left-0 w-[min(82vw,320px)] pb-[var(--app-safe-bottom)]"
             : "absolute inset-y-0",
           (feedColumnTempShow && !feedColumnShow) || mobileDrawerOpen
             ? "shadow-drawer-to-right z-[12]"
