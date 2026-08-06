@@ -240,7 +240,7 @@ const FeedResponsiveResizerContainer = ({
         className={cn(
           "shrink-0 overflow-hidden",
           "absolute inset-y-0 z-[2]",
-          isMobileViewport && "w-[min(82vw,320px)] max-lg:pb-[env(safe-area-inset-bottom,0px)]",
+          isMobileViewport && "max-lg:app-safe-bottom w-[min(82vw,320px)]",
           (feedColumnTempShow && !feedColumnShow) || mobileDrawerOpen
             ? "shadow-drawer-to-right z-[12]"
             : "",

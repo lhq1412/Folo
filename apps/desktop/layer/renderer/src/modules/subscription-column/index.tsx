@@ -126,10 +126,11 @@ export function SubscriptionColumn({
       as={Focusable}
       scope={HotkeyScope.SubscriptionList}
       data-hide-in-print
+      data-safe-area-owner="mobile-drawer-content"
       className={cn(
         !feedColumnShow && ELECTRON_BUILD && "bg-material-opaque",
-        "relative flex h-full flex-col pt-2.5",
-        "max-lg:pt-[calc(0.625rem+env(safe-area-inset-top,0px))]",
+        "relative flex h-full flex-col lg:pt-2.5",
+        "max-lg:pt-[calc(0.625rem+var(--app-safe-top))]",
         className,
       )}
       ref={focusableContainerRef}

@@ -45,11 +45,11 @@
 
 @media (max-width: 600px) {
   #root [data-sonner-toaster][data-y-position="bottom"] {
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
+    bottom: calc(var(--app-safe-bottom) + 20px);
   }
 
   #root [data-sonner-toaster][data-y-position="top"] {
-    top: calc(env(safe-area-inset-top, 0px) + 20px);
+    top: calc(var(--app-safe-top) + 20px);
   }
 }
 

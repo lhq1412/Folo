@@ -64,7 +64,7 @@ export const MobileTimelineLayout = memo(function MobileTimelineLayout({
                 transition={Spring.smooth(0.2)}
                 className="absolute inset-0 flex size-full flex-col overflow-hidden bg-theme-background"
               >
-                <div className="flex-shrink-0 bg-background pt-[env(safe-area-inset-top,0px)]">
+                <div className="flex-shrink-0 bg-background">
                   <div className="flex items-center">
                     <button
                       type="button"

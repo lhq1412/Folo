@@ -1,0 +1,80 @@
+on:
+  pull_request:
+  push:
+    branches: [main, dev, web-mobile-pwa]
+
+env:
+  VITE_WEB_URL: https://app.folo.is
+  VITE_API_URL: https://api.follow.is
+  FOLO_E2E_API_URL: https://api.follow.is
+
+name: ✨ CI Mobile Layout E2E
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-e2e-mobile-layout
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/dev' && github.ref != 'refs/heads/web-mobile-pwa' }}
+
+jobs:
+  mobile-shell-layout-unit:
+    name: Vitest mobile shell layout
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - name: Use Node.js LTS
+        uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --child-concurrency=1
+
+      - name: Run mobile shell layout unit tests
+        run: pnpm --dir apps/desktop exec vitest run layer/renderer/src/lib/pwa/mobile-shell-layout.test.ts
+
+  e2e-mobile-layout:
+    name: Playwright mobile shell layout
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - name: Use Node.js LTS
+        uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --child-concurrency=1
+
+      - name: Install Playwright browsers
+        run: pnpm --dir apps/desktop exec playwright install chromium webkit --with-deps
+
+      - name: Run mobile layout E2E
+        run: pnpm --dir apps/desktop run e2e:web-mobile-layout
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-mobile-layout
+          path: apps/desktop/e2e/playwright-report/
+          retention-days: 14
+
+      - name: Upload Playwright test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-test-results-mobile-layout
+          path: apps/desktop/e2e/test-results/
+          retention-days: 14

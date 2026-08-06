@@ -148,7 +148,6 @@ export const EntryListHeader: FC<{
     <div
       className={cn(
         "flex w-full flex-col pr-2.5 pt-2 @[700px]:pr-3 @[1024px]:pr-4",
-        "max-lg:pt-[calc(0.5rem+env(safe-area-inset-top,0px))]",
         !feedColumnShow && "macos:mt-4 macos:pt-margin-macos-traffic-light-y",
         titleStyleBasedView[view],
         isPreview

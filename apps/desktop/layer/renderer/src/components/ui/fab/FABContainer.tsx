@@ -94,7 +94,7 @@ export const FABContainer = (props: { children?: ReactNode }) => {
       data-testid="fab-container"
       data-hide-print
       className={clsx(
-        "fixed bottom-[calc(2rem+env(safe-area-inset-bottom))] left-[calc(100vw-3rem-1rem)] z-[9] flex flex-col",
+        "fixed bottom-[calc(2rem+var(--app-safe-bottom))] left-[calc(100vw-3rem-1rem)] z-[9] flex flex-col",
         "transition-transform duration-300 ease-in-out",
       )}
     >
