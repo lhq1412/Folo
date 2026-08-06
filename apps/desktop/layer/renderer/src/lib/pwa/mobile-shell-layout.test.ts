@@ -51,12 +51,18 @@ describe("mobile shell layout ownership", () => {
 
   test("documents safe-area owners for main and drawer render paths", () => {
     const mainLayout = readRendererSource("modules/app-layout/MainDestopLayout.tsx")
+    const subscriptionColumnContainer = readRendererSource(
+      "modules/app-layout/subscription-column/SubscriptionColumn.tsx",
+    )
     const subscriptionColumn = readRendererSource("modules/subscription-column/index.tsx")
 
     expect(mainLayout).toContain('data-safe-area-owner="main-top"')
     expect(mainLayout).toContain("max-lg:app-safe-top")
-    expect(subscriptionColumn).toContain('data-safe-area-owner="mobile-drawer-content"')
-    expect(subscriptionColumn).toContain("max-lg:pt-[calc(0.625rem+var(--app-safe-top))]")
+    expect(subscriptionColumnContainer).toContain('"mobile-drawer-shell"')
+    expect(subscriptionColumnContainer).toContain("top-[var(--app-safe-top)]")
+    expect(subscriptionColumnContainer).toContain("pb-[var(--app-safe-bottom)]")
+    expect(subscriptionColumn).not.toContain("var(--app-safe-top)")
+    expect(subscriptionColumn).toContain("pt-2.5")
   })
 
   test("releases shell max-height constraints in print mode", () => {

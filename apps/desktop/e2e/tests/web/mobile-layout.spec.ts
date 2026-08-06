@@ -61,28 +61,81 @@ test.describe("mobile shell geometry", () => {
     await expect(mainOwner).toHaveClass(/app-safe-top/)
   })
 
-  test("drawer content keeps base gutter plus safe-area top padding", async ({ page }) => {
+  test("drawer content keeps base gutter without duplicating top safe-area padding", async ({
+    page,
+  }) => {
     await page.setViewportSize({ width: 390, height: 844 })
     await openWebApp(page, env)
 
-    const drawerContent = page.locator('[data-safe-area-owner="mobile-drawer-content"]')
+    const drawerContent = page.locator("#mobile-subscription-drawer .relative.flex.h-full")
     await expect(drawerContent).toBeVisible()
 
     const padding = await drawerContent.evaluate((element) => {
       const style = getComputedStyle(element)
       const rootFontSize = Number.parseFloat(getComputedStyle(document.documentElement).fontSize)
       const paddingTop = Number.parseFloat(style.paddingTop)
-      const safeTop = Number.parseFloat(
-        getComputedStyle(document.documentElement).getPropertyValue("--app-safe-top"),
-      )
 
       return {
         paddingTop,
-        expected: rootFontSize * 0.625 + safeTop,
+        expected: rootFontSize * 0.625,
       }
     })
 
     expect(padding.paddingTop).toBeCloseTo(padding.expected, 1)
+  })
+
+  test("mobile drawer shell top aligns with injected safe-area top", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await openWebApp(page, env)
+
+    await page.evaluate(() => {
+      document.documentElement.style.setProperty("--app-safe-top", "47px")
+    })
+
+    const drawerShell = page.locator('[data-safe-area-owner="mobile-drawer-shell"]')
+    await expect(drawerShell).toBeVisible()
+
+    await expect
+      .poll(() =>
+        drawerShell.evaluate((element) => Math.round(element.getBoundingClientRect().top)),
+      )
+      .toBe(47)
+
+    const shellStyles = await drawerShell.evaluate((element) => {
+      const style = getComputedStyle(element)
+      return {
+        paddingTop: style.paddingTop,
+        top: style.top,
+      }
+    })
+
+    expect(shellStyles.paddingTop).toBe("0px")
+    expect(shellStyles.top).toBe("47px")
+  })
+
+  test("mobile drawer shell bottom respects injected safe-area bottom", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await openWebApp(page, env)
+
+    await page.evaluate(() => {
+      document.documentElement.style.setProperty("--app-safe-bottom", "34px")
+    })
+
+    const drawerShell = page.locator('[data-safe-area-owner="mobile-drawer-shell"]')
+    await expect(drawerShell).toBeVisible()
+
+    const shellStyles = await drawerShell.evaluate((element) => {
+      const style = getComputedStyle(element)
+      const rect = element.getBoundingClientRect()
+      return {
+        paddingBottom: style.paddingBottom,
+        bottom: Math.round(rect.bottom),
+        viewportHeight: window.innerHeight,
+      }
+    })
+
+    expect(shellStyles.paddingBottom).toBe("34px")
+    expect(shellStyles.bottom).toBe(shellStyles.viewportHeight)
   })
 
   test("mobile viewport bootstrap remains stable after resize", async ({ page }) => {
