@@ -27,6 +27,8 @@ describe("mobile shell layout ownership", () => {
     expect(baseCss).toContain("--app-viewport-height")
     expect(baseCss).toContain(".app-shell")
     expect(mainLayout).not.toContain("h-dvh")
+    expect(mainLayout).not.toContain("lg:h-screen")
+    expect(mainLayout).not.toContain("print:h-auto")
   })
 
   test("does not distribute mobile dvh ownership across body and root", () => {
@@ -54,7 +56,14 @@ describe("mobile shell layout ownership", () => {
     expect(mainLayout).toContain('data-safe-area-owner="main-top"')
     expect(mainLayout).toContain("max-lg:app-safe-top")
     expect(subscriptionColumn).toContain('data-safe-area-owner="mobile-drawer-content"')
-    expect(subscriptionColumn).toContain("max-lg:app-safe-top")
+    expect(subscriptionColumn).toContain("max-lg:pt-[calc(0.625rem+var(--app-safe-top))]")
+  })
+
+  test("releases shell max-height constraints in print mode", () => {
+    const baseCss = readRendererSource("styles/base.css")
+
+    expect(baseCss).toMatch(/@media print[\s\S]*\.app-shell[\s\S]*max-height:\s*none/)
+    expect(baseCss).toMatch(/@media print[\s\S]*\.app-shell[\s\S]*height:\s*auto/)
   })
 
   test("limits direct env(safe-area-inset) usage to shell variables", () => {

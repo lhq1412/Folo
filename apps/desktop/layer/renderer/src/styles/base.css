@@ -66,6 +66,15 @@ body,
 .app-shell {
   height: var(--app-viewport-height);
   max-height: var(--app-viewport-height);
+  overflow: hidden;
+}
+
+@media print {
+  .app-shell {
+    height: auto;
+    max-height: none;
+    overflow: visible;
+  }
 }
 
 @layer utilities {

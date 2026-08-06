@@ -74,7 +74,7 @@ export default defineConfig({
       },
     },
     {
-      name: "web-mobile-webkit",
+      name: "web-mobile-layout-webkit",
       testMatch: /tests\/web\/mobile-layout\.spec\.ts/,
       use: {
         ...devices["iPhone 14"],

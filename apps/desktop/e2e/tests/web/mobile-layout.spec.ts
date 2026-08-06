@@ -24,6 +24,7 @@ test.describe("mobile shell geometry", () => {
 
       const shell = page.locator("#follow-root-container")
       await expect(shell).toBeVisible()
+      await expect(shell).toHaveClass(/app-shell/)
 
       await expect
         .poll(() =>
@@ -33,6 +34,21 @@ test.describe("mobile shell geometry", () => {
           }),
         )
         .toBe(viewport.height)
+
+      await expect
+        .poll(() =>
+          shell.evaluate((element) => {
+            const style = getComputedStyle(element)
+            return {
+              height: style.height,
+              maxHeight: style.maxHeight,
+            }
+          }),
+        )
+        .toEqual({
+          height: `${viewport.height}px`,
+          maxHeight: `${viewport.height}px`,
+        })
     })
   }
 
@@ -43,6 +59,26 @@ test.describe("mobile shell geometry", () => {
     const mainOwner = page.locator('main[data-safe-area-owner="main-top"]')
     await expect(mainOwner).toBeVisible()
     await expect(mainOwner).toHaveClass(/app-safe-top/)
+  })
+
+  test("drawer content keeps base gutter plus safe-area top padding", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await openWebApp(page, env)
+
+    const drawerContent = page.locator('[data-safe-area-owner="mobile-drawer-content"]')
+    await expect(drawerContent).toBeVisible()
+
+    const padding = await drawerContent.evaluate((element) => {
+      const style = getComputedStyle(element)
+      const paddingTop = Number.parseFloat(style.paddingTop)
+      const safeTop = Number.parseFloat(
+        getComputedStyle(document.documentElement).getPropertyValue("--app-safe-top"),
+      )
+
+      return { paddingTop, expected: 10 + safeTop }
+    })
+
+    expect(padding.paddingTop).toBeCloseTo(padding.expected, 1)
   })
 
   test("mobile viewport bootstrap remains stable after resize", async ({ page }) => {
@@ -76,6 +112,31 @@ test.describe("mobile shell geometry", () => {
     await expect
       .poll(async () => page.evaluate(() => document.documentElement.dataset.displayMode))
       .toBe("browser")
+  })
+
+  test("print mode removes viewport max-height constraint from shell", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await openWebApp(page, env)
+
+    const shell = page.locator("#follow-root-container")
+    await page.emulateMedia({ media: "print" })
+
+    await expect
+      .poll(() =>
+        shell.evaluate((element) => {
+          const style = getComputedStyle(element)
+          return {
+            height: style.height,
+            maxHeight: style.maxHeight,
+            overflow: style.overflow,
+          }
+        }),
+      )
+      .toEqual({
+        height: "auto",
+        maxHeight: "none",
+        overflow: "visible",
+      })
   })
 })
 
