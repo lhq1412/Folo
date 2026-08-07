@@ -12,7 +12,12 @@ const env = resolveDesktopE2EEnv()
 const viewportCases = [
   { width: 320, height: 568, expected: "mobile" },
   { width: 390, height: 844, expected: "mobile" },
+  { width: 768, height: 1024, expected: "mobile" },
+  { width: 820, height: 1180, expected: "mobile" },
+  { width: 834, height: 1194, expected: "mobile" },
+  { width: 1023, height: 1366, expected: "mobile" },
   { width: 1024, height: 768, expected: "desktop" },
+  { width: 1024, height: 1366, expected: "desktop" },
 ] as const
 
 const focusableSelector =
