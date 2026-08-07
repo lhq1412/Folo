@@ -11,7 +11,15 @@ const viewportCases = [
   { width: 390, height: 844 },
   { width: 430, height: 932 },
   { width: 768, height: 1024 },
+  { width: 820, height: 1180 },
+  { width: 834, height: 1194 },
   { width: 1024, height: 768 },
+  { width: 1024, height: 1366 },
+] as const
+
+const breakpointCases = [
+  { width: 1023, height: 1366, expected: "mobile" },
+  { width: 1024, height: 1366, expected: "desktop" },
 ] as const
 
 test.describe("mobile shell geometry", () => {
@@ -180,6 +188,35 @@ test.describe("mobile shell geometry", () => {
       .poll(async () => page.evaluate(() => document.documentElement.dataset.displayMode))
       .toBe("browser")
   })
+
+  for (const breakpoint of breakpointCases) {
+    test(`responsive branch at ${breakpoint.width}px uses ${breakpoint.expected} layout`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: breakpoint.width, height: breakpoint.height })
+      await openWebApp(page, env)
+
+      await expect
+        .poll(async () => page.evaluate(() => document.documentElement.dataset.viewport))
+        .toBe(breakpoint.expected)
+
+      const shell = page.locator("#follow-root-container")
+      await expect(shell).toBeVisible()
+      await expect
+        .poll(() => shell.evaluate((element) => Math.round(element.getBoundingClientRect().height)))
+        .toBe(breakpoint.height)
+
+      if (breakpoint.expected === "mobile") {
+        const drawerShell = page.locator('[data-safe-area-owner="mobile-drawer-bottom"]')
+        await expect(drawerShell).toBeVisible()
+        await expect
+          .poll(() =>
+            drawerShell.evaluate((element) => Math.round(element.getBoundingClientRect().top)),
+          )
+          .toBe(0)
+      }
+    })
+  }
 
   test("print mode removes viewport max-height constraint from shell", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 })

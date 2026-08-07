@@ -49,9 +49,11 @@ describe("mobile shell layout ownership", () => {
     expect(mobileTimelineLayout).not.toContain("safe-area-inset")
   })
 
-  test("uses non-overlay iOS PWA status bar mode", () => {
+  test("declares Apple standalone PWA meta contract", () => {
     const indexHtml = readFileSync(join(rendererRoot, "../index.html"), "utf8")
 
+    expect(indexHtml).toContain('<meta name="mobile-web-app-capable" content="yes" />')
+    expect(indexHtml).toContain('<meta name="apple-mobile-web-app-capable" content="yes" />')
     expect(indexHtml).toContain(
       '<meta name="apple-mobile-web-app-status-bar-style" content="default" />',
     )
