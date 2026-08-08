@@ -13,7 +13,7 @@ const visibleByTestId = (page: Page, testId: string) =>
 const isElectronPage = (page: Page) => page.url().startsWith("app://")
 const optionalRendererResponseTimeout = (page: Page) => (isElectronPage(page) ? 5_000 : 120_000)
 
-const hasRenderedAppShell = async (page: Page) => {
+export const hasRenderedAppShell = async (page: Page) => {
   const visibleTestIds = [
     "login-button",
     "login-modal",

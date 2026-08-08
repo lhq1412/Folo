@@ -7,15 +7,16 @@ env:
   VITE_WEB_URL: https://app.folo.is
   VITE_API_URL: https://api.follow.is
   FOLO_E2E_API_URL: https://api.follow.is
+  FOLO_E2E_USE_PROD_WEB_SERVER: "1"
 
-name: ✨ CI Web PWA E2E
+name: ✨ CI Production PWA E2E
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-e2e-web-pwa
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/dev' && github.ref != 'refs/heads/web-mobile-pwa' }}
 
 jobs:
   e2e-web-pwa:
-    name: Playwright PWA update coordination
+    name: Playwright production PWA regression
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -40,7 +41,10 @@ jobs:
       - name: Install Playwright Chromium
         run: pnpm --dir apps/desktop exec playwright install chromium --with-deps
 
-      - name: Run PWA coordination E2E
+      - name: Run production PWA E2E
+        run: pnpm --dir apps/desktop run e2e:web:pwa-prod
+
+      - name: Run PWA coordinator E2E
         run: pnpm --dir apps/desktop run e2e:web:pwa
 
       - name: Upload Playwright report
