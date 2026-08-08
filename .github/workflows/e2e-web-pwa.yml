@@ -7,7 +7,6 @@ env:
   VITE_WEB_URL: https://app.folo.is
   VITE_API_URL: https://api.follow.is
   FOLO_E2E_API_URL: https://api.follow.is
-  FOLO_E2E_USE_PROD_WEB_SERVER: "1"
 
 name: ✨ CI Production PWA E2E
 concurrency:
