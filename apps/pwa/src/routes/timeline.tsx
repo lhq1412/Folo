@@ -1,15 +1,83 @@
 /* eslint-disable react-dom/no-dangerously-set-innerhtml -- Feed HTML is sanitized with DOMPurify at the render boundary. */
-import type { EntryListResponse } from "@follow-app/client-sdk"
+import { getImageProxyUrl } from "@follow/utils/img-proxy"
+import type { EntryListResponse, EntryMedia } from "@follow-app/client-sdk"
 import { FeedViewType } from "@follow-app/client-sdk"
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query"
 import DOMPurify from "dompurify"
 import { useMemo } from "react"
-import { Link, useParams } from "react-router"
+import { Link, useParams, useSearchParams } from "react-router"
 
 import { followApi } from "../lib/api"
 
 const PAGE_SIZE = 20
 const INTERACTIVE_FEED_TAGS = ["button", "form", "input", "option", "select", "textarea"]
+const SOCIAL_LIST_FORBIDDEN_TAGS = [
+  ...INTERACTIVE_FEED_TAGS,
+  "a",
+  "audio",
+  "iframe",
+  "img",
+  "source",
+  "video",
+]
+
+const TIMELINE_VIEWS = [
+  {
+    description: "Your latest articles",
+    icon: "i-mgc-paper-cute-re",
+    label: "Articles",
+    slug: "articles",
+    title: "Today",
+    view: FeedViewType.Articles,
+  },
+  {
+    description: "Posts from people and communities",
+    icon: "i-mgc-thought-cute-re",
+    label: "Social",
+    slug: "social-media",
+    title: "Social Media",
+    view: FeedViewType.SocialMedia,
+  },
+  {
+    description: "Photos from your feeds",
+    icon: "i-mgc-pic-cute-re",
+    label: "Pictures",
+    slug: "pictures",
+    title: "Pictures",
+    view: FeedViewType.Pictures,
+  },
+] as const
+
+type EntryListItem = Omit<EntryListResponse["data"][number], "entries"> & {
+  entries: EntryListResponse["data"][number]["entries"] & { content?: string | null }
+}
+type TimelineView = (typeof TIMELINE_VIEWS)[number]
+type PreviewMedia = { imageUrl: string; media: EntryMedia }
+
+export const getTimelineView = (slug: string | null): TimelineView =>
+  TIMELINE_VIEWS.find((item) => item.slug === slug) ?? TIMELINE_VIEWS[0]
+
+export const getPreviewMedia = (media: EntryMedia[] | null | undefined): PreviewMedia[] => {
+  const previews = new Map<string, EntryMedia>()
+
+  for (const item of media ?? []) {
+    const imageUrl = item.type === "photo" ? item.url : item.preview_image_url
+    if (imageUrl && !previews.has(imageUrl)) previews.set(imageUrl, item)
+  }
+
+  return Array.from(previews, ([imageUrl, item]) => ({ imageUrl, media: item }))
+}
+
+const getTimelineImageUrl = (url: string, width: number, height?: number) =>
+  getImageProxyUrl({ canUseProxy: true, height, url, width })
+
+const getTimelineHref = (view: TimelineView) =>
+  view.view === FeedViewType.Articles ? "/" : `/?view=${view.slug}`
+
+const getEntryHref = (entryId: string, view: TimelineView) =>
+  view.view === FeedViewType.Articles
+    ? `/entries/${entryId}`
+    : `/entries/${entryId}?view=${view.slug}`
 
 export const getNextPageParam = (page: Pick<EntryListResponse, "data">) =>
   page.data.length < PAGE_SIZE ? undefined : page.data.at(-1)?.entries.publishedAt
@@ -23,14 +91,259 @@ export const sanitizeEntryContent = (content: string) =>
     FORBID_TAGS: INTERACTIVE_FEED_TAGS,
   })
 
-function EntryList({ selectedId }: { selectedId?: string }) {
+export const sanitizeSocialListContent = (content: string) =>
+  DOMPurify.sanitize(content, {
+    FORBID_ATTR: ["style"],
+    FORBID_TAGS: SOCIAL_LIST_FORBIDDEN_TAGS,
+  })
+
+function TimelineViewNav({ current }: { current: TimelineView }) {
+  return (
+    <nav aria-label="Timeline views" className="mt-3">
+      <ul className="grid grid-cols-3 gap-1 rounded-xl bg-fill-quinary p-1">
+        {TIMELINE_VIEWS.map((view) => {
+          const isActive = current.view === view.view
+          return (
+            <li key={view.slug}>
+              <Link
+                aria-current={isActive ? "page" : undefined}
+                className={`flex min-h-11 items-center justify-center gap-1.5 rounded-lg px-2 text-xs font-semibold transition-colors ${isActive ? "bg-theme-background text-accent shadow-sm" : "text-text-tertiary"}`}
+                to={getTimelineHref(view)}
+              >
+                <i aria-hidden className={`${view.icon} size-4`} />
+                <span>{view.label}</span>
+              </Link>
+            </li>
+          )
+        })}
+      </ul>
+    </nav>
+  )
+}
+
+function FeedAvatar({ item }: { item: EntryListItem }) {
+  const source = item.entries.authorAvatar || item.feeds.image
+
+  return source ? (
+    <img alt="" className="size-8 shrink-0 rounded-full object-cover" loading="lazy" src={source} />
+  ) : (
+    <span
+      aria-hidden
+      className="grid size-8 shrink-0 place-items-center rounded-full bg-fill-quinary text-text-tertiary"
+    >
+      <i className="i-mgc-user-3-cute-re size-4" />
+    </span>
+  )
+}
+
+function ArticleListItem({
+  item,
+  selectedId,
+  view,
+}: {
+  item: EntryListItem
+  selectedId?: string
+  view: TimelineView
+}) {
+  const entry = item.entries
+  const feed = item.feeds
+
+  return (
+    <li className="border-b border-fill-tertiary">
+      <Link
+        aria-current={selectedId === entry.id ? "page" : undefined}
+        className="block min-h-24 px-4 py-3 transition-colors hover:bg-fill-quinary focus-visible:bg-fill-quinary focus-visible:outline-none"
+        to={getEntryHref(entry.id, view)}
+      >
+        <div className="flex items-center gap-2 text-xs text-text-tertiary">
+          {feed.image ? (
+            <img alt="" className="size-4 rounded" loading="lazy" src={feed.image} />
+          ) : (
+            <span aria-hidden className="size-2 rounded-full bg-accent" />
+          )}
+          <span className="min-w-0 flex-1 truncate">{feed.title || feed.url}</span>
+          <time dateTime={entry.publishedAt}>{formatDate(entry.publishedAt)}</time>
+        </div>
+        <h3 className="mt-2 line-clamp-2 text-[15px] font-semibold leading-5">
+          {entry.title || "Untitled"}
+        </h3>
+        {entry.description && (
+          <p className="mt-1 line-clamp-2 text-sm leading-5 text-text-secondary">
+            {entry.description}
+          </p>
+        )}
+      </Link>
+    </li>
+  )
+}
+
+function SocialListItem({
+  item,
+  selectedId,
+  view,
+}: {
+  item: EntryListItem
+  selectedId?: string
+  view: TimelineView
+}) {
+  const entry = item.entries
+  const feed = item.feeds
+  const media = getPreviewMedia(entry.media)
+  const visibleMedia = media.slice(0, 4)
+  const safeContent = useMemo(
+    () => sanitizeSocialListContent(entry.content || entry.description || entry.title || ""),
+    [entry.content, entry.description, entry.title],
+  )
+
+  return (
+    <li className="border-b border-fill-tertiary">
+      <Link
+        aria-current={selectedId === entry.id ? "page" : undefined}
+        className="relative flex gap-3 px-4 py-4 transition-colors hover:bg-fill-quinary focus-visible:bg-fill-quinary focus-visible:outline-none"
+        to={getEntryHref(entry.id, view)}
+      >
+        {!item.read && (
+          <span className="absolute left-1.5 top-7 size-2 rounded-full bg-accent">
+            <span className="sr-only">Unread</span>
+          </span>
+        )}
+        <FeedAvatar item={item} />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5 text-xs text-text-tertiary">
+            <span className="min-w-0 flex-1 truncate text-sm font-semibold text-text">
+              {entry.author || feed.title || feed.url}
+            </span>
+            <span aria-hidden>·</span>
+            <time className="shrink-0" dateTime={entry.publishedAt}>
+              {formatDate(entry.publishedAt)}
+            </time>
+          </div>
+          {safeContent && (
+            <div
+              className="line-clamp-7 mt-1.5 whitespace-pre-wrap text-[15px] leading-[22px]"
+              dangerouslySetInnerHTML={{ __html: safeContent }}
+            />
+          )}
+          {visibleMedia.length > 0 && (
+            <div className="mt-3 grid grid-cols-2 gap-1 overflow-hidden rounded-xl">
+              {visibleMedia.map((preview, index) => {
+                const isWide =
+                  visibleMedia.length === 1 ||
+                  (visibleMedia.length % 2 === 1 && index === visibleMedia.length - 1)
+                return (
+                  <div
+                    className={`relative overflow-hidden bg-fill-quinary ${isWide ? "col-span-2 aspect-[2/1]" : "aspect-square"}`}
+                    key={preview.imageUrl}
+                  >
+                    <img
+                      alt=""
+                      className="size-full object-cover"
+                      loading="lazy"
+                      src={getTimelineImageUrl(preview.imageUrl, isWide ? 800 : 400, 400)}
+                    />
+                    {preview.media.type === "video" && (
+                      <span className="absolute inset-0 grid place-items-center bg-black/15 text-white">
+                        <i aria-hidden className="i-mgc-play-cute-fi size-8 drop-shadow" />
+                        <span className="sr-only">Video</span>
+                      </span>
+                    )}
+                    {index === 3 && media.length > visibleMedia.length && (
+                      <span className="absolute inset-0 grid place-items-center bg-black/45 text-lg font-semibold text-white">
+                        +{media.length - visibleMedia.length}
+                      </span>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      </Link>
+    </li>
+  )
+}
+
+function PictureListItem({ item, view }: { item: EntryListItem; view: TimelineView }) {
+  const entry = item.entries
+  const feed = item.feeds
+  const media = getPreviewMedia(entry.media)
+  const firstMedia = media[0]
+
+  return (
+    <li className="mb-2 break-inside-avoid">
+      <Link
+        className="block overflow-hidden rounded-xl bg-fill-quinary transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+        to={getEntryHref(entry.id, view)}
+      >
+        <div className="relative">
+          {firstMedia ? (
+            <img
+              alt=""
+              className={
+                firstMedia.media.width && firstMedia.media.height
+                  ? "h-auto w-full"
+                  : "aspect-square w-full object-cover"
+              }
+              height={firstMedia.media.height}
+              loading="lazy"
+              src={getTimelineImageUrl(firstMedia.imageUrl, 600)}
+              width={firstMedia.media.width}
+            />
+          ) : (
+            <span
+              aria-hidden
+              className="grid aspect-square w-full place-items-center text-text-tertiary"
+            >
+              <i className="i-mgc-pic-cute-re size-7" />
+            </span>
+          )}
+          {!item.read && (
+            <span className="absolute left-2 top-2 size-2 rounded-full bg-accent ring-2 ring-black/20">
+              <span className="sr-only">Unread</span>
+            </span>
+          )}
+          {media.length > 1 && (
+            <span className="absolute right-2 top-2 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-semibold text-white">
+              1/{media.length}
+            </span>
+          )}
+        </div>
+        <div className="p-2.5">
+          <h3 className="line-clamp-2 text-sm font-semibold leading-5">
+            {entry.title || feed.title || "Untitled"}
+          </h3>
+          <div className="mt-2 flex min-w-0 items-center gap-1.5 text-[11px] text-text-tertiary">
+            {feed.image && (
+              <img alt="" className="size-4 rounded" loading="lazy" src={feed.image} />
+            )}
+            <span className="min-w-0 flex-1 truncate">{feed.title || feed.url}</span>
+            <time className="shrink-0" dateTime={entry.publishedAt}>
+              {formatDate(entry.publishedAt)}
+            </time>
+          </div>
+        </div>
+      </Link>
+    </li>
+  )
+}
+
+function EntryList({
+  selectedId,
+  view,
+  wide,
+}: {
+  selectedId?: string
+  view: TimelineView
+  wide: boolean
+}) {
   const query = useInfiniteQuery({
-    queryKey: ["entries", FeedViewType.Articles],
+    queryKey: ["entries", view.view],
     queryFn: ({ pageParam }) =>
       followApi.entries.list({
         limit: PAGE_SIZE,
         publishedAfter: pageParam,
-        view: FeedViewType.Articles,
+        view: view.view,
+        withContent: view.view === FeedViewType.SocialMedia,
       }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam,
@@ -41,14 +354,15 @@ function EntryList({ selectedId }: { selectedId?: string }) {
   return (
     <section
       aria-busy={query.isPending}
-      aria-label="Timeline"
-      className={`${selectedId ? "hidden md:flex" : "flex"} min-h-0 flex-col border-fill-tertiary md:border-r`}
+      aria-label={`${view.label} timeline`}
+      className={`${selectedId ? "hidden md:flex" : "flex"} min-h-0 flex-col border-fill-tertiary ${wide ? "" : "md:border-r"}`}
     >
       <header className="shrink-0 border-b border-fill-tertiary px-4 py-4">
         <Heading className="text-title2 font-semibold outline-none" tabIndex={-1}>
-          Today
+          {view.title}
         </Heading>
-        <p className="mt-0.5 text-xs text-text-tertiary">Your latest articles</p>
+        <p className="mt-0.5 text-xs text-text-tertiary">{view.description}</p>
+        <TimelineViewNav current={view} />
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
@@ -62,41 +376,37 @@ function EntryList({ selectedId }: { selectedId?: string }) {
           </div>
         )}
         {!query.isPending && !query.isError && items.length === 0 && (
-          <p className="p-5 text-sm text-text-secondary">No articles yet.</p>
+          <p className="p-5 text-sm text-text-secondary">No {view.label.toLowerCase()} yet.</p>
         )}
-        <ol>
-          {items.map((item) => {
-            const entry = item.entries
-            const feed = item.feeds
-            return (
-              <li key={entry.id} className="border-b border-fill-tertiary">
-                <Link
-                  aria-current={selectedId === entry.id ? "page" : undefined}
-                  className="block min-h-24 px-4 py-3 transition-colors hover:bg-fill-quinary focus-visible:bg-fill-quinary focus-visible:outline-none"
-                  to={`/entries/${entry.id}`}
-                >
-                  <div className="flex items-center gap-2 text-xs text-text-tertiary">
-                    {feed.image ? (
-                      <img alt="" className="size-4 rounded" loading="lazy" src={feed.image} />
-                    ) : (
-                      <span aria-hidden className="size-2 rounded-full bg-accent" />
-                    )}
-                    <span className="min-w-0 flex-1 truncate">{feed.title || feed.url}</span>
-                    <time dateTime={entry.publishedAt}>{formatDate(entry.publishedAt)}</time>
-                  </div>
-                  <h3 className="mt-2 line-clamp-2 text-[15px] font-semibold leading-5">
-                    {entry.title || "Untitled"}
-                  </h3>
-                  {entry.description && (
-                    <p className="mt-1 line-clamp-2 text-sm leading-5 text-text-secondary">
-                      {entry.description}
-                    </p>
-                  )}
-                </Link>
-              </li>
-            )
-          })}
-        </ol>
+        {view.view === FeedViewType.Pictures ? (
+          <ol
+            className={`${selectedId ? "columns-2" : "columns-2 sm:columns-3 lg:columns-4"} gap-2 p-2`}
+          >
+            {items.map((item) => (
+              <PictureListItem item={item} key={item.entries.id} view={view} />
+            ))}
+          </ol>
+        ) : (
+          <ol className={wide ? "mx-auto w-full max-w-2xl" : undefined}>
+            {items.map((item) =>
+              view.view === FeedViewType.SocialMedia ? (
+                <SocialListItem
+                  item={item}
+                  key={item.entries.id}
+                  selectedId={selectedId}
+                  view={view}
+                />
+              ) : (
+                <ArticleListItem
+                  item={item}
+                  key={item.entries.id}
+                  selectedId={selectedId}
+                  view={view}
+                />
+              ),
+            )}
+          </ol>
+        )}
         {query.hasNextPage && (
           <div className="p-4 text-center">
             <button
@@ -113,7 +423,7 @@ function EntryList({ selectedId }: { selectedId?: string }) {
   )
 }
 
-function EntryDetail({ entryId }: { entryId: string }) {
+function EntryDetail({ backTo, entryId }: { backTo: string; entryId: string }) {
   const query = useQuery({
     queryKey: ["entry", entryId],
     queryFn: async () => (await followApi.entries.get({ id: entryId })).data,
@@ -130,7 +440,7 @@ function EntryDetail({ entryId }: { entryId: string }) {
       <div className="mx-auto max-w-[680px] px-5 py-4 md:px-8 md:py-8">
         <Link
           className="inline-flex min-h-11 items-center gap-1 text-sm text-accent md:hidden"
-          to="/"
+          to={backTo}
         >
           <i aria-hidden className="i-mgc-left-cute-re size-4" />
           Back
@@ -151,7 +461,10 @@ function EntryDetail({ entryId }: { entryId: string }) {
             <h1 className="text-title2 font-semibold outline-none" tabIndex={-1}>
               Article not found
             </h1>
-            <Link className="mt-3 inline-flex min-h-11 items-center text-sm text-accent" to="/">
+            <Link
+              className="mt-3 inline-flex min-h-11 items-center text-sm text-accent"
+              to={backTo}
+            >
               Return to your timeline
             </Link>
           </div>
@@ -198,18 +511,27 @@ function EntryDetail({ entryId }: { entryId: string }) {
 function EmptyDetail() {
   return (
     <section className="hidden place-items-center p-8 text-center text-sm text-text-tertiary md:grid">
-      Select an article to read it here.
+      Select an item to open it here.
     </section>
   )
 }
 
 export function Component() {
   const { entryId } = useParams<{ entryId: string }>()
+  const [searchParams] = useSearchParams()
+  const view = getTimelineView(searchParams.get("view"))
+  const wide = !entryId && view.view !== FeedViewType.Articles
 
   return (
-    <div className="grid h-full min-h-0 md:grid-cols-[minmax(20rem,24rem)_minmax(0,1fr)]">
-      <EntryList selectedId={entryId} />
-      {entryId ? <EntryDetail entryId={entryId} /> : <EmptyDetail />}
+    <div
+      className={`grid h-full min-h-0 ${wide ? "" : "md:grid-cols-[minmax(20rem,24rem)_minmax(0,1fr)]"}`}
+    >
+      <EntryList selectedId={entryId} view={view} wide={wide} />
+      {entryId ? (
+        <EntryDetail backTo={getTimelineHref(view)} entryId={entryId} />
+      ) : wide ? null : (
+        <EmptyDetail />
+      )}
     </div>
   )
 }

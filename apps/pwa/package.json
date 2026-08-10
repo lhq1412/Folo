@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@follow/components": "workspace:*",
+    "@follow/utils": "workspace:*",
     "@follow-app/client-sdk": "catalog:",
     "@tanstack/react-query": "5.101.2",
     "better-auth": "1.6.23",

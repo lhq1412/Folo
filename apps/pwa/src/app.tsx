@@ -102,7 +102,7 @@ function AppShell() {
     window.requestAnimationFrame(() => {
       document.querySelector<HTMLElement>("#main h1")?.focus()
     })
-  }, [location.pathname])
+  }, [location.pathname, location.search])
 
   return (
     <div className="app-shell bg-theme-background font-theme text-text">
