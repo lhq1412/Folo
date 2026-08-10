@@ -100,14 +100,14 @@ export const sanitizeSocialListContent = (content: string) =>
 function TimelineViewNav({ current }: { current: TimelineView }) {
   return (
     <nav aria-label="Timeline views" className="mt-3">
-      <ul className="grid grid-cols-3 gap-1 rounded-xl bg-fill-quinary p-1">
+      <ul className="inline-flex items-center gap-1">
         {TIMELINE_VIEWS.map((view) => {
           const isActive = current.view === view.view
           return (
             <li key={view.slug}>
               <Link
                 aria-current={isActive ? "page" : undefined}
-                className={`flex min-h-11 items-center justify-center gap-1.5 rounded-lg px-2 text-xs font-semibold transition-colors ${isActive ? "bg-theme-background text-accent shadow-sm" : "text-text-tertiary"}`}
+                className={`flex min-h-11 items-center justify-center gap-1.5 border-b-2 px-2 text-xs font-medium transition-colors ${isActive ? "border-accent text-accent" : "border-transparent text-text-tertiary hover:text-text-secondary"}`}
                 to={getTimelineHref(view)}
               >
                 <i aria-hidden className={`${view.icon} size-4`} />
