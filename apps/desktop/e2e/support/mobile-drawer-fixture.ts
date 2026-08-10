@@ -1,6 +1,7 @@
 import { mkdir } from "node:fs/promises"
 import { fileURLToPath } from "node:url"
 
+import { FeedViewType } from "@follow/constants"
 import type { Page, Route } from "@playwright/test"
 import { expect } from "@playwright/test"
 import { dirname, join } from "pathe"
@@ -12,6 +13,40 @@ import type { DesktopE2EEnv } from "./env"
 
 const MOBILE_DRAWER_E2E_USER_ID = "e2e-mobile-drawer-user"
 const MOBILE_LAYOUT_INIT_KEY = "follow:mobile-layout-initialized"
+const MOBILE_DRAWER_APP_TIP_DISMISS_KEY = `follow:ai-onboarding:dismissed:${MOBILE_DRAWER_E2E_USER_ID}`
+const MOBILE_DRAWER_E2E_FEED_ID = "e2e-mobile-drawer-feed"
+export const MOBILE_DRAWER_E2E_ENTRY_ID = "41147805272531997"
+
+const mockFeed = {
+  type: "feed",
+  id: MOBILE_DRAWER_E2E_FEED_ID,
+  title: "Folo E2E Feed",
+  url: "https://example.com/folo-e2e.xml",
+  image: null,
+  description: null,
+  ownerUserId: null,
+  errorAt: null,
+  errorMessage: null,
+  siteUrl: "https://example.com",
+}
+
+const mockEntry = {
+  id: MOBILE_DRAWER_E2E_ENTRY_ID,
+  title: "Folo mobile navigation fixture",
+  url: "https://example.com/folo-e2e-entry",
+  description: "Stable entry for mobile navigation E2E coverage.",
+  guid: MOBILE_DRAWER_E2E_ENTRY_ID,
+  author: "Folo E2E",
+  authorUrl: null,
+  authorAvatar: null,
+  insertedAt: "2026-01-01T00:00:00.000Z",
+  publishedAt: "2026-01-01T00:00:00.000Z",
+  media: null,
+  categories: null,
+  attachments: null,
+  extra: null,
+  language: "en",
+}
 
 const mockSessionUser = {
   id: MOBILE_DRAWER_E2E_USER_ID,
@@ -80,6 +115,35 @@ const fulfillMockApi = async (route: Route) => {
   })
 }
 
+const fulfillMockEntries = async (route: Route) => {
+  const request = route.request()
+  const requestBody =
+    request.method() === "POST" ? (request.postDataJSON() as { publishedAfter?: string }) : null
+  const data =
+    request.method() === "GET"
+      ? {
+          feeds: mockFeed,
+          entries: { ...mockEntry, content: "<p>Folo mobile navigation fixture.</p>" },
+        }
+      : requestBody?.publishedAfter
+        ? []
+        : [
+            {
+              read: false,
+              view: FeedViewType.Articles,
+              from: [],
+              feeds: mockFeed,
+              entries: mockEntry,
+            },
+          ]
+
+  await route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({ code: 0, data }),
+  })
+}
+
 export const installMobileDrawerMockAuth = async (page: Page, apiURL: string) => {
   const apiHost = new URL(apiURL).host
 
@@ -89,10 +153,25 @@ export const installMobileDrawerMockAuth = async (page: Page, apiURL: string) =>
   await page.route(`**://${apiHost}/**`, fulfillMockApi)
 }
 
+export const installMobileDrawerMockEntry = async (page: Page, apiURL: string) => {
+  const apiHost = new URL(apiURL).host
+  await page.route(
+    (url) => url.host === apiHost && /\/entries\/?$/.test(url.pathname),
+    fulfillMockEntries,
+  )
+}
+
 export const installMobileDrawerTestInitScripts = async (page: Page) => {
-  await page.addInitScript((layoutInitKey) => {
-    localStorage.removeItem(layoutInitKey)
-  }, MOBILE_LAYOUT_INIT_KEY)
+  await page.addInitScript(
+    ({ appTipDismissKey, layoutInitKey }) => {
+      localStorage.removeItem(layoutInitKey)
+      localStorage.setItem(appTipDismissKey, "1")
+    },
+    {
+      appTipDismissKey: MOBILE_DRAWER_APP_TIP_DISMISS_KEY,
+      layoutInitKey: MOBILE_LAYOUT_INIT_KEY,
+    },
+  )
 }
 
 export const prepareMobileDrawerAuthenticatedPage = async (page: Page, env: DesktopE2EEnv) => {

@@ -2,6 +2,7 @@ packages:
   - apps/*
   - packages/**/*
   - apps/desktop/layer/*
+  - cloudflare/api
   - "!apps/mobile/native/example"
   - apps/mobile/web-app
   - apps/mobile/web-app/html-renderer

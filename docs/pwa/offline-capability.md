@@ -60,6 +60,14 @@ Cross-tab update state lives in IndexedDB (`folo-pwa-update-state-v1`). `localSt
 
 ## Follow-up (tracked separately)
 
-- Production offline App Shell Playwright test (Issue #3 / Issue #8)
 - Precache budget gate & machine-readable build report
 - Full offline feed sync
+
+## Automated regression coverage
+
+Production PWA behavior is covered by Playwright projects `web-pwa-prod` and `web-pwa-prod-mobile` in `apps/desktop/e2e/playwright.config.ts`. The suite serves `out/web` via `pnpm --dir apps/desktop run e2e:serve-prod-web` and verifies:
+
+- Service Worker registration, activation, and page control
+- Offline reload of `/` and representative deep routes
+- Update now / later flows against a bumped `sw.js`
+- Mobile Chromium drawer and entry back-navigation with Service Workers enabled

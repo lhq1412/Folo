@@ -1,49 +1,50 @@
-// 需要反代的地址
+import { applyCorsHeaders, parseAllowedOrigins, resolveCorsDecision } from "./cors.js"
 
-const origin_host = "api.folo.is"
-const allowedMethods = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+const originHost = "api.folo.is"
+const upstreamOrigin = "https://folo.is"
 
-function getCorsHeaders(request) {
-  const origin = request.headers.get("Origin")
-  const requestHeaders = request.headers.get("Access-Control-Request-Headers")
-
-  const headers = {
-    "Access-Control-Allow-Origin": origin ?? "*",
-    "Access-Control-Allow-Methods": allowedMethods,
-    "Access-Control-Allow-Headers":
-      requestHeaders ?? "Authorization, Content-Type, Accept, Origin, X-Requested-With",
-    "Access-Control-Max-Age": "86400",
-    Vary: "Origin",
+/**
+ * @param {Record<string, string | undefined>} env
+ */
+function createCorsConfig(env) {
+  return {
+    allowedOrigins: parseAllowedOrigins(env.FOLO_CORS_ALLOWED_ORIGINS),
   }
-
-  if (origin) {
-    headers["Access-Control-Allow-Credentials"] = "true"
-  }
-
-  return headers
 }
 
 export default {
-  async fetch(request) {
+  /**
+   * @param {Request} request
+   * @param {Record<string, string | undefined>} env
+   */
+  async fetch(request, env = {}) {
+    const corsConfig = createCorsConfig(env)
+    const decision = resolveCorsDecision(request, corsConfig)
+
+    if (decision.action === "forbidden") {
+      return new Response("Forbidden", {
+        status: decision.status,
+        headers: {
+          Vary: "Origin",
+        },
+      })
+    }
+
     if (request.method === "OPTIONS") {
       return new Response(null, {
         status: 204,
-        headers: getCorsHeaders(request),
+        headers: decision.corsHeaders ?? undefined,
       })
     }
 
     const url = new URL(request.url)
-    url.host = origin_host
+    url.host = originHost
 
-    const newReq = new Request(url, request)
-    newReq.headers.set("Origin", "https://folo.is")
+    const upstreamRequest = new Request(url, request)
+    upstreamRequest.headers.set("Origin", upstreamOrigin)
 
-    const response = await fetch(newReq)
-    const headers = new Headers(response.headers)
-
-    for (const [key, value] of Object.entries(getCorsHeaders(request))) {
-      headers.set(key, value)
-    }
+    const response = await fetch(upstreamRequest)
+    const headers = applyCorsHeaders(response.headers, decision.corsHeaders)
 
     return new Response(response.body, {
       status: response.status,
