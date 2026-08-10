@@ -13,8 +13,11 @@ import {
 } from "./timeline"
 
 describe("timeline pagination", () => {
-  test("stops before requesting an incomplete next page", () => {
+  test("continues from any non-empty page and stops on an empty page", () => {
     expect(getNextPageParam({ data: [] })).toBeUndefined()
+    expect(
+      getNextPageParam({ data: [{ entries: { publishedAt: "2026-08-10T12:00:00.000Z" } }] }),
+    ).toBe("2026-08-10T12:00:00.000Z")
   })
 
   test("removes interactive and positioned content from feeds", () => {
