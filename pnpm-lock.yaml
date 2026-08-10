@@ -1589,6 +1589,73 @@ importers:
         specifier: 4.107.1
         version: 4.107.1(@cloudflare/workers-types@5.20260708.1)(bufferutil@4.1.0)
 
+  apps/pwa:
+    dependencies:
+      '@follow-app/client-sdk':
+        specifier: 0.3.95
+        version: 0.3.95(e61c7b7af41fae4af70d423e45fe1cf4)
+      '@follow/components':
+        specifier: workspace:*
+        version: link:../../packages/internal/components
+      '@tanstack/react-query':
+        specifier: 5.101.2
+        version: 5.101.2(react@19.2.7)
+      better-auth:
+        specifier: 1.6.23
+        version: 1.6.23(@cloudflare/workers-types@5.20260708.1)(@opentelemetry/api@1.9.1)(better-sqlite3@12.6.2)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@cloudflare/workers-types@5.20260708.1)(@opentelemetry/api@1.9.1)(better-sqlite3@12.6.2)(expo-sqlite@57.0.0(expo@57.0.4)(react-native@0.86.0(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.17)(bufferutil@4.1.0)(react@19.2.7))(react@19.2.7))(kysely@0.29.3)(pg@8.18.0))(mongodb@7.1.0(socks@2.8.7))(next@16.0.11(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@playwright/test@1.61.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(pg@8.18.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@4.1.10(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.1)(@types/node@26.1.1)(happy-dom@20.10.6(bufferutil@4.1.0))(jsdom@29.1.1(@noble/hashes@2.0.1))(vite@7.3.1(@types/node@26.1.1)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.0)(yaml@2.9.0)))
+      dompurify:
+        specifier: 3.4.11
+        version: 3.4.11
+      react:
+        specifier: 19.2.7
+        version: 19.2.7
+      react-dom:
+        specifier: 19.2.7
+        version: 19.2.7(react@19.2.7)
+      react-router:
+        specifier: 8.2.0
+        version: 8.2.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      tailwindcss-uikit-colors:
+        specifier: 'catalog:'
+        version: 1.0.0
+      workbox-window:
+        specifier: 7.4.1
+        version: 7.4.1
+    devDependencies:
+      '@follow/configs':
+        specifier: workspace:*
+        version: link:../../packages/configs
+      '@tailwindcss/postcss':
+        specifier: 4.3.2
+        version: 4.3.2
+      '@types/react':
+        specifier: 19.2.17
+        version: 19.2.17
+      '@types/react-dom':
+        specifier: 19.2.3
+        version: 19.2.3(@types/react@19.2.17)
+      '@vitejs/plugin-react':
+        specifier: 5.1.4
+        version: 5.1.4(vite@7.3.1(@types/node@26.1.1)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.0)(yaml@2.9.0))
+      tailwindcss:
+        specifier: 4.3.2
+        version: 4.3.2
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      vite:
+        specifier: 7.3.1
+        version: 7.3.1(@types/node@26.1.1)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.0)(yaml@2.9.0)
+      vite-plugin-pwa:
+        specifier: 1.3.0
+        version: 1.3.0(@vite-pwa/assets-generator@1.0.2)(vite@7.3.1(@types/node@26.1.1)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.0)(yaml@2.9.0))(workbox-build@7.4.1(@types/babel__core@7.20.5))(workbox-window@7.4.1)
+      vitest:
+        specifier: 4.1.10
+        version: 4.1.10(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.1)(@types/node@26.1.1)(happy-dom@20.10.6(bufferutil@4.1.0))(jsdom@29.1.1(@noble/hashes@2.0.1))(vite@7.3.1(@types/node@26.1.1)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.0)(yaml@2.9.0))
+      wrangler:
+        specifier: 4.107.1
+        version: 4.107.1(@cloudflare/workers-types@5.20260708.1)(bufferutil@4.1.0)
+
   apps/ssr:
     dependencies:
       '@fastify/middie':

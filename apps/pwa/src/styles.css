@@ -1,0 +1,96 @@
+@import "tailwindcss" source(none);
+@import "@follow/components/assets/colors.css";
+@import "@follow/components/assets/tailwind.css";
+@import "tailwindcss-uikit-colors/macos/selector.css";
+@config "../tailwind.config.ts";
+@source "./";
+@source "../index.html";
+
+* {
+  box-sizing: border-box;
+}
+
+:root {
+  color-scheme: light dark;
+  --app-height: 100vh;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+}
+
+@supports (height: 100dvh) {
+  :root {
+    --app-height: 100dvh;
+  }
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  min-width: 320px;
+  overflow: hidden;
+  background: rgb(var(--color-background));
+}
+
+button,
+a,
+input {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  width: 100%;
+  height: var(--app-height);
+  padding-top: var(--safe-top);
+  padding-right: var(--safe-right);
+  padding-left: var(--safe-left);
+}
+
+.entry-content {
+  color: rgb(var(--color-label));
+  font-size: 1.0625rem;
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+}
+
+.entry-content > * + * {
+  margin-top: 1.25em;
+}
+
+.entry-content :is(h1, h2, h3) {
+  margin-top: 1.6em;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.entry-content :is(img, video) {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.75rem;
+}
+
+.entry-content a {
+  color: rgb(var(--color-accent));
+  text-decoration: underline;
+}
+
+.entry-content pre {
+  overflow-x: auto;
+  border-radius: 0.75rem;
+  background: rgb(var(--color-fill-quinary));
+  padding: 1rem;
+}
+
+.entry-content blockquote {
+  border-left: 3px solid rgb(var(--color-fill-tertiary));
+  padding-left: 1rem;
+  color: rgb(var(--color-secondary-label));
+}

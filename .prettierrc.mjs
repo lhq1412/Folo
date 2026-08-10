@@ -22,6 +22,12 @@ export default {
       },
     },
     {
+      files: "apps/pwa/**/*.{css,html,js,jsx,ts,tsx}",
+      options: {
+        tailwindConfig: "./apps/pwa/tailwind.config.ts",
+      },
+    },
+    {
       files: "apps/ssr/**/*.{css,html,js,jsx,ts,tsx}",
       options: {
         tailwindConfig: "./apps/ssr/tailwind.config.ts",

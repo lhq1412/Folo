@@ -1,0 +1,9 @@
+{
+  "extends": "@follow/configs/tsconfig.extend.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "lib": ["DOM", "DOM.Iterable", "ESNext"],
+    "types": ["vite/client", "vite-plugin-pwa/client"]
+  },
+  "include": ["src", "vite.config.ts"]
+}
