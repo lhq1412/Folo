@@ -37,9 +37,10 @@ test.describe("production PWA update flow", () => {
     const swPath = resolveProdWebServiceWorkerPath(env.desktopAppDir)
 
     await installAndControlProductionPwa(page, DEEP_ROUTE)
-    const initialController = await page.evaluate(
-      () => navigator.serviceWorker.controller?.scriptURL ?? null,
-    )
+    let navigationCount = 0
+    page.on("framenavigated", (frame) => {
+      if (frame === page.mainFrame()) navigationCount++
+    })
 
     await bumpProductionServiceWorker(swPath, `defer-${Date.now()}`)
     await triggerServiceWorkerUpdateCheck(page)
@@ -54,11 +55,7 @@ test.describe("production PWA update flow", () => {
     await expect(page.getByRole("button", { name: "Later" })).toHaveCount(0)
 
     await page.waitForTimeout(1_500)
-
-    const currentController = await page.evaluate(
-      () => navigator.serviceWorker.controller?.scriptURL ?? null,
-    )
-    expect(currentController).toBe(initialController)
+    expect(navigationCount).toBe(0)
   })
 
   test("activates a waiting worker when the user chooses update now", async ({ page }) => {
@@ -75,9 +72,21 @@ test.describe("production PWA update flow", () => {
       timeout: 30_000,
     })
 
-    await page.getByRole("button", { name: "Update now" }).click()
-    await page.waitForLoadState("domcontentloaded", { timeout: 60_000 })
+    const controllerChanged = page.evaluate(
+      () =>
+        new Promise<void>((resolve) => {
+          navigator.serviceWorker.addEventListener("controllerchange", () => resolve(), {
+            once: true,
+          })
+        }),
+    )
+    await Promise.all([controllerChanged, page.getByRole("button", { name: "Update now" }).click()])
     await waitForServiceWorkerController(page)
+    await expect
+      .poll(() =>
+        page.evaluate(async () => (await navigator.serviceWorker.getRegistration())?.waiting),
+      )
+      .toBeNull()
   })
 
   test("does not force reload loops when two tabs defer the same update", async ({
@@ -91,6 +100,14 @@ test.describe("production PWA update flow", () => {
 
     const pageB = await context.newPage()
     await installAndControlProductionPwa(pageB, DEEP_ROUTE)
+    let navigationCountA = 0
+    let navigationCountB = 0
+    page.on("framenavigated", (frame) => {
+      if (frame === page.mainFrame()) navigationCountA++
+    })
+    pageB.on("framenavigated", (frame) => {
+      if (frame === pageB.mainFrame()) navigationCountB++
+    })
 
     await bumpProductionServiceWorker(swPath, `multi-tab-${Date.now()}`)
     await triggerServiceWorkerUpdateCheck(page)
@@ -110,6 +127,9 @@ test.describe("production PWA update flow", () => {
 
     await expect(pageB.getByText(DEFERRED_UPDATE_COPY)).toBeVisible({ timeout: 30_000 })
     await expect(pageB.getByRole("button", { name: "Later" })).toHaveCount(0)
+
+    await page.waitForTimeout(1_500)
+    expect([navigationCountA, navigationCountB]).toEqual([0, 0])
 
     await pageB.close()
   })

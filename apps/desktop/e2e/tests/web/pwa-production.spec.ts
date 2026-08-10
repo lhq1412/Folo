@@ -4,6 +4,7 @@ import { buildProdWebAppURL } from "../../support/prod-web-env"
 import {
   installAndControlProductionPwa,
   openProdWebApp,
+  waitForRenderedProdAppShell,
   waitForServiceWorkerController,
 } from "../../support/pwa-production"
 
@@ -22,24 +23,16 @@ test.describe("production PWA service worker", () => {
     expect(controllerScriptURL).toContain("/sw.js")
   })
 
-  test("serves precached app shell assets while offline", async ({ page }) => {
+  test("loads the root route offline from the precached app shell", async ({ page }) => {
     await installAndControlProductionPwa(page, DEEP_ROUTE)
 
     await page.context().setOffline(true)
-
-    const shellResponse = await page.evaluate(async () => {
-      const response = await fetch("/index.html")
-      const text = await response.text()
-      return {
-        ok: response.ok,
-        status: response.status,
-        hasRoot: text.includes('id="root"'),
-      }
+    const response = await page.goto(buildProdWebAppURL("/"), {
+      waitUntil: "domcontentloaded",
     })
 
-    expect(shellResponse.ok).toBe(true)
-    expect(shellResponse.hasRoot).toBe(true)
-
+    expect(response?.status()).toBe(200)
+    await waitForRenderedProdAppShell(page)
     await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(false)
     await expect
       .poll(() => page.evaluate(() => navigator.serviceWorker.controller !== null))

@@ -1,7 +1,10 @@
 import { expect, test } from "@playwright/test"
 
+import { resolveDesktopE2EEnv } from "../../support/env"
 import {
   ensureMobileDrawerClosed,
+  installMobileDrawerMockEntry,
+  MOBILE_DRAWER_E2E_ENTRY_ID,
   MOBILE_DRAWER_TIMELINE_ROUTE,
   openMobileSubscriptionDrawerFromEntry,
 } from "../../support/mobile-drawer-fixture"
@@ -60,23 +63,24 @@ test.describe("production PWA mobile navigation", () => {
     await expect(page).toHaveURL(/\/timeline\/videos\//)
   })
 
-  test("switches mobile list routes while service worker control stays active", async ({
+  test("opens an entry and returns to the mobile list with service worker control", async ({
     page,
   }) => {
-    const articlesInDrawer = page.locator(
-      '#mobile-subscription-drawer [data-testid="timeline-tab-articles"]',
-    )
-    const videosInDrawer = page.locator(
-      '#mobile-subscription-drawer [data-testid="timeline-tab-videos"]',
-    )
+    const env = resolveDesktopE2EEnv()
+    await installMobileDrawerMockEntry(page, env.apiURL)
+    await page.goto(buildProdWebAppURL(MOBILE_DRAWER_TIMELINE_ROUTE), {
+      waitUntil: "domcontentloaded",
+    })
+    await waitForRenderedProdAppShell(page)
+    await waitForServiceWorkerController(page)
 
-    await openMobileSubscriptionDrawerFromEntry(page)
-    await videosInDrawer.click()
-    await expect(page).toHaveURL(/\/timeline\/videos\//)
+    const entry = page.locator(`[data-entry-id="${MOBILE_DRAWER_E2E_ENTRY_ID}"]`)
+    await expect(entry).toBeVisible({ timeout: 30_000 })
+    await entry.locator("a[href]").click()
 
-    await openMobileSubscriptionDrawerFromEntry(page)
-    await articlesInDrawer.click()
-    await expect(page).toHaveURL(/\/timeline\/articles\//)
+    await expect(page.getByTestId("entry-render")).toBeVisible()
+    await page.getByRole("button", { name: "Back to list" }).click()
+    await expect(entry).toBeVisible()
 
     await expect
       .poll(async () => page.evaluate(() => navigator.serviceWorker.controller?.state ?? null))
