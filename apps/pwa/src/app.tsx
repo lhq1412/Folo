@@ -97,6 +97,7 @@ export function UpdatePrompt() {
 
 function AppShell() {
   const location = useLocation()
+  const isEntryDetail = location.pathname.startsWith("/entries/")
 
   useEffect(() => {
     window.requestAnimationFrame(() => {
@@ -115,34 +116,36 @@ function AppShell() {
       <main id="main" className="min-h-0 overflow-hidden" tabIndex={-1}>
         <Outlet />
       </main>
-      <nav
-        aria-label="Primary"
-        className="border-t border-fill-tertiary bg-material-thick px-[var(--safe-left)] pb-[var(--safe-bottom)]"
-      >
-        <ul className="mx-auto grid h-16 max-w-xl grid-cols-4">
-          {tabs.map((tab) => (
-            <li key={tab.to}>
-              <NavLink
-                end={tab.to === "/"}
-                className={({ isActive }) =>
-                  `flex h-full min-h-11 flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition-colors ${isActive ? "text-accent" : "text-text-tertiary"}`
-                }
-                to={tab.to}
-              >
-                {({ isActive }) => (
-                  <>
-                    <i
-                      aria-hidden
-                      className={`i-mgc-${tab.icon}-cute-${isActive ? "fi" : "re"} size-5`}
-                    />
-                    <span>{tab.label}</span>
-                  </>
-                )}
-              </NavLink>
-            </li>
-          ))}
-        </ul>
-      </nav>
+      {!isEntryDetail && (
+        <nav
+          aria-label="Primary"
+          className="border-t border-fill-tertiary bg-material-thick px-[var(--safe-left)] pb-[var(--safe-bottom)]"
+        >
+          <ul className="mx-auto grid h-16 max-w-xl grid-cols-4">
+            {tabs.map((tab) => (
+              <li key={tab.to}>
+                <NavLink
+                  end={tab.to === "/"}
+                  className={({ isActive }) =>
+                    `flex h-full min-h-11 flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition-colors ${isActive ? "text-accent" : "text-text-tertiary"}`
+                  }
+                  to={tab.to}
+                >
+                  {({ isActive }) => (
+                    <>
+                      <i
+                        aria-hidden
+                        className={`i-mgc-${tab.icon}-cute-${isActive ? "fi" : "re"} size-5`}
+                      />
+                      <span>{tab.label}</span>
+                    </>
+                  )}
+                </NavLink>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      )}
     </div>
   )
 }

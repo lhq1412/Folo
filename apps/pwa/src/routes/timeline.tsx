@@ -327,15 +327,7 @@ function PictureListItem({ item, view }: { item: EntryListItem; view: TimelineVi
   )
 }
 
-function EntryList({
-  selectedId,
-  view,
-  wide,
-}: {
-  selectedId?: string
-  view: TimelineView
-  wide: boolean
-}) {
+function EntryList({ selectedId, view }: { selectedId?: string; view: TimelineView }) {
   const query = useInfiniteQuery({
     queryKey: ["entries", view.view],
     queryFn: ({ pageParam }) =>
@@ -355,7 +347,7 @@ function EntryList({
     <section
       aria-busy={query.isPending}
       aria-label={`${view.label} timeline`}
-      className={`${selectedId ? "hidden md:flex" : "flex"} min-h-0 flex-col border-fill-tertiary ${wide ? "" : "md:border-r"}`}
+      className={`${selectedId ? "hidden md:flex" : "flex"} min-h-0 min-w-0 flex-col border-fill-tertiary md:border-r`}
     >
       <header className="shrink-0 border-b border-fill-tertiary px-4 py-4">
         <Heading className="text-title2 font-semibold outline-none" tabIndex={-1}>
@@ -379,15 +371,13 @@ function EntryList({
           <p className="p-5 text-sm text-text-secondary">No {view.label.toLowerCase()} yet.</p>
         )}
         {view.view === FeedViewType.Pictures ? (
-          <ol
-            className={`${selectedId ? "columns-2" : "columns-2 sm:columns-3 lg:columns-4"} gap-2 p-2`}
-          >
+          <ol className="columns-2 gap-2 p-2">
             {items.map((item) => (
               <PictureListItem item={item} key={item.entries.id} view={view} />
             ))}
           </ol>
         ) : (
-          <ol className={wide ? "mx-auto w-full max-w-2xl" : undefined}>
+          <ol>
             {items.map((item) =>
               view.view === FeedViewType.SocialMedia ? (
                 <SocialListItem
@@ -520,18 +510,11 @@ export function Component() {
   const { entryId } = useParams<{ entryId: string }>()
   const [searchParams] = useSearchParams()
   const view = getTimelineView(searchParams.get("view"))
-  const wide = !entryId && view.view !== FeedViewType.Articles
 
   return (
-    <div
-      className={`grid h-full min-h-0 ${wide ? "" : "md:grid-cols-[minmax(20rem,24rem)_minmax(0,1fr)]"}`}
-    >
-      <EntryList selectedId={entryId} view={view} wide={wide} />
-      {entryId ? (
-        <EntryDetail backTo={getTimelineHref(view)} entryId={entryId} />
-      ) : wide ? null : (
-        <EmptyDetail />
-      )}
+    <div className="grid h-full min-h-0 min-w-0 grid-cols-[minmax(0,1fr)] md:grid-cols-[minmax(20rem,24rem)_minmax(0,1fr)]">
+      <EntryList selectedId={entryId} view={view} />
+      {entryId ? <EntryDetail backTo={getTimelineHref(view)} entryId={entryId} /> : <EmptyDetail />}
     </div>
   )
 }
