@@ -43,11 +43,12 @@ vi.mock("motion/react", () => ({
 
 vi.mock("~/lib/img-proxy", async () => {
   const { getImageProxyUrl } = await import("@follow/utils/img-proxy")
+  const getImageProxyUrlForTest = (
+    params: Omit<Parameters<typeof getImageProxyUrl>[0], "canUseProxy">,
+  ) => getImageProxyUrl({ ...params, canUseProxy: true })
 
   return {
-    useGetImageProxyUrl:
-      () => (params: Omit<Parameters<typeof getImageProxyUrl>[0], "canUseProxy">) =>
-        getImageProxyUrl({ ...params, canUseProxy: true }),
+    useGetImageProxyUrl: () => getImageProxyUrlForTest,
   }
 })
 
@@ -231,13 +232,27 @@ describe("Media video preview", () => {
     expect(saveImageDimensionsToDbMock).toHaveBeenCalledWith(src, dimensions)
   })
 
-  test("does not wrap an existing Folo proxy image again", async () => {
+  test("does not wrap an existing Folo proxy and falls back after one failure", async () => {
     const proxied = `https://img.folo.is/?url=${encodeURIComponent("https://example.com/photo.jpg")}`
 
     await render(
-      <Media preferOrigin={false} proxy={{ height: 0, width: 720 }} src={proxied} type="photo" />,
+      <Media
+        preferOrigin={false}
+        proxy={{ height: 0, width: 720 }}
+        showFallback
+        src={proxied}
+        type="photo"
+      />,
     )
 
-    expect(container?.querySelector("img")?.getAttribute("src")).toBe(proxied)
+    const image = container?.querySelector("img")
+    expect(image?.getAttribute("src")).toBe(proxied)
+
+    await act(async () => {
+      image?.dispatchEvent(new Event("error", { bubbles: true }))
+    })
+
+    expect(container?.querySelector("img")).toBeNull()
+    expect(container?.textContent).toContain("Media loaded failed")
   })
 })

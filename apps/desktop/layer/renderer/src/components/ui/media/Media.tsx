@@ -93,34 +93,23 @@ const MediaImpl: FC<MediaProps> = ({
     if (!src) return []
 
     const sources: Array<{ url: string; type: "proxy" | "origin" }> = []
+    const proxyUrl = proxy
+      ? getImageProxyUrl({
+          url: src,
+          width: proxy.width || 0,
+          height: proxy.height || 0,
+        })
+      : undefined
 
     // Determine priority based on preferences
-    if (proxy && !preferOrigin) {
+    if (proxyUrl && !preferOrigin) {
       // Use proxy first
-      sources.push(
-        {
-          url: getImageProxyUrl({
-            url: src,
-            width: proxy.width || 0,
-            height: proxy.height || 0,
-          }),
-          type: "proxy",
-        },
-        { url: src, type: "origin" },
-      )
+      sources.push({ url: proxyUrl, type: "proxy" })
+      if (proxyUrl !== src) sources.push({ url: src, type: "origin" })
     } else {
       // Use original URL first
       sources.push({ url: src, type: "origin" })
-      if (proxy) {
-        sources.push({
-          url: getImageProxyUrl({
-            url: src,
-            width: proxy.width || 0,
-            height: proxy.height || 0,
-          }),
-          type: "proxy",
-        })
-      }
+      if (proxyUrl && proxyUrl !== src) sources.push({ url: proxyUrl, type: "proxy" })
     }
 
     return sources
