@@ -1,7 +1,7 @@
 import type { EntryModel } from "@follow/store/entry/types"
 
 import { createZustandStore } from "../utils/helper"
-import { getImageDimensionsFromDb } from "./db"
+import { getImageDimensionsManyFromDb } from "./db"
 
 export interface StoreImageType {
   src: string
@@ -27,19 +27,34 @@ class ImageActions {
 
   saveImages(images: StoreImageType[]) {
     set((state) => {
-      const newImages = { ...state.images }
+      let newImages: Record<string, StoreImageType> | undefined
       for (const image of images) {
+        const current = state.images[image.src]
+        if (
+          current === image ||
+          (current?.width === image.width &&
+            current.height === image.height &&
+            current.ratio === image.ratio &&
+            current.blurhash === image.blurhash)
+        ) {
+          continue
+        }
+
+        newImages ||= { ...state.images }
         newImages[image.src] = image
       }
-      return { images: newImages }
+      return newImages ? { images: newImages } : state
     })
   }
 
   async fetchDimensionsFromDb(images: string[]) {
-    const dims = (await Promise.all(images.map((image) => getImageDimensionsFromDb(image)))).filter(
-      Boolean,
-    ) as StoreImageType[]
-    imageActions.saveImages(dims)
+    const missingImages = [...new Set(images)].filter((image) => !get().images[image])
+    if (missingImages.length === 0) return
+
+    const dimensions = (await getImageDimensionsManyFromDb(missingImages)).filter(
+      (image): image is StoreImageType => !!image && !get().images[image.src],
+    )
+    imageActions.saveImages(dimensions)
   }
 
   getImagesFromEntry(entry: EntryModel) {

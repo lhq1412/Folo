@@ -12,6 +12,8 @@ import {
 } from "./cache-config"
 
 const ORIGIN = "https://app.folo.is"
+const imageProxyUrl = (target: string) =>
+  new URL(`https://img.folo.is/?url=${encodeURIComponent(target)}&width=700&height=`)
 
 describe("cache-config", () => {
   it("detects sensitive query params case-insensitively", () => {
@@ -85,6 +87,41 @@ describe("cache-config", () => {
 
     expect(shouldCacheAsArticleImage(url, ORIGIN)).toBe(true)
     expect(resolveRuntimeImageCacheRoute(url, ORIGIN)).toBe("articleImages")
+  })
+
+  it("routes safe image proxy requests from their nested path", () => {
+    const article = imageProxyUrl("https://cdn.example.com/content/123")
+    const icon = imageProxyUrl("https://cdn.example.com/icons/site")
+    const proxiedStaticAsset = imageProxyUrl("https://app.folo.is/assets/logo-01234567abcdef.png")
+
+    expect(isSafeRuntimeImageUrl(article)).toBe(true)
+    expect(resolveRuntimeImageCacheRoute(article, ORIGIN)).toBe("articleImages")
+    expect(resolveRuntimeImageCacheRoute(icon, ORIGIN)).toBe("feedIcons")
+    expect(isSameOriginStaticImage(proxiedStaticAsset, ORIGIN)).toBe(false)
+    expect(resolveRuntimeImageCacheRoute(proxiedStaticAsset, ORIGIN)).toBe("articleImages")
+  })
+
+  it("rejects malformed or unsafe image proxy requests", () => {
+    const safeTarget = encodeURIComponent("https://cdn.example.com/image.jpg")
+    const rejected = [
+      "https://img.folo.is/",
+      "https://img.folo.is/?url=not-a-url",
+      `https://img.folo.is/?url=${safeTarget}&url=${safeTarget}`,
+      `https://img.folo.is/resize?url=${safeTarget}`,
+      `https://user:secret@img.folo.is/?url=${safeTarget}`,
+      `https://img.folo.is/?url=${safeTarget}&token=secret`,
+      `https://img.folo.is/?url=${encodeURIComponent("javascript:alert(1)")}`,
+      `https://img.folo.is/?url=${encodeURIComponent("https://user:secret@cdn.example.com/image.jpg")}`,
+      `https://img.folo.is/?url=${encodeURIComponent("https://cdn.example.com/api/image.jpg")}`,
+      `https://img.folo.is/?url=${encodeURIComponent("https://cdn.example.com/private/image.jpg")}`,
+      `https://img.folo.is/?url=${encodeURIComponent("https://cdn.example.com/pr%69vate/image.jpg")}`,
+      `https://img.folo.is/?url=${encodeURIComponent("https://cdn.example.com/user/image.jpg")}`,
+      `https://img.folo.is/?url=${encodeURIComponent("https://cdn.example.com/image.jpg?signature=secret")}`,
+    ]
+
+    for (const href of rejected) {
+      expect(resolveRuntimeImageCacheRoute(new URL(href), ORIGIN)).toBeNull()
+    }
   })
 
   it("routes cross-origin hashed asset images to article cache", () => {

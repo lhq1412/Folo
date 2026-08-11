@@ -32,7 +32,6 @@ import {
   useRef,
   useState,
 } from "react"
-import { useEventCallback } from "usehooks-ts"
 
 import { useActionLanguage, useGeneralSettingKey } from "~/atoms/settings/general"
 import { useUISettingKey } from "~/atoms/settings/ui"
@@ -63,36 +62,23 @@ export const PictureMasonry: FC<MasonryProps> = (props) => {
   const [isInitDim, setIsInitDim] = useState(false)
   const [isInitLayout, setIsInitLayout] = useState(false)
   const deferIsInitLayout = useDeferredValue(isInitLayout)
-  const restoreDimensions = useEventCallback(async () => {
-    const images = [] as string[]
-
+  const processedEntryIdsRef = useRef(new Set<string>())
+  useLayoutEffect(() => {
+    const images: string[] = []
+    const dimensions: StoreImageType[] = []
     data.forEach((entryId) => {
+      if (processedEntryIdsRef.current.has(entryId)) return
+
       const entry = getEntry(entryId)
       if (!entry) return
+      processedEntryIdsRef.current.add(entryId)
 
       images.push(...imageActions.getImagesFromEntry(entry))
-    })
-    return imageActions.fetchDimensionsFromDb(images)
-  })
-  useLayoutEffect(() => {
-    restoreDimensions().finally(() => {
-      startTransition(() => {
-        setIsInitDim(true)
-      })
-    })
-  }, [restoreDimensions])
-
-  useLayoutEffect(() => {
-    const images: StoreImageType[] = []
-    data.forEach((entryId) => {
-      const entry = getEntry(entryId)
-      if (!entry) return
-
       if (!entry.media) return
       for (const media of entry.media) {
         if (!media.height || !media.width) continue
 
-        images.push({
+        dimensions.push({
           src: media.url,
           width: media.width,
           height: media.height,
@@ -100,10 +86,14 @@ export const PictureMasonry: FC<MasonryProps> = (props) => {
         })
       }
     })
-    if (images.length > 0) {
-      imageActions.saveImages(images)
-    }
-  }, [JSON.stringify(data)])
+
+    imageActions.saveImages(dimensions)
+    imageActions.fetchDimensionsFromDb(images).finally(() => {
+      startTransition(() => {
+        setIsInitDim(true)
+      })
+    })
+  }, [data])
 
   const { containerRef, currentColumn, currentItemWidth } = useMasonryColumn(gutter, () => {
     setIsInitLayout(true)

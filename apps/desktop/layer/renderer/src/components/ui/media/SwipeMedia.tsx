@@ -1,10 +1,11 @@
+import { useMobile } from "@follow/components/hooks/useMobile.js"
 import type { MediaModel } from "@follow/database/schemas/types"
 import { stopPropagation } from "@follow/utils/dom"
 import { cn } from "@follow/utils/utils"
 import useEmblaCarousel from "embla-carousel-react"
 import { WheelGesturesPlugin } from "embla-carousel-wheel-gestures"
 import { uniqBy } from "es-toolkit/compat"
-import { useCallback, useRef } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 
 import { Media } from "~/components/ui/media/Media"
 
@@ -31,11 +32,38 @@ export function SwipeMedia({
   } | null
   fitContainer?: boolean
 }) {
-  const uniqMedia = media ? uniqBy(media, "url") : []
+  const uniqMedia = useMemo(() => (media ? uniqBy(media, "url") : []), [media])
+  const displayedMedia = uniqMedia.slice(0, 5)
+  const isCarousel = displayedMedia.length > 1
+  const isMobile = useMobile()
+  const plugins = useMemo(
+    () => (isCarousel && !isMobile ? [WheelGesturesPlugin()] : []),
+    [isCarousel, isMobile],
+  )
 
-  const hoverRef = useRef<HTMLDivElement>(null)
+  const [emblaRef, emblaApi] = useEmblaCarousel({ active: isCarousel, loop: true }, plugins)
+  const [selectedIndex, setSelectedIndex] = useState(0)
 
-  const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true }, [WheelGesturesPlugin()])
+  useEffect(() => {
+    if (!emblaApi) return
+
+    const updateSelectedIndex = () => {
+      setSelectedIndex(
+        displayedMedia.length ? emblaApi.selectedScrollSnap() % displayedMedia.length : 0,
+      )
+    }
+
+    updateSelectedIndex()
+    emblaApi.on("select", updateSelectedIndex)
+    emblaApi.on("reInit", updateSelectedIndex)
+
+    return () => {
+      emblaApi.off("select", updateSelectedIndex)
+      emblaApi.off("reInit", updateSelectedIndex)
+    }
+  }, [emblaApi, displayedMedia.length])
+
+  const currentIndex = displayedMedia.length ? selectedIndex % displayedMedia.length : 0
 
   const scrollPrev = useCallback(
     (e) => {
@@ -59,7 +87,6 @@ export function SwipeMedia({
 
   return (
     <div
-      ref={hoverRef}
       className={cn(
         "relative flex w-full items-center overflow-hidden",
 
@@ -69,31 +96,36 @@ export function SwipeMedia({
       {uniqMedia?.length ? (
         <div ref={emblaRef} className="size-full overflow-hidden">
           <div className="flex size-full">
-            {uniqMedia?.slice(0, 5).map((med, i) => (
+            {displayedMedia.map((med, i) => (
               <div className="mr-2 size-full flex-none" key={med.url}>
-                <Media
-                  className="size-full rounded-none"
-                  mediaContainerClassName={cn("object-cover", imgClassName)}
-                  alt="cover"
-                  cacheDimensions={med.type === "photo"}
-                  src={med.url}
-                  type={med.type}
-                  previewImageUrl={med.preview_image_url}
-                  loading="lazy"
-                  proxy={proxySize || undefined}
-                  blurhash={med.blurhash}
-                  width={med.width}
-                  height={med.height}
-                  onClick={(e) => {
-                    if (onPreview) {
-                      e.stopPropagation()
-                      onPreview(uniqMedia, i)
-                    }
-                  }}
-                  showFallback={true}
-                  fitContent
-                  fitContainer={fitContainer}
-                />
+                {(displayedMedia.length <= 3 ||
+                  i === currentIndex ||
+                  i === (currentIndex + displayedMedia.length - 1) % displayedMedia.length ||
+                  i === (currentIndex + 1) % displayedMedia.length) && (
+                  <Media
+                    className="size-full rounded-none"
+                    mediaContainerClassName={cn("object-cover", imgClassName)}
+                    alt="cover"
+                    cacheDimensions={med.type === "photo"}
+                    src={med.url}
+                    type={med.type}
+                    previewImageUrl={med.preview_image_url}
+                    loading="lazy"
+                    proxy={proxySize || undefined}
+                    blurhash={med.blurhash}
+                    width={med.width}
+                    height={med.height}
+                    onClick={(e) => {
+                      if (onPreview) {
+                        e.stopPropagation()
+                        onPreview(uniqMedia, i)
+                      }
+                    }}
+                    showFallback={true}
+                    fitContent
+                    fitContainer={fitContainer}
+                  />
+                )}
               </div>
             ))}
           </div>

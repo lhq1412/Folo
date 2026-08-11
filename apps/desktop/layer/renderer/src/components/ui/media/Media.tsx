@@ -1,3 +1,4 @@
+import { useMobile } from "@follow/components/hooks/useMobile.js"
 import { nextFrame } from "@follow/utils/dom"
 import { cn } from "@follow/utils/utils"
 import { useForceUpdate } from "motion/react"
@@ -503,40 +504,62 @@ const VideoPreview: FC<{
   thumbnail?: boolean
   videoClassName?: string
 }> = ({ src, previewImageUrl, thumbnail = false, videoClassName }) => {
-  const [isInitVideoPlayer, setIsInitVideoPlayer] = useState(!previewImageUrl)
+  const isMobile = useMobile()
+  const [isInitVideoPlayer, setIsInitVideoPlayer] = useState(false)
 
   const [videoRef, setVideoRef] = useState<VideoPlayerRef | null>(null)
   const isPaused = videoRef ? videoRef?.getState().paused : true
   const [forceUpdate] = useForceUpdate()
+  const isHoveringRef = useRef(false)
+  const handleVideoRef = useEventCallback((ref: VideoPlayerRef | null) => {
+    setVideoRef(ref)
+    if (ref && isHoveringRef.current) {
+      ref.controls.play()?.then(forceUpdate)
+    }
+  })
+
   return (
     <div
       className="size-full"
       onMouseEnter={() => {
-        videoRef?.controls.play()?.then(forceUpdate)
+        if (isMobile) return
+
+        isHoveringRef.current = true
+        if (videoRef) {
+          videoRef.controls.play()?.then(forceUpdate)
+        } else {
+          setIsInitVideoPlayer(true)
+        }
       }}
       onMouseLeave={() => {
+        isHoveringRef.current = false
+        if (isMobile) return
+
         videoRef?.controls.pause()
         nextFrame(forceUpdate)
       }}
     >
-      {!isInitVideoPlayer ? (
-        <img
-          src={previewImageUrl}
-          className={cn("size-full object-cover", videoClassName)}
-          onMouseEnter={() => {
-            setIsInitVideoPlayer(true)
-          }}
-        />
-      ) : (
+      {!isMobile && isInitVideoPlayer ? (
         <VideoPlayer
           variant={thumbnail ? "thumbnail" : "preview"}
           controls={false}
           src={src}
           poster={previewImageUrl}
-          ref={setVideoRef}
+          preload="none"
+          ref={handleVideoRef}
           muted
           className={cn("not-prose relative size-full object-cover", videoClassName)}
         />
+      ) : previewImageUrl ? (
+        <img
+          src={previewImageUrl}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          className={cn("size-full object-cover", videoClassName)}
+        />
+      ) : (
+        <div className={cn("size-full bg-material-ultra-thick", videoClassName)} />
       )}
 
       <div
