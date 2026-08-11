@@ -37,7 +37,7 @@ import { useActionLanguage, useGeneralSettingKey } from "~/atoms/settings/genera
 import { useUISettingKey } from "~/atoms/settings/ui"
 import { MediaContainerWidthProvider } from "~/components/ui/media/MediaContainerWidthProvider"
 import type { StoreImageType } from "~/store/image"
-import { imageActions } from "~/store/image"
+import { claimUnprocessedImageUrls, imageActions } from "~/store/image"
 
 import { useEntriesState } from "../context/EntriesContext"
 import { batchMarkRead } from "../hooks/useEntryMarkReadHandler"
@@ -62,18 +62,31 @@ export const PictureMasonry: FC<MasonryProps> = (props) => {
   const [isInitDim, setIsInitDim] = useState(false)
   const [isInitLayout, setIsInitLayout] = useState(false)
   const deferIsInitLayout = useDeferredValue(isInitLayout)
-  const processedEntryIdsRef = useRef(new Set<string>())
+  const processedEntryMediaRef = useRef(new Map<string, unknown>())
+  const processedImageUrlsRef = useRef(new Set<string>())
   useLayoutEffect(() => {
     const images: string[] = []
     const dimensions: StoreImageType[] = []
+    const processedEntries: Array<[entryId: string, media: unknown]> = []
     data.forEach((entryId) => {
-      if (processedEntryIdsRef.current.has(entryId)) return
-
       const entry = getEntry(entryId)
       if (!entry) return
-      processedEntryIdsRef.current.add(entryId)
+      if (
+        processedEntryMediaRef.current.has(entryId) &&
+        processedEntryMediaRef.current.get(entryId) === entry.media
+      ) {
+        return
+      }
 
-      images.push(...imageActions.getImagesFromEntry(entry))
+      processedEntryMediaRef.current.set(entryId, entry.media)
+      processedEntries.push([entryId, entry.media])
+
+      images.push(
+        ...claimUnprocessedImageUrls(
+          imageActions.getImagesFromEntry(entry),
+          processedImageUrlsRef.current,
+        ),
+      )
       if (!entry.media) return
       for (const media of entry.media) {
         if (!media.height || !media.width) continue
@@ -88,11 +101,23 @@ export const PictureMasonry: FC<MasonryProps> = (props) => {
     })
 
     imageActions.saveImages(dimensions)
-    imageActions.fetchDimensionsFromDb(images).finally(() => {
-      startTransition(() => {
-        setIsInitDim(true)
+    imageActions
+      .fetchDimensionsFromDb(images)
+      .catch(() => {
+        for (const image of images) {
+          processedImageUrlsRef.current.delete(image)
+        }
+        for (const [entryId, media] of processedEntries) {
+          if (processedEntryMediaRef.current.get(entryId) === media) {
+            processedEntryMediaRef.current.delete(entryId)
+          }
+        }
       })
-    })
+      .finally(() => {
+        startTransition(() => {
+          setIsInitDim(true)
+        })
+      })
   }, [data])
 
   const { containerRef, currentColumn, currentItemWidth } = useMasonryColumn(gutter, () => {

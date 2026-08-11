@@ -103,6 +103,11 @@ describe("cache-config", () => {
 
   it("rejects malformed or unsafe image proxy requests", () => {
     const safeTarget = encodeURIComponent("https://cdn.example.com/image.jpg")
+    const nestedSafeProxy = imageProxyUrl("https://cdn.example.com/image.jpg").href
+    const nestedTokenProxy = imageProxyUrl("https://cdn.example.com/image.jpg?token=secret").href
+    const nestedSignatureProxy = imageProxyUrl(
+      "https://cdn.example.com/image.jpg?signature=secret",
+    ).href
     const rejected = [
       "https://img.folo.is/",
       "https://img.folo.is/?url=not-a-url",
@@ -117,6 +122,9 @@ describe("cache-config", () => {
       `https://img.folo.is/?url=${encodeURIComponent("https://cdn.example.com/pr%69vate/image.jpg")}`,
       `https://img.folo.is/?url=${encodeURIComponent("https://cdn.example.com/user/image.jpg")}`,
       `https://img.folo.is/?url=${encodeURIComponent("https://cdn.example.com/image.jpg?signature=secret")}`,
+      imageProxyUrl(nestedSafeProxy).href,
+      imageProxyUrl(nestedTokenProxy).href,
+      imageProxyUrl(nestedSignatureProxy).href,
     ]
 
     for (const href of rejected) {

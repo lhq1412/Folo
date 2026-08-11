@@ -17,6 +17,13 @@ export const useImageStore = createZustandStore<State>("image")(() => ({
   images: {},
 }))
 
+export const claimUnprocessedImageUrls = (urls: readonly string[], processedUrls: Set<string>) =>
+  urls.filter((url) => {
+    if (processedUrls.has(url)) return false
+    processedUrls.add(url)
+    return true
+  })
+
 const set = useImageStore.setState
 const get = useImageStore.getState
 

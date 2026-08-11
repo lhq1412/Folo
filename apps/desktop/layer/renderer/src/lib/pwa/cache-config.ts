@@ -129,7 +129,7 @@ function getSafeImageProxyTarget(url: URL): URL | null {
 
   try {
     const target = new URL(targets[0]!)
-    return hasSafeRuntimeUrlBoundary(target) ? target : null
+    return target.origin !== IMAGE_PROXY_URL && hasSafeRuntimeUrlBoundary(target) ? target : null
   } catch {
     return null
   }

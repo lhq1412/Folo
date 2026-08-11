@@ -6,12 +6,23 @@ import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vi
 
 import { Media } from "./Media"
 
-const { playMock, useMobileMock, videoPlayerMock, videoPlayerRef } = vi.hoisted(() => {
+const {
+  playMock,
+  saveImageDimensionsToDbMock,
+  saveImagesMock,
+  useMobileMock,
+  videoPlayerMock,
+  videoPlayerMountMock,
+  videoPlayerRef,
+} = vi.hoisted(() => {
   const playMock = vi.fn(() => Promise.resolve())
   return {
     playMock,
+    saveImageDimensionsToDbMock: vi.fn(),
+    saveImagesMock: vi.fn(),
     useMobileMock: vi.fn(() => false),
     videoPlayerMock: vi.fn(),
+    videoPlayerMountMock: vi.fn(),
     videoPlayerRef: {
       controls: {
         pause: vi.fn(),
@@ -30,15 +41,24 @@ vi.mock("motion/react", () => ({
   useForceUpdate: () => [vi.fn()],
 }))
 
-vi.mock("~/lib/img-proxy", () => ({
-  useGetImageProxyUrl:
-    () =>
-    ({ url }: { url: string }) =>
-      url,
-}))
+vi.mock("~/lib/img-proxy", async () => {
+  const { getImageProxyUrl } = await import("@follow/utils/img-proxy")
+
+  return {
+    useGetImageProxyUrl:
+      () => (params: Omit<Parameters<typeof getImageProxyUrl>[0], "canUseProxy">) =>
+        getImageProxyUrl({ ...params, canUseProxy: true }),
+  }
+})
 
 vi.mock("~/store/image/db", () => ({
-  saveImageDimensionsToDb: vi.fn(),
+  saveImageDimensionsToDb: saveImageDimensionsToDbMock,
+}))
+
+vi.mock("~/store/image", () => ({
+  imageActions: {
+    saveImages: saveImagesMock,
+  },
 }))
 
 vi.mock("./hooks", () => ({
@@ -57,6 +77,7 @@ vi.mock("./VideoPlayer", () => ({
     videoPlayerMock(props)
     const { ref } = props
     React.useEffect(() => {
+      videoPlayerMountMock()
       ref?.(videoPlayerRef)
       return () => ref?.(null)
     }, [ref])
@@ -149,16 +170,74 @@ describe("Media video preview", () => {
     },
   )
 
-  test("never initializes an inline player on mobile", async () => {
+  test("initializes and plays an inline player only after a mobile tap", async () => {
     useMobileMock.mockReturnValue(true)
     await render(<Media src="https://example.com/video.mp4" type="video" />)
 
+    const preview = container?.querySelector(".i-mgc-play-cute-fi")?.parentElement?.parentElement
+
     await act(async () => {
-      const preview = container?.querySelector(".i-mgc-play-cute-fi")?.parentElement?.parentElement
       preview?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }))
     })
 
     expect(videoPlayerMock).not.toHaveBeenCalled()
     expect(container?.querySelector(".bg-material-ultra-thick")).not.toBeNull()
+
+    await act(async () => {
+      preview?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    })
+
+    expect(playMock).toHaveBeenCalledTimes(1)
+    expect(videoPlayerMountMock).toHaveBeenCalledTimes(1)
+    expect(container?.querySelector('[data-testid="video-player"]')).not.toBeNull()
+
+    await act(async () => {
+      root?.render(<Media src="https://example.com/video.mp4" type="video" />)
+    })
+
+    expect(videoPlayerMountMock).toHaveBeenCalledTimes(1)
+  })
+
+  test("leaves mobile video playback to an external click handler", async () => {
+    useMobileMock.mockReturnValue(true)
+    const onClick = vi.fn()
+    await render(<Media src="https://example.com/video.mp4" type="video" onClick={onClick} />)
+
+    await act(async () => {
+      container
+        ?.querySelector(".i-mgc-play-cute-fi")
+        ?.parentElement?.parentElement?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    })
+
+    expect(onClick).toHaveBeenCalledTimes(1)
+    expect(videoPlayerMock).not.toHaveBeenCalled()
+  })
+
+  test("stores loaded photo dimensions in memory and IndexedDB", async () => {
+    const src = "https://example.com/photo.jpg"
+    await render(<Media cacheDimensions src={src} type="photo" />)
+    const image = container?.querySelector("img")
+    Object.defineProperties(image, {
+      naturalHeight: { value: 200 },
+      naturalWidth: { value: 400 },
+    })
+
+    await act(async () => {
+      image?.dispatchEvent(new Event("load", { bubbles: true }))
+    })
+
+    const dimensions = { height: 200, ratio: 2, src, width: 400 }
+    expect(saveImagesMock).toHaveBeenCalledWith([dimensions])
+    expect(saveImageDimensionsToDbMock).toHaveBeenCalledWith(src, dimensions)
+  })
+
+  test("does not wrap an existing Folo proxy image again", async () => {
+    const proxied = `https://img.folo.is/?url=${encodeURIComponent("https://example.com/photo.jpg")}`
+
+    await render(
+      <Media preferOrigin={false} proxy={{ height: 0, width: 720 }} src={proxied} type="photo" />,
+    )
+
+    expect(container?.querySelector("img")?.getAttribute("src")).toBe(proxied)
   })
 })

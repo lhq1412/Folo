@@ -9,6 +9,7 @@ import { Blurhash, BlurhashCanvas } from "react-blurhash"
 import { useEventCallback } from "usehooks-ts"
 
 import { useGetImageProxyUrl } from "~/lib/img-proxy"
+import { imageActions } from "~/store/image"
 import { saveImageDimensionsToDb } from "~/store/image/db"
 
 import { ErrorBoundary } from "../../common/ErrorBoundary"
@@ -244,17 +245,20 @@ const MediaImpl: FC<MediaProps> = ({
       isImageLoadedSet.add(imgSrc)
     }
     if ("cacheDimensions" in props && props.cacheDimensions && src) {
-      saveImageDimensionsToDb(src, {
+      const dimensions = {
         src,
         width: e.currentTarget.naturalWidth,
         height: e.currentTarget.naturalHeight,
         ratio: e.currentTarget.naturalWidth / e.currentTarget.naturalHeight,
         blurhash: props.blurhash,
-      })
+      }
+      imageActions.saveImages([dimensions])
+      saveImageDimensionsToDb(src, dimensions)
     }
   })
 
   const containerWidth = useMediaContainerWidth()
+  const inlineVideoPlayback = !popper && !props.onClick
 
   const InnerContent = useMemo(() => {
     switch (type) {
@@ -298,6 +302,7 @@ const MediaImpl: FC<MediaProps> = ({
               previewImageUrl={previewImageSrc}
               thumbnail={thumbnail}
               videoClassName={videoClassName}
+              inlinePlayback={inlineVideoPlayback}
             />
           </span>
         )
@@ -323,6 +328,7 @@ const MediaImpl: FC<MediaProps> = ({
     previewImageSrc,
     thumbnail,
     videoClassName,
+    inlineVideoPlayback,
   ])
 
   if (!type || !src) return null
@@ -503,17 +509,18 @@ const VideoPreview: FC<{
   previewImageUrl?: string
   thumbnail?: boolean
   videoClassName?: string
-}> = ({ src, previewImageUrl, thumbnail = false, videoClassName }) => {
+  inlinePlayback: boolean
+}> = ({ src, previewImageUrl, thumbnail = false, videoClassName, inlinePlayback }) => {
   const isMobile = useMobile()
   const [isInitVideoPlayer, setIsInitVideoPlayer] = useState(false)
 
   const [videoRef, setVideoRef] = useState<VideoPlayerRef | null>(null)
   const isPaused = videoRef ? videoRef?.getState().paused : true
   const [forceUpdate] = useForceUpdate()
-  const isHoveringRef = useRef(false)
+  const shouldPlayRef = useRef(false)
   const handleVideoRef = useEventCallback((ref: VideoPlayerRef | null) => {
     setVideoRef(ref)
-    if (ref && isHoveringRef.current) {
+    if (ref && shouldPlayRef.current) {
       ref.controls.play()?.then(forceUpdate)
     }
   })
@@ -524,7 +531,7 @@ const VideoPreview: FC<{
       onMouseEnter={() => {
         if (isMobile) return
 
-        isHoveringRef.current = true
+        shouldPlayRef.current = true
         if (videoRef) {
           videoRef.controls.play()?.then(forceUpdate)
         } else {
@@ -532,14 +539,24 @@ const VideoPreview: FC<{
         }
       }}
       onMouseLeave={() => {
-        isHoveringRef.current = false
         if (isMobile) return
 
+        shouldPlayRef.current = false
         videoRef?.controls.pause()
         nextFrame(forceUpdate)
       }}
+      onClick={() => {
+        if (!isMobile || !inlinePlayback) return
+
+        shouldPlayRef.current = true
+        if (videoRef) {
+          videoRef.controls.play()?.then(forceUpdate)
+        } else {
+          setIsInitVideoPlayer(true)
+        }
+      }}
     >
-      {!isMobile && isInitVideoPlayer ? (
+      {isInitVideoPlayer ? (
         <VideoPlayer
           variant={thumbnail ? "thumbnail" : "preview"}
           controls={false}
