@@ -67,6 +67,8 @@ describe("MarkdownBlockImage", () => {
     root = null
     container = null
     vi.clearAllMocks()
+    vi.unstubAllGlobals()
+    getWrappedElementSizeMock.mockReturnValue({ h: 0, w: 640 })
   })
 
   test("passes image context menu events with the resolved image URL", async () => {
@@ -101,5 +103,65 @@ describe("MarkdownBlockImage", () => {
       expect.objectContaining({ clientX: 12, clientY: 34 }),
       "https://example.com/image.png",
     )
+  })
+
+  test("loads block images from a stable proxy size before the origin fallback", async () => {
+    vi.stubGlobal("devicePixelRatio", 2)
+    vi.stubGlobal("innerWidth", 390)
+    getWrappedElementSizeMock.mockReturnValue({ h: 0, w: 0 })
+
+    const image = () => (
+      <MarkdownRenderActionContext
+        value={{
+          ensureAndRenderTimeStamp: () => false,
+          isAudio: () => false,
+          transformUrl: (url) => url,
+        }}
+      >
+        <MarkdownBlockImage
+          src="https://cdn.example.com/article.jpg"
+          proxy={{ height: 0, width: 700 }}
+        />
+      </MarkdownRenderActionContext>
+    )
+
+    ;({ container, root } = await renderComponent(image()))
+
+    const initialProps = mediaMock.mock.calls.at(-1)?.[0]
+    expect(initialProps).toMatchObject({
+      decoding: "async",
+      preferOrigin: false,
+      proxy: { height: 0, width: 960 },
+      src: "https://cdn.example.com/article.jpg",
+    })
+
+    getWrappedElementSizeMock.mockReturnValue({ h: 0, w: 390 })
+    await act(async () => {
+      root?.render(image())
+    })
+
+    expect(mediaMock.mock.calls.at(-1)?.[0].proxy).toBe(initialProps?.proxy)
+  })
+
+  test("caps device pixel ratio when choosing a proxy width", async () => {
+    vi.stubGlobal("devicePixelRatio", 3)
+    getWrappedElementSizeMock.mockReturnValue({ h: 0, w: 300 })
+
+    ;({ container, root } = await renderComponent(
+      <MarkdownRenderActionContext
+        value={{
+          ensureAndRenderTimeStamp: () => false,
+          isAudio: () => false,
+          transformUrl: (url) => url,
+        }}
+      >
+        <MarkdownBlockImage
+          src="https://cdn.example.com/article.jpg"
+          proxy={{ height: 0, width: 700 }}
+        />
+      </MarkdownRenderActionContext>,
+    ))
+
+    expect(mediaMock.mock.calls.at(-1)?.[0].proxy).toEqual({ height: 0, width: 720 })
   })
 })

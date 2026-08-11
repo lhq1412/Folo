@@ -1,3 +1,4 @@
+import { useMobile } from "@follow/components/hooks/useMobile.js"
 import { nextFrame } from "@follow/utils/dom"
 import { cn } from "@follow/utils/utils"
 import { useForceUpdate } from "motion/react"
@@ -8,6 +9,7 @@ import { Blurhash, BlurhashCanvas } from "react-blurhash"
 import { useEventCallback } from "usehooks-ts"
 
 import { useGetImageProxyUrl } from "~/lib/img-proxy"
+import { imageActions } from "~/store/image"
 import { saveImageDimensionsToDb } from "~/store/image/db"
 
 import { ErrorBoundary } from "../../common/ErrorBoundary"
@@ -91,34 +93,23 @@ const MediaImpl: FC<MediaProps> = ({
     if (!src) return []
 
     const sources: Array<{ url: string; type: "proxy" | "origin" }> = []
+    const proxyUrl = proxy
+      ? getImageProxyUrl({
+          url: src,
+          width: proxy.width || 0,
+          height: proxy.height || 0,
+        })
+      : undefined
 
     // Determine priority based on preferences
-    if (proxy && !preferOrigin) {
+    if (proxyUrl && !preferOrigin) {
       // Use proxy first
-      sources.push(
-        {
-          url: getImageProxyUrl({
-            url: src,
-            width: proxy.width || 0,
-            height: proxy.height || 0,
-          }),
-          type: "proxy",
-        },
-        { url: src, type: "origin" },
-      )
+      sources.push({ url: proxyUrl, type: "proxy" })
+      if (proxyUrl !== src) sources.push({ url: src, type: "origin" })
     } else {
       // Use original URL first
       sources.push({ url: src, type: "origin" })
-      if (proxy) {
-        sources.push({
-          url: getImageProxyUrl({
-            url: src,
-            width: proxy.width || 0,
-            height: proxy.height || 0,
-          }),
-          type: "proxy",
-        })
-      }
+      if (proxyUrl && proxyUrl !== src) sources.push({ url: proxyUrl, type: "proxy" })
     }
 
     return sources
@@ -243,17 +234,20 @@ const MediaImpl: FC<MediaProps> = ({
       isImageLoadedSet.add(imgSrc)
     }
     if ("cacheDimensions" in props && props.cacheDimensions && src) {
-      saveImageDimensionsToDb(src, {
+      const dimensions = {
         src,
         width: e.currentTarget.naturalWidth,
         height: e.currentTarget.naturalHeight,
         ratio: e.currentTarget.naturalWidth / e.currentTarget.naturalHeight,
         blurhash: props.blurhash,
-      })
+      }
+      imageActions.saveImages([dimensions])
+      saveImageDimensionsToDb(src, dimensions)
     }
   })
 
   const containerWidth = useMediaContainerWidth()
+  const inlineVideoPlayback = !popper && !props.onClick
 
   const InnerContent = useMemo(() => {
     switch (type) {
@@ -297,6 +291,7 @@ const MediaImpl: FC<MediaProps> = ({
               previewImageUrl={previewImageSrc}
               thumbnail={thumbnail}
               videoClassName={videoClassName}
+              inlinePlayback={inlineVideoPlayback}
             />
           </span>
         )
@@ -322,6 +317,7 @@ const MediaImpl: FC<MediaProps> = ({
     previewImageSrc,
     thumbnail,
     videoClassName,
+    inlineVideoPlayback,
   ])
 
   if (!type || !src) return null
@@ -502,41 +498,74 @@ const VideoPreview: FC<{
   previewImageUrl?: string
   thumbnail?: boolean
   videoClassName?: string
-}> = ({ src, previewImageUrl, thumbnail = false, videoClassName }) => {
-  const [isInitVideoPlayer, setIsInitVideoPlayer] = useState(!previewImageUrl)
+  inlinePlayback: boolean
+}> = ({ src, previewImageUrl, thumbnail = false, videoClassName, inlinePlayback }) => {
+  const isMobile = useMobile()
+  const [isInitVideoPlayer, setIsInitVideoPlayer] = useState(false)
 
   const [videoRef, setVideoRef] = useState<VideoPlayerRef | null>(null)
   const isPaused = videoRef ? videoRef?.getState().paused : true
   const [forceUpdate] = useForceUpdate()
+  const shouldPlayRef = useRef(false)
+  const handleVideoRef = useEventCallback((ref: VideoPlayerRef | null) => {
+    setVideoRef(ref)
+    if (ref && shouldPlayRef.current) {
+      ref.controls.play()?.then(forceUpdate)
+    }
+  })
+
   return (
     <div
       className="size-full"
       onMouseEnter={() => {
-        videoRef?.controls.play()?.then(forceUpdate)
+        if (isMobile) return
+
+        shouldPlayRef.current = true
+        if (videoRef) {
+          videoRef.controls.play()?.then(forceUpdate)
+        } else {
+          setIsInitVideoPlayer(true)
+        }
       }}
       onMouseLeave={() => {
+        if (isMobile) return
+
+        shouldPlayRef.current = false
         videoRef?.controls.pause()
         nextFrame(forceUpdate)
       }}
+      onClick={() => {
+        if (!isMobile || !inlinePlayback) return
+
+        shouldPlayRef.current = true
+        if (videoRef) {
+          videoRef.controls.play()?.then(forceUpdate)
+        } else {
+          setIsInitVideoPlayer(true)
+        }
+      }}
     >
-      {!isInitVideoPlayer ? (
-        <img
-          src={previewImageUrl}
-          className={cn("size-full object-cover", videoClassName)}
-          onMouseEnter={() => {
-            setIsInitVideoPlayer(true)
-          }}
-        />
-      ) : (
+      {isInitVideoPlayer ? (
         <VideoPlayer
           variant={thumbnail ? "thumbnail" : "preview"}
           controls={false}
           src={src}
           poster={previewImageUrl}
-          ref={setVideoRef}
+          preload="none"
+          ref={handleVideoRef}
           muted
           className={cn("not-prose relative size-full object-cover", videoClassName)}
         />
+      ) : previewImageUrl ? (
+        <img
+          src={previewImageUrl}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          className={cn("size-full object-cover", videoClassName)}
+        />
+      ) : (
+        <div className={cn("size-full bg-material-ultra-thick", videoClassName)} />
       )}
 
       <div

@@ -1,5 +1,13 @@
 export const IMAGE_PROXY_URL = "https://img.folo.is"
 
+export const isImageProxyUrl = (url: string) => {
+  try {
+    return new URL(url).origin === IMAGE_PROXY_URL
+  } catch {
+    return false
+  }
+}
+
 export const imageRefererMatches = [
   {
     url: /^https:\/\/\w+\.sinaimg\.cn/,
@@ -47,7 +55,7 @@ export const getImageProxyUrl = ({
   height?: number
   canUseProxy?: boolean
 }) => {
-  if (!canUseProxy) {
+  if (!canUseProxy || isImageProxyUrl(url)) {
     return url
   }
   return `${IMAGE_PROXY_URL}?url=${encodeURIComponent(url)}&width=${width ? Math.round(width) : ""}&height=${height ? Math.round(height) : ""}`

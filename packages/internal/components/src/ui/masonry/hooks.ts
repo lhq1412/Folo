@@ -13,6 +13,7 @@ export const useMasonryColumn = (gutter: number, onReady?: (column: number) => a
 
   useLayoutEffect(() => {
     let readyCallOnce = false
+    let cancelReadyFrame: (() => void) | undefined
     const $warpper = containerRef.current
     if (!$warpper) return
 
@@ -26,11 +27,10 @@ export const useMasonryColumn = (gutter: number, onReady?: (column: number) => a
 
       setCurrentColumn(column)
 
-      nextFrame(() => {
-        if (readyCallOnce) return
+      if (!readyCallOnce) {
         readyCallOnce = true
-        onReady?.(column)
-      })
+        cancelReadyFrame = nextFrame(() => onReady?.(column))
+      }
     }
     const recal = throttle(handler, 1000 / 12)
 
@@ -48,13 +48,14 @@ export const useMasonryColumn = (gutter: number, onReady?: (column: number) => a
     })
 
     // Use nextFrame to ensure DOM is ready before initial calculation
-    nextFrame(() => {
-      recal()
-    })
+    const cancelInitialFrame = nextFrame(recal)
 
     resizeObserver.observe($warpper)
     return () => {
       resizeObserver.disconnect()
+      recal.cancel()
+      cancelInitialFrame()
+      cancelReadyFrame?.()
     }
   }, [])
 

@@ -2,9 +2,8 @@
 import { clearRequestTimeout, requestTimeout } from "@essentials/request-timeout"
 import { useWindowSize } from "@react-hook/window-size"
 import { isEqual, throttle } from "es-toolkit/compat"
-import type { ContainerPosition, MasonryProps, MasonryScrollerProps, Positioner } from "masonic"
-import { createResizeObserver, useMasonry, usePositioner, useScrollToIndex } from "masonic"
-import { useForceUpdate } from "motion/react"
+import type { ContainerPosition, MasonryProps, MasonryScrollerProps } from "masonic"
+import { useMasonry, usePositioner, useResizeObserver, useScrollToIndex } from "masonic"
 import * as React from "react"
 
 import { useScrollViewElement } from "../scroll-area/hooks.js"
@@ -27,7 +26,6 @@ export const Masonry = <Item,>(props: MasonryProps<Item>) => {
   React.useEffect(() => {
     if (!scrollElement) return
 
-    const scrollTimer: number | null = null
     const handleScroll = throttle(() => {
       setIsScrolling(true)
       setScrollTop(scrollElement.scrollTop)
@@ -37,9 +35,7 @@ export const Masonry = <Item,>(props: MasonryProps<Item>) => {
 
     return () => {
       scrollElement.removeEventListener("scroll", handleScroll)
-      if (scrollTimer) {
-        clearTimeout(scrollTimer)
-      }
+      handleScroll.cancel()
     }
   }, [fps, scrollElement])
   const didMount = React.useRef(0)
@@ -207,13 +203,4 @@ function useContainerPosition(
   }, [containerPosition, elementRef])
 
   return containerPosition
-}
-
-function useResizeObserver(positioner: Positioner) {
-  const [forceUpdate] = useForceUpdate()
-  const resizeObserver = createResizeObserver(positioner, throttle(forceUpdate, 1000 / 12))
-  // Cleans up the resize observers when they change or the
-  // component unmounts
-  React.useEffect(() => () => resizeObserver.disconnect(), [resizeObserver])
-  return resizeObserver
 }

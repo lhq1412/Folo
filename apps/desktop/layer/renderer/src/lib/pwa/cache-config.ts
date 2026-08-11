@@ -1,3 +1,5 @@
+import { IMAGE_PROXY_URL } from "@follow/utils/img-proxy"
+
 /**
  * Shared runtime cache configuration for the PWA service worker and renderer cleanup.
  *
@@ -80,28 +82,73 @@ export function hasSensitiveQueryParams(url: URL): boolean {
   return false
 }
 
+function getDecodedPathname(url: URL): string | null {
+  try {
+    return decodeURIComponent(url.pathname)
+  } catch {
+    return null
+  }
+}
+
 export function isApiUrl(url: URL): boolean {
-  return url.pathname.startsWith("/api/")
+  return getDecodedPathname(url)?.startsWith("/api/") ?? false
 }
 
 export function isUserSpecificPath(url: URL): boolean {
-  return USER_SPECIFIC_PATH_PATTERN.test(url.pathname)
+  const pathname = getDecodedPathname(url)
+  return pathname !== null && USER_SPECIFIC_PATH_PATTERN.test(pathname)
+}
+
+function hasSafeRuntimeUrlBoundary(url: URL): boolean {
+  return (
+    (url.protocol === "http:" || url.protocol === "https:") &&
+    !url.username &&
+    !url.password &&
+    getDecodedPathname(url) !== null &&
+    !isApiUrl(url) &&
+    !isUserSpecificPath(url) &&
+    !hasSensitiveQueryParams(url)
+  )
+}
+
+function getSafeImageProxyTarget(url: URL): URL | null {
+  if (
+    url.origin !== IMAGE_PROXY_URL ||
+    url.pathname !== "/" ||
+    url.username ||
+    url.password ||
+    hasSensitiveQueryParams(url)
+  ) {
+    return null
+  }
+
+  const targets = url.searchParams.getAll("url")
+  if (targets.length !== 1) {
+    return null
+  }
+
+  try {
+    const target = new URL(targets[0]!)
+    return target.origin !== IMAGE_PROXY_URL && hasSafeRuntimeUrlBoundary(target) ? target : null
+  } catch {
+    return null
+  }
+}
+
+function getSafeRuntimeImageClassificationUrl(url: URL): URL | null {
+  if (url.origin === IMAGE_PROXY_URL) {
+    return getSafeImageProxyTarget(url)
+  }
+
+  return hasSafeRuntimeUrlBoundary(url) && IMAGE_EXTENSION_PATTERN.test(url.pathname) ? url : null
 }
 
 export function isSafeRuntimeImageUrl(url: URL): boolean {
-  if (url.protocol !== "http:" && url.protocol !== "https:") {
-    return false
-  }
-
-  if (isApiUrl(url) || isUserSpecificPath(url) || hasSensitiveQueryParams(url)) {
-    return false
-  }
-
-  return IMAGE_EXTENSION_PATTERN.test(url.pathname)
+  return getSafeRuntimeImageClassificationUrl(url) !== null
 }
 
 export function isSameOriginStaticImage(url: URL, origin: string): boolean {
-  if (url.origin !== origin || !isSafeRuntimeImageUrl(url)) {
+  if (url.origin === IMAGE_PROXY_URL || url.origin !== origin || !isSafeRuntimeImageUrl(url)) {
     return false
   }
 
@@ -109,15 +156,16 @@ export function isSameOriginStaticImage(url: URL, origin: string): boolean {
 }
 
 export function isFeedIconOrAvatar(url: URL): boolean {
-  if (!isSafeRuntimeImageUrl(url)) {
+  const classificationUrl = getSafeRuntimeImageClassificationUrl(url)
+  if (!classificationUrl) {
     return false
   }
 
-  if (FEED_ICON_SEGMENT_PATTERN.test(url.pathname)) {
+  if (FEED_ICON_SEGMENT_PATTERN.test(classificationUrl.pathname)) {
     return true
   }
 
-  const filename = url.pathname.split("/").pop() ?? ""
+  const filename = classificationUrl.pathname.split("/").pop() ?? ""
   const stem = filename.replace(/\.[^.]+$/, "")
   return FEED_ICON_FILENAME_STEM_PATTERN.test(stem)
 }
