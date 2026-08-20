@@ -1,8 +1,8 @@
 import { FollowClient } from "@follow-app/client-sdk"
 
-export const API_URL =
-  import.meta.env.VITE_API_URL ??
-  (import.meta.env.DEV ? new URL("/api", window.location.origin).href : "https://api.folo.is")
+import { API_URL } from "./env"
+
+export { API_URL }
 
 export const followClient = new FollowClient({
   baseURL: API_URL,

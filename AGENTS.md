@@ -8,6 +8,7 @@ This file provides concise, agent-focused guidance for working in this monorepo.
 - Apps:
   - `apps/desktop` – Electron app (Vite + React renderer is the primary web app)
   - `apps/mobile` – React Native app via Expo
+  - `apps/pwa` – Folo Lite (mobile-first PWA reader; independent of the full web client)
   - `apps/ssr` – Minimal SSR site for external sharing
 - Shared packages: `packages/internal` (components, atoms, hooks, store, utils, database, etc.).
 
@@ -19,6 +20,9 @@ pnpm install
 
 # Desktop – recommended (browser renderer)
 cd apps/desktop && pnpm run dev:web
+
+# Folo Lite PWA
+cd apps/pwa && pnpm run dev
 
 # Desktop – full Electron
 cd apps/desktop && pnpm run dev:electron

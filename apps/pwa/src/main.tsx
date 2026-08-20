@@ -1,12 +1,12 @@
 import "./styles.css"
 
-import { QueryClientProvider } from "@tanstack/react-query"
 import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
 import { RouterProvider } from "react-router"
 
-import { router, UpdatePrompt } from "./app"
-import { queryClient } from "./lib/query-client"
+import { Providers } from "./app/providers"
+import { router } from "./app/router"
+import { UpdatePrompt } from "./infrastructure/pwa/UpdatePrompt"
 
 const root = document.querySelector("#root")
 
@@ -16,9 +16,9 @@ if (!root) {
 
 createRoot(root).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
+    <Providers>
       <RouterProvider router={router} />
       <UpdatePrompt />
-    </QueryClientProvider>
+    </Providers>
   </StrictMode>,
 )
