@@ -64,6 +64,8 @@ These are architecture invariants, not Lighthouse guesses:
 3. Session request via better-auth (`cache: "no-store"`).
 4. One timeline `entries.list` request for the active view. No default refetch-on-focus and no SW API cache.
 5. Opening a reader adds `entries.get` for that id.
+6. Opening an unread entry adds one `reads.markAsRead` POST. Save/unsave uses `collections.post` / `collections.delete`. These patch React Query caches in place; they must not refetch the timeline.
+7. Returning from the reader must not refetch loaded timeline pages. Timeline queries use `refetchOnMount: false` and a 5-minute `staleTime`. Scroll position is restored from an in-memory anchor, never from localStorage.
 
 ## Long-session scenario
 

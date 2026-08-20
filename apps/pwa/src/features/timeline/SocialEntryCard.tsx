@@ -3,6 +3,7 @@ import { useMemo } from "react"
 import { Link } from "react-router"
 
 import type { EntryListItem } from "../../domain/entry"
+import { entryIdOf } from "../../domain/entry"
 import { formatDate } from "../../domain/format"
 import { getPreviewMedia, getTimelineImageUrl } from "../../domain/media"
 import { sanitizeSocialListContent } from "../../domain/sanitize"
@@ -26,10 +27,12 @@ function FeedAvatar({ item }: { item: EntryListItem }) {
 
 export function SocialEntryCard({
   item,
+  onOpen,
   selectedId,
   view,
 }: {
   item: EntryListItem
+  onOpen?: () => void
   selectedId?: string
   view: TimelineView
 }) {
@@ -43,11 +46,12 @@ export function SocialEntryCard({
   )
 
   return (
-    <li className="border-b border-fill-tertiary">
+    <li className="border-b border-fill-tertiary" data-entry-id={entryIdOf(item)}>
       <Link
         aria-current={selectedId === entry.id ? "page" : undefined}
         className="relative flex gap-3 px-4 py-4 transition-colors hover:bg-fill-quinary focus-visible:bg-fill-quinary focus-visible:outline-none"
         to={getEntryHref(entry.id, view)}
+        onClick={onOpen}
       >
         {!item.read && (
           <span className="absolute left-1.5 top-7 size-2 rounded-full bg-accent">

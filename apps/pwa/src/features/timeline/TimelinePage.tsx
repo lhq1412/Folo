@@ -1,7 +1,7 @@
-import { useParams, useSearchParams } from "react-router"
+import { Outlet, useParams, useSearchParams } from "react-router"
 
-import { EmptyReader, Reader } from "../reader/Reader"
-import { getTimelineHref, getTimelineView } from "./model"
+import { EmptyReader } from "../reader/EmptyReader"
+import { getTimelineView } from "./model"
 import { Timeline } from "./Timeline"
 
 export function Component() {
@@ -12,7 +12,7 @@ export function Component() {
   return (
     <div className="grid h-full min-h-0 min-w-0 grid-cols-[minmax(0,1fr)] md:grid-cols-[minmax(20rem,24rem)_minmax(0,1fr)]">
       <Timeline selectedId={entryId} view={view} />
-      {entryId ? <Reader backTo={getTimelineHref(view)} entryId={entryId} /> : <EmptyReader />}
+      {entryId ? <Outlet /> : <EmptyReader />}
     </div>
   )
 }

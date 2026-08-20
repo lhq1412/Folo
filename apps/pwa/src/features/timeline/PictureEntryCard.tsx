@@ -1,22 +1,35 @@
 import { Link } from "react-router"
 
 import type { EntryListItem } from "../../domain/entry"
+import { entryIdOf } from "../../domain/entry"
 import { formatDate } from "../../domain/format"
 import { getPreviewMedia, getTimelineImageUrl } from "../../domain/media"
 import type { TimelineView } from "./model"
 import { getEntryHref } from "./model"
 
-export function PictureEntryCard({ item, view }: { item: EntryListItem; view: TimelineView }) {
+export function PictureEntryCard({
+  item,
+  onOpen,
+  selectedId,
+  view,
+}: {
+  item: EntryListItem
+  onOpen?: () => void
+  selectedId?: string
+  view: TimelineView
+}) {
   const entry = item.entries
   const feed = item.feeds
   const media = getPreviewMedia(entry.media)
   const firstMedia = media[0]
 
   return (
-    <li className="mb-2 break-inside-avoid">
+    <li className="mb-2 break-inside-avoid" data-entry-id={entryIdOf(item)}>
       <Link
+        aria-current={selectedId === entry.id ? "page" : undefined}
         className="block overflow-hidden rounded-xl bg-fill-quinary transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
         to={getEntryHref(entry.id, view)}
+        onClick={onOpen}
       >
         <div className="relative">
           {firstMedia ? (

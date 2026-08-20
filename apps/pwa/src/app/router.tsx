@@ -20,8 +20,16 @@ export const router = createBrowserRouter([
       {
         element: <AppShell />,
         children: [
-          { index: true, lazy: () => import("../features/timeline/TimelinePage") },
-          { path: "entries/:entryId", lazy: () => import("../features/timeline/TimelinePage") },
+          {
+            lazy: () => import("../features/timeline/TimelinePage"),
+            children: [
+              { index: true },
+              {
+                path: "entries/:entryId",
+                lazy: () => import("../features/reader/ReaderPage"),
+              },
+            ],
+          },
           {
             path: "subscriptions",
             lazy: () => import("../features/subscriptions/SubscriptionsPage"),
