@@ -84,7 +84,8 @@ export const validateServiceWorker = (source: string) => {
 
 export const validateServiceWorkerRegistration = (bundleSources: string[]) => {
   const combined = bundleSources.join("\n")
-  if (!/registerSW|serviceWorker\.register|["']\/sw\.js["']/.test(combined)) {
+  // Vite 8 minifies string literals with backticks (`/sw.js`) as well as quotes.
+  if (!/registerSW|serviceWorker\.register|["'`]\/sw\.js["'`]/.test(combined)) {
     return [
       {
         code: "registration" as const,

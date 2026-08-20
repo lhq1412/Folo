@@ -48,18 +48,18 @@ Production `vite build` on Node 22. Gzip via `zlib.gzipSync`.
 
 ## Recorded M1 (2026-08-20)
 
-Same measurement method. Reader is now its own lazy route (`ReaderPage`) so list → reader does not remount the timeline.
+Same measurement method. Reader is now its own lazy route (`ReaderPage`) so list → reader does not remount the timeline. Vite is 8.1.4 (same as the other Vite-native apps) so workspace `ensure-package-version` lint passes; the desktop toolchain stays on Vite 7.
 
-| Graph         | gzip      | Notes                                                                                         |
-| ------------- | --------- | --------------------------------------------------------------------------------------------- |
-| Initial JS    | 107.3 KiB | +0.1 KiB vs M0. Under the 8 KiB / 5% regression allowance; `baseline.json` was not rewritten. |
-| Initial CSS   | 12.1 KiB  | Reader/timeline action classes. Still under the CSS cap and regression allowance.             |
-| login         | 1.0 KiB   | Unchanged.                                                                                    |
-| timeline      | 87.2 KiB  | List layout chunk plus shared API client.                                                     |
-| reader        | 86.7 KiB  | Reader chunk plus shared API client / sanitizer.                                              |
-| subscriptions | 72.9 KiB  | Unchanged shape.                                                                              |
-| discover      | 70.5 KiB  | Unchanged.                                                                                    |
-| settings      | 1.7 KiB   | Unchanged.                                                                                    |
+| Graph         | gzip      | Notes                                                                             |
+| ------------- | --------- | --------------------------------------------------------------------------------- |
+| Initial JS    | 107.7 KiB | App shell plus a Vite 8 `env` preload. Under the 8 KiB / 5% regression allowance. |
+| Initial CSS   | 12.2 KiB  | Reader/timeline action classes. Still under the CSS cap and regression allowance. |
+| login         | 1.0 KiB   | Unchanged.                                                                        |
+| timeline      | 87.2 KiB  | List layout chunk plus shared API client.                                         |
+| reader        | 86.7 KiB  | Reader chunk plus shared API client / sanitizer.                                  |
+| subscriptions | 72.9 KiB  | Unchanged shape.                                                                  |
+| discover      | 70.5 KiB  | Unchanged.                                                                        |
+| settings      | 1.7 KiB   | Unchanged.                                                                        |
 
 Web Vitals, DOM-after-N-pages, and JS heap are not in this file. Capture those with the long-session scenario below; #37 should turn the memory/DOM part into a gate.
 
