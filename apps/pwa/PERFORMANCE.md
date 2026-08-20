@@ -63,7 +63,18 @@ Same measurement method. Reader is now its own lazy route (`ReaderPage`) so list
 
 ## Recorded M2–M4 (2026-08-20)
 
-Same measurement method. This environment cannot capture real-device JS heap or decoded-image memory; those numbers still belong on a phone (see the long-session scenario). The code policy below is the automated gate until that lab data exists.
+Production `vite build` on Node 22 after this change. Gzip via `zlib.gzipSync`. This environment cannot capture real-device JS heap or decoded-image memory; those numbers still belong on a phone (see the long-session scenario). The code policy below is the automated gate until that lab data exists.
+
+| Graph         | gzip      | Notes                                                                                  |
+| ------------- | --------- | -------------------------------------------------------------------------------------- |
+| Initial JS    | 109.8 KiB | App shell plus persistence/session hydrate. Under the 8 KiB / 5% regression allowance. |
+| Initial CSS   | 12.4 KiB  | `content-visibility` list rows. Still under the CSS cap.                               |
+| login         | 9.2 KiB   | Shared `env` chunk now attributed to login (sign-in still clears persisted data).      |
+| timeline      | 94.0 KiB  | List layout plus shared API client.                                                    |
+| reader        | 93.6 KiB  | Reader chunk plus shared API client / sanitizer.                                       |
+| subscriptions | 79.7 KiB  | Unchanged shape.                                                                       |
+| discover      | 77.4 KiB  | Unchanged shape.                                                                       |
+| settings      | 9.9 KiB   | Sign out now wipes IndexedDB + session snapshot.                                       |
 
 ### Bounded retained work (#37)
 
