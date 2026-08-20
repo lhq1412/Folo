@@ -51,6 +51,7 @@ apps/desktop/resources/cli
 /apps/mobile/e2e/artifacts/
 /apps/mobile/report.xml
 /report.xml
+/apps/pwa/performance/bundle-report.json
 
 # Mobile local E2E build artifacts
 apps/mobile/build-*.tar.gz

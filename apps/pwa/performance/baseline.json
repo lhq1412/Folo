@@ -1,0 +1,30 @@
+{
+  "command": "pnpm --dir apps/pwa build && pnpm --dir apps/pwa analyze:bundle",
+  "gzip": "node:zlib gzipSync default level",
+  "initialAssets": "script[src], link[rel=modulepreload], link[rel=stylesheet] in dist/index.html",
+  "initialCssGzipBytes": 11608,
+  "initialJsGzipBytes": 109819,
+  "measuredAt": "2026-08-20",
+  "routeChunks": [
+    {
+      "gzipBytes": 1037,
+      "id": "login"
+    },
+    {
+      "gzipBytes": 1733,
+      "id": "settings"
+    },
+    {
+      "gzipBytes": 72170,
+      "id": "discover"
+    },
+    {
+      "gzipBytes": 74475,
+      "id": "subscriptions"
+    },
+    {
+      "gzipBytes": 88374,
+      "id": "timeline"
+    }
+  ]
+}

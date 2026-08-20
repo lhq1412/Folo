@@ -2,8 +2,8 @@ import type { FormEvent } from "react"
 import { useState } from "react"
 import { Navigate, useNavigate } from "react-router"
 
-import { authClient } from "../lib/auth"
-import { queryClient } from "../lib/query-client"
+import { authClient } from "../../infrastructure/auth"
+import { queryClient } from "../../infrastructure/query-client"
 
 export function Component() {
   const navigate = useNavigate()

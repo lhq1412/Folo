@@ -4,7 +4,10 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
+    "analyze:bundle": "node --experimental-strip-types --no-warnings ./scripts/analyze-bundle.ts",
     "build": "vite build",
+    "check:budget": "node --experimental-strip-types --no-warnings ./scripts/analyze-bundle.ts --check",
+    "check:dist": "node --experimental-strip-types --no-warnings ./scripts/check-pwa-dist.ts",
     "deploy": "wrangler deploy",
     "dev": "vite",
     "preview": "vite preview",

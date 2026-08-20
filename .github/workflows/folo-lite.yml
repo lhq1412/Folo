@@ -1,0 +1,77 @@
+on:
+  pull_request:
+    paths:
+      - "apps/pwa/**"
+      - "packages/configs/**"
+      - "packages/internal/components/**"
+      - "packages/internal/utils/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "package.json"
+      - "turbo.json"
+      - ".github/workflows/folo-lite.yml"
+  push:
+    branches: [main, dev, web-mobile-pwa, feat/mobile-first-pwa]
+    paths:
+      - "apps/pwa/**"
+      - "packages/configs/**"
+      - "packages/internal/components/**"
+      - "packages/internal/utils/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "package.json"
+      - "turbo.json"
+      - ".github/workflows/folo-lite.yml"
+
+env:
+  VITE_API_URL: https://api.follow.is
+
+name: Folo Lite
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-folo-lite
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/dev' && github.ref != 'refs/heads/web-mobile-pwa' }}
+
+jobs:
+  folo-lite:
+    name: Typecheck, test, build, PWA, budget
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - name: Use Node.js LTS
+        uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --child-concurrency=1
+
+      - name: Typecheck Folo Lite
+        run: pnpm --dir apps/pwa typecheck
+
+      - name: Test Folo Lite
+        run: pnpm --dir apps/pwa test
+
+      - name: Production build
+        run: pnpm --dir apps/pwa build
+
+      - name: Validate PWA artifacts and SPA shell
+        run: pnpm --dir apps/pwa check:dist
+
+      - name: Check bundle budget
+        run: pnpm --dir apps/pwa check:budget
+
+      - name: Upload bundle report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: folo-lite-bundle-report
+          path: apps/pwa/performance/bundle-report.json
+          if-no-files-found: ignore
+          retention-days: 14
