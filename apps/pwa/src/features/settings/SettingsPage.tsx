@@ -1,18 +1,23 @@
 import { useMutation } from "@tanstack/react-query"
 
 import { Page } from "../../app/Page"
+import { useLiteSession } from "../../app/session-context"
 import { authClient } from "../../infrastructure/auth"
 import { queryClient } from "../../infrastructure/query-client"
+import { queryPersistence } from "../../infrastructure/query-persistence"
+import { clearSessionSnapshot } from "../../infrastructure/session-snapshot"
 
 export function Component() {
-  const { data: session } = authClient.useSession()
+  const { user } = useLiteSession()
   const signOut = useMutation({
     mutationFn: async () => {
       const result = await authClient.signOut()
       if (result.error) throw new Error(result.error.message ?? "Unable to sign out.")
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       queryClient.clear()
+      await queryPersistence.clear()
+      clearSessionSnapshot()
       window.location.assign("/login")
     },
   })
@@ -20,8 +25,8 @@ export function Component() {
   return (
     <Page title="Settings">
       <div className="mt-6 rounded-2xl bg-fill-quinary p-4">
-        <p className="font-medium">{session?.user.name || "Folo user"}</p>
-        <p className="mt-0.5 text-sm text-text-secondary">{session?.user.email}</p>
+        <p className="font-medium">{user.name || "Folo user"}</p>
+        <p className="mt-0.5 text-sm text-text-secondary">{user.email}</p>
       </div>
       <button
         className="mt-6 min-h-12 w-full rounded-xl border border-red/30 px-4 font-medium text-red disabled:opacity-50"

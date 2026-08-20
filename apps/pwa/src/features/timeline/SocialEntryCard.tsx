@@ -5,7 +5,12 @@ import { Link } from "react-router"
 import type { EntryListItem } from "../../domain/entry"
 import { entryIdOf } from "../../domain/entry"
 import { formatDate } from "../../domain/format"
-import { getPreviewMedia, getTimelineImageUrl } from "../../domain/media"
+import {
+  getAvatarUrl,
+  getPreviewMedia,
+  getTimelineImageUrl,
+  IMAGE_PIXEL_SIZES,
+} from "../../domain/media"
 import { sanitizeSocialListContent } from "../../domain/sanitize"
 import type { TimelineView } from "./model"
 import { getEntryHref } from "./model"
@@ -14,7 +19,13 @@ function FeedAvatar({ item }: { item: EntryListItem }) {
   const source = item.entries.authorAvatar || item.feeds.image
 
   return source ? (
-    <img alt="" className="size-8 shrink-0 rounded-full object-cover" loading="lazy" src={source} />
+    <img
+      alt=""
+      className="size-8 shrink-0 rounded-full object-cover"
+      decoding="async"
+      loading="lazy"
+      src={getAvatarUrl(source)}
+    />
   ) : (
     <span
       aria-hidden
@@ -46,7 +57,7 @@ export function SocialEntryCard({
   )
 
   return (
-    <li className="border-b border-fill-tertiary" data-entry-id={entryIdOf(item)}>
+    <li className="timeline-row border-b border-fill-tertiary" data-entry-id={entryIdOf(item)}>
       <Link
         aria-current={selectedId === entry.id ? "page" : undefined}
         className="relative flex gap-3 px-4 py-4 transition-colors hover:bg-fill-quinary focus-visible:bg-fill-quinary focus-visible:outline-none"
@@ -89,8 +100,13 @@ export function SocialEntryCard({
                     <img
                       alt=""
                       className="size-full object-cover"
+                      decoding="async"
                       loading="lazy"
-                      src={getTimelineImageUrl(preview.imageUrl, isWide ? 800 : 400, 400)}
+                      src={getTimelineImageUrl(
+                        preview.imageUrl,
+                        isWide ? IMAGE_PIXEL_SIZES.socialGridWide : IMAGE_PIXEL_SIZES.socialGrid,
+                        IMAGE_PIXEL_SIZES.socialGrid,
+                      )}
                     />
                     {preview.media.type === "video" && (
                       <span className="absolute inset-0 grid place-items-center bg-black/15 text-white">

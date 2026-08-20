@@ -32,3 +32,14 @@ export const isUnreadOnlyEntriesQueryKey = (queryKey: readonly unknown[]) => {
 
 export const isSavedEntriesQueryKey = (queryKey: readonly unknown[]) =>
   queryKey[0] === "entries" && queryKey[1] === "saved"
+
+export type PersistableQueryKind = "list" | "detail" | "session"
+
+export const persistableQueryKind = (queryKey: readonly unknown[]): PersistableQueryKind | null => {
+  if (queryKey[0] === "entries" && (queryKey[1] === "timeline" || queryKey[1] === "saved")) {
+    return "list"
+  }
+  if (queryKey[0] === "entry-session" && queryKey.length === 2) return "session"
+  if (queryKey[0] === "entry" && queryKey.length === 2) return "detail"
+  return null
+}

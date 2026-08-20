@@ -1,6 +1,8 @@
 import { useEffect } from "react"
 import { NavLink, Outlet, useLocation } from "react-router"
 
+import { useLiteSession } from "./session-context"
+
 const tabs = [
   { to: "/", label: "Home", icon: "home-5" },
   { to: "/subscriptions", label: "Subscriptions", icon: "black-board-2" },
@@ -10,6 +12,7 @@ const tabs = [
 
 export function AppShell() {
   const location = useLocation()
+  const { isOffline } = useLiteSession()
   const isEntryDetail = location.pathname.startsWith("/entries/")
 
   useEffect(() => {
@@ -26,7 +29,15 @@ export function AppShell() {
       >
         Skip to content
       </a>
-      <main id="main" className="min-h-0 overflow-hidden" tabIndex={-1}>
+      {isOffline && (
+        <p
+          role="status"
+          className="shrink-0 border-b border-fill-tertiary bg-yellow/15 px-4 py-2 text-center text-xs text-text"
+        >
+          You're offline. Recent timelines and articles stay available.
+        </p>
+      )}
+      <main id="main" className="min-h-0 flex-1 overflow-hidden" tabIndex={-1}>
         <Outlet />
       </main>
       {!isEntryDetail && (

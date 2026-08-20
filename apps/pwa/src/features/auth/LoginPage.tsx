@@ -4,6 +4,8 @@ import { Navigate, useNavigate } from "react-router"
 
 import { authClient } from "../../infrastructure/auth"
 import { queryClient } from "../../infrastructure/query-client"
+import { queryPersistence } from "../../infrastructure/query-persistence"
+import { clearSessionSnapshot } from "../../infrastructure/session-snapshot"
 
 export function Component() {
   const navigate = useNavigate()
@@ -33,6 +35,8 @@ export function Component() {
       }
 
       queryClient.clear()
+      await queryPersistence.clear()
+      clearSessionSnapshot()
       await refetch()
       navigate("/", { replace: true })
     } catch {

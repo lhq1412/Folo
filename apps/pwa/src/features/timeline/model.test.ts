@@ -7,10 +7,17 @@ import {
   getSavedNextPageParam,
   getTimelineHref,
   getTimelineView,
+  MAX_RETAINED_PAGES,
+  PAGE_SIZE,
   timelineCardLayout,
 } from "./model"
 
 describe("timeline model", () => {
+  test("bounds retained infinite pages instead of virtualizing the list", () => {
+    expect(MAX_RETAINED_PAGES).toBe(6)
+    expect(MAX_RETAINED_PAGES * PAGE_SIZE).toBe(120)
+  })
+
   test("continues from any non-empty page and stops on an empty page", () => {
     expect(getNextPageParam({ data: [] })).toBeUndefined()
     expect(

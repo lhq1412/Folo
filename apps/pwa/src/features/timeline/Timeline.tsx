@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import { Link } from "react-router"
 
 import type { EntryListItem } from "../../domain/entry"
+import { useOnlineStatus } from "../../infrastructure/online"
 import { ArticleEntryCard } from "./ArticleEntryCard"
 import type { TimelineView } from "./model"
 import {
@@ -89,6 +90,7 @@ export function Timeline({ selectedId, view }: { selectedId?: string; view: Time
     enabled: view.kind === "saved",
   })
   const query = view.kind === "saved" ? savedQuery : feedQuery
+  const online = useOnlineStatus()
   const { fetchNextPage, hasNextPage, isFetchNextPageError, isFetchingNextPage } = query
   const items = (query.data?.pages.flatMap((page) => page.data) ?? []) as EntryListItem[]
   const Heading = selectedId ? "h2" : "h1"
@@ -163,10 +165,16 @@ export function Timeline({ selectedId, view }: { selectedId?: string; view: Time
         {query.isPending && <p className="p-5 text-sm text-text-secondary">Loading timeline…</p>}
         {query.isError && items.length === 0 && (
           <div className="p-5 text-sm">
-            <p className="text-red">Unable to load your timeline.</p>
-            <button className="mt-3 min-h-11 text-accent" onClick={() => void query.refetch()}>
-              Try again
-            </button>
+            <p className="text-red">
+              {online
+                ? "Unable to load your timeline."
+                : "You're offline. Connect to load this timeline."}
+            </p>
+            {online && (
+              <button className="mt-3 min-h-11 text-accent" onClick={() => void query.refetch()}>
+                Try again
+              </button>
+            )}
           </div>
         )}
         {!query.isPending && !query.isError && items.length === 0 && (

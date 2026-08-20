@@ -3,6 +3,8 @@ import { FeedViewType } from "@follow-app/client-sdk"
 import type { EntryListItem } from "../../domain/entry"
 
 export const PAGE_SIZE = 20
+/** Newest pages kept in memory (~120 items). Older pages drop on fetch-next. */
+export const MAX_RETAINED_PAGES = 6
 export const UNREAD_ONLY_STORAGE_KEY = "follow:pwa:unreadOnly"
 export const TIMELINE_STALE_TIME_MS = 5 * 60 * 1000
 export const TIMELINE_GC_TIME_MS = 30 * 60 * 1000

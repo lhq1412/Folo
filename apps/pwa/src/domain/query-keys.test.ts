@@ -1,7 +1,12 @@
 import { FeedViewType } from "@follow-app/client-sdk"
 import { describe, expect, test } from "vitest"
 
-import { isSavedEntriesQueryKey, isUnreadOnlyEntriesQueryKey, queryKeys } from "./query-keys"
+import {
+  isSavedEntriesQueryKey,
+  isUnreadOnlyEntriesQueryKey,
+  persistableQueryKind,
+  queryKeys,
+} from "./query-keys"
 
 describe("query key factory", () => {
   test("keeps timeline, saved, entry, and session caches addressable without duplicated arrays", () => {
@@ -33,5 +38,16 @@ describe("query key factory", () => {
     expect(isSavedEntriesQueryKey(queryKeys.entries.timeline(FeedViewType.Articles, false))).toBe(
       false,
     )
+  })
+
+  test("marks only timeline, saved, entry, and session caches as persistable", () => {
+    expect(persistableQueryKind(queryKeys.entries.timeline(FeedViewType.Articles, false))).toBe(
+      "list",
+    )
+    expect(persistableQueryKind(queryKeys.entries.saved(true))).toBe("list")
+    expect(persistableQueryKind(queryKeys.entry.detail("entry-1"))).toBe("detail")
+    expect(persistableQueryKind(queryKeys.entry.session("entry-1"))).toBe("session")
+    expect(persistableQueryKind(queryKeys.subscriptions.root())).toBeNull()
+    expect(persistableQueryKind(["session"])).toBeNull()
   })
 })

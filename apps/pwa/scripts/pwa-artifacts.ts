@@ -1,3 +1,5 @@
+import { PWA_RUNTIME_CACHE_NAMES } from "../src/infrastructure/pwa/cache-config.ts"
+
 export type WebManifestIcon = {
   src: string
   sizes?: string
@@ -72,12 +74,28 @@ export const validateServiceWorker = (source: string) => {
       message: "sw.js references the API origin; API responses must stay network-only.",
     })
   }
-  if (/\b(?:NetworkFirst|StaleWhileRevalidate|CacheFirst)\b/.test(source)) {
+  if (/\bNetworkFirst\b/.test(source)) {
     failures.push({
       code: "api-cache",
-      message:
-        "sw.js registers a Workbox runtime cache strategy. Do not cache API or user data in the service worker.",
+      message: "sw.js uses NetworkFirst. API and user data must stay network-only.",
     })
+  }
+  const usesImageRuntimeCache = /\b(?:CacheFirst|StaleWhileRevalidate)\b/.test(source)
+  const requiredCacheNames = Object.values(PWA_RUNTIME_CACHE_NAMES)
+  if (!usesImageRuntimeCache) {
+    failures.push({
+      code: "service-worker",
+      message: "sw.js does not register bounded image runtime caches.",
+    })
+  } else {
+    for (const cacheName of requiredCacheNames) {
+      if (!source.includes(cacheName)) {
+        failures.push({
+          code: "api-cache",
+          message: `sw.js is missing the expected image cache ${cacheName}.`,
+        })
+      }
+    }
   }
   return failures
 }

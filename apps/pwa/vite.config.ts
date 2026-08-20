@@ -2,6 +2,8 @@ import react from "@vitejs/plugin-react"
 import { defineConfig } from "vite"
 import { VitePWA } from "vite-plugin-pwa"
 
+import { liteRuntimeCaching } from "./src/infrastructure/pwa/runtime-caching"
+
 export default defineConfig({
   build: {
     manifest: true,
@@ -27,6 +29,7 @@ export default defineConfig({
         maximumFileSizeToCacheInBytes: 2 * 1024 * 1024,
         navigateFallback: "/index.html",
         navigateFallbackDenylist: [/^\/api\//, /^\/better-auth\//],
+        runtimeCaching: liteRuntimeCaching,
       },
       manifest: {
         id: "/",

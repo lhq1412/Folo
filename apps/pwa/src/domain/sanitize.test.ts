@@ -14,6 +14,18 @@ describe("content sanitization", () => {
     expect(sanitized).toContain("<p>Safe</p>")
   })
 
+  test("rewrites reader images through the sized proxy and lazy-loads them", () => {
+    const sanitized = sanitizeEntryContent(
+      '<p>Hello</p><img src="https://cdn.example.com/hero.jpg" alt="">',
+    )
+
+    expect(sanitized).toContain("https://img.folo.is?")
+    expect(sanitized).toContain(encodeURIComponent("https://cdn.example.com/hero.jpg"))
+    expect(sanitized).toContain("width=960")
+    expect(sanitized).toMatch(/loading="lazy"/)
+    expect(sanitized).toMatch(/decoding="async"/)
+  })
+
   test("keeps social text without loading or nesting interactive media", () => {
     const sanitized = sanitizeSocialListContent(
       '<p style="position:fixed">Hello <a href="https://evil.example">world</a></p><img src="https://evil.example/large.jpg"><video src="https://evil.example/video.mp4"></video><button>Continue</button>',

@@ -37,7 +37,15 @@ describe("production PWA artifacts", () => {
   })
 
   test("rejects unresolved Workbox manifests and API runtime caches", () => {
-    expect(validateServiceWorker("precacheAndRoute([{url:'/index.html'}]);")).toEqual([])
+    const validWorker = [
+      "precacheAndRoute([{url:'/index.html'}]);",
+      "workbox.strategies.CacheFirst();",
+      "workbox.strategies.StaleWhileRevalidate();",
+      "folo-lite-same-origin-static-images-v1",
+      "folo-lite-feed-icons-v1",
+      "folo-lite-article-images-v1",
+    ].join("\n")
+    expect(validateServiceWorker(validWorker)).toEqual([])
     expect(validateServiceWorker("self.__WB_MANIFEST").map((item) => item.code)).toContain(
       "service-worker",
     )
@@ -49,6 +57,9 @@ describe("production PWA artifacts", () => {
     expect(
       validateServiceWorker("precacheAndRoute([]); https://api.folo.is").map((item) => item.code),
     ).toContain("api-cache")
+    expect(validateServiceWorker("precacheAndRoute([]);").map((item) => item.code)).toContain(
+      "service-worker",
+    )
   })
 
   test("requires a service worker registration helper in the app shell", () => {

@@ -45,13 +45,28 @@ input {
 }
 
 .app-shell {
-  display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  display: flex;
+  flex-direction: column;
   width: 100%;
   height: var(--app-height);
   padding-top: var(--safe-top);
   padding-right: var(--safe-right);
   padding-left: var(--safe-left);
+}
+
+.app-shell > main {
+  flex: 1;
+  min-height: 0;
+}
+
+.timeline-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 140px;
+}
+
+.timeline-picture {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 220px;
 }
 
 .entry-content {

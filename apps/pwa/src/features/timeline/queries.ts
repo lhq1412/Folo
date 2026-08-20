@@ -6,6 +6,7 @@ import { followApi } from "../../infrastructure/api"
 import {
   getNextPageParam,
   getSavedNextPageParam,
+  MAX_RETAINED_PAGES,
   PAGE_SIZE,
   TIMELINE_GC_TIME_MS,
   TIMELINE_STALE_TIME_MS,
@@ -14,7 +15,9 @@ import {
 const listQueryDefaults = {
   gcTime: TIMELINE_GC_TIME_MS,
   initialPageParam: undefined as string | undefined,
+  maxPages: MAX_RETAINED_PAGES,
   refetchOnMount: false as const,
+  refetchOnReconnect: true as const,
   staleTime: TIMELINE_STALE_TIME_MS,
 }
 

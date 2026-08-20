@@ -55,5 +55,7 @@ export const restoreScroller = (scroller: HTMLElement, snapshot: TimelineScrollS
     }
   }
 
-  scroller.scrollTop = snapshot.scrollTop
+  const maxScroll = Math.max(0, scroller.scrollHeight - scroller.clientHeight)
+  // After page eviction the old scrollTop can exceed the remaining list.
+  scroller.scrollTop = snapshot.scrollTop <= maxScroll ? snapshot.scrollTop : 0
 }
