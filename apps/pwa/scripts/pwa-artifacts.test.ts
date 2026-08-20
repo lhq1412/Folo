@@ -55,5 +55,6 @@ describe("production PWA artifacts", () => {
     expect(validateServiceWorkerRegistration(["const x = 1"])).not.toEqual([])
     expect(validateServiceWorkerRegistration(["registerSW({ immediate: false })"])).toEqual([])
     expect(validateServiceWorkerRegistration(['new Workbox("/sw.js",{scope:"/"})'])).toEqual([])
+    expect(validateServiceWorkerRegistration(["new Workbox(`/sw.js`,{scope:`/`})"])).toEqual([])
   })
 })

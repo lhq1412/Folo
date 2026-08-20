@@ -12,6 +12,7 @@ const ignoredEnsureVersionDependencies = new Map([
   // stays on Vite 7 while Vite-native apps can move to Vite 8.
   ["package.json", new Set(["vite"])],
   ["apps/ssr/package.json", new Set(["@vitejs/plugin-react", "vite"])],
+  ["apps/pwa/package.json", new Set(["@vitejs/plugin-react"])],
   ["apps/mobile/web-app/html-renderer/package.json", new Set(["@vitejs/plugin-react"])],
   // NativeWind 4 uses react-native-css-interop, whose latest stable release
   // still requires Tailwind CSS 3.

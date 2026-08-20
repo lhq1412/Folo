@@ -46,6 +46,21 @@ Production `vite build` on Node 22. Gzip via `zlib.gzipSync`.
 | discover          | 70.5 KiB  | Mostly the shared API client.                                                  |
 | settings          | 1.7 KiB   | Sign out.                                                                      |
 
+## Recorded M1 (2026-08-20)
+
+Same measurement method. Reader is now its own lazy route (`ReaderPage`) so list → reader does not remount the timeline. Vite is 8.1.4 (same as the other Vite-native apps) so workspace `ensure-package-version` lint passes; the desktop toolchain stays on Vite 7.
+
+| Graph         | gzip      | Notes                                                                             |
+| ------------- | --------- | --------------------------------------------------------------------------------- |
+| Initial JS    | 107.7 KiB | App shell plus a Vite 8 `env` preload. Under the 8 KiB / 5% regression allowance. |
+| Initial CSS   | 12.2 KiB  | Reader/timeline action classes. Still under the CSS cap and regression allowance. |
+| login         | 1.0 KiB   | Unchanged.                                                                        |
+| timeline      | 87.2 KiB  | List layout chunk plus shared API client.                                         |
+| reader        | 86.7 KiB  | Reader chunk plus shared API client / sanitizer.                                  |
+| subscriptions | 72.9 KiB  | Unchanged shape.                                                                  |
+| discover      | 70.5 KiB  | Unchanged.                                                                        |
+| settings      | 1.7 KiB   | Unchanged.                                                                        |
+
 Web Vitals, DOM-after-N-pages, and JS heap are not in this file. Capture those with the long-session scenario below; #37 should turn the memory/DOM part into a gate.
 
 ## Measurement assumptions
@@ -64,6 +79,8 @@ These are architecture invariants, not Lighthouse guesses:
 3. Session request via better-auth (`cache: "no-store"`).
 4. One timeline `entries.list` request for the active view. No default refetch-on-focus and no SW API cache.
 5. Opening a reader adds `entries.get` for that id.
+6. Opening an unread entry adds one `reads.markAsRead` POST. Save/unsave uses `collections.post` / `collections.delete`. These patch React Query caches in place; they must not refetch the timeline.
+7. Returning from the reader must not refetch loaded timeline pages. Timeline queries use `refetchOnMount: false` and a 5-minute `staleTime`. Scroll position is restored from an in-memory anchor, never from localStorage.
 
 ## Long-session scenario
 

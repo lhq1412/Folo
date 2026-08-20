@@ -3,25 +3,41 @@ import { useInfiniteQuery } from "@tanstack/react-query"
 import { useEffect, useRef, useState } from "react"
 import { Link } from "react-router"
 
+import type { EntryListItem } from "../../domain/entry"
 import { ArticleEntryCard } from "./ArticleEntryCard"
 import type { TimelineView } from "./model"
-import { getTimelineHref, TIMELINE_VIEWS, UNREAD_ONLY_STORAGE_KEY } from "./model"
+import {
+  getTimelineHref,
+  isPicturesTimeline,
+  TIMELINE_VIEWS,
+  timelineCardLayout,
+  UNREAD_ONLY_STORAGE_KEY,
+} from "./model"
 import { PictureEntryCard } from "./PictureEntryCard"
-import { timelineInfiniteQueryOptions } from "./queries"
+import { savedInfiniteQueryOptions, timelineInfiniteQueryOptions } from "./queries"
+import { timelineScrollKey } from "./scroll-restoration"
 import { SocialEntryCard } from "./SocialEntryCard"
+import { useTimelineScrollRestoration } from "./use-timeline-scroll"
 
-function TimelineViewNav({ current }: { current: TimelineView }) {
+function TimelineViewNav({
+  current,
+  onNavigate,
+}: {
+  current: TimelineView
+  onNavigate: () => void
+}) {
   return (
     <nav aria-label="Timeline views" className="mt-3">
-      <ul className="inline-flex items-center gap-1">
+      <ul className="inline-flex items-center gap-1 overflow-x-auto">
         {TIMELINE_VIEWS.map((view) => {
-          const isActive = current.view === view.view
+          const isActive = current.slug === view.slug
           return (
             <li key={view.slug}>
               <Link
                 aria-current={isActive ? "page" : undefined}
                 className={`flex min-h-11 items-center justify-center gap-1.5 border-b-2 px-2 text-xs font-medium transition-colors ${isActive ? "border-accent text-accent" : "border-transparent text-text-tertiary hover:text-text-secondary"}`}
                 to={getTimelineHref(view)}
+                onClick={onNavigate}
               >
                 <i aria-hidden className={`${view.icon} size-4`} />
                 <span>{view.label}</span>
@@ -34,16 +50,55 @@ function TimelineViewNav({ current }: { current: TimelineView }) {
   )
 }
 
+function TimelineEntry({
+  item,
+  onOpen,
+  selectedId,
+  view,
+}: {
+  item: EntryListItem
+  onOpen: () => void
+  selectedId?: string
+  view: TimelineView
+}) {
+  const layout = timelineCardLayout(item, view)
+  if (layout === "social") {
+    return <SocialEntryCard item={item} selectedId={selectedId} view={view} onOpen={onOpen} />
+  }
+  if (layout === "pictures") {
+    return <PictureEntryCard item={item} selectedId={selectedId} view={view} onOpen={onOpen} />
+  }
+  return <ArticleEntryCard item={item} selectedId={selectedId} view={view} onOpen={onOpen} />
+}
+
 export function Timeline({ selectedId, view }: { selectedId?: string; view: TimelineView }) {
   const [unreadOnly, setUnreadOnly] = useState(
     () => localStorage.getItem(UNREAD_ONLY_STORAGE_KEY) === "true",
   )
   const scrollRef = useRef<HTMLDivElement>(null)
   const loadMoreRef = useRef<HTMLDivElement>(null)
-  const query = useInfiniteQuery(timelineInfiniteQueryOptions(view.view, unreadOnly))
+  const feedQuery = useInfiniteQuery({
+    ...timelineInfiniteQueryOptions(
+      view.kind === "feed" ? view.view : FeedViewType.Articles,
+      unreadOnly,
+    ),
+    enabled: view.kind === "feed",
+  })
+  const savedQuery = useInfiniteQuery({
+    ...savedInfiniteQueryOptions(unreadOnly),
+    enabled: view.kind === "saved",
+  })
+  const query = view.kind === "saved" ? savedQuery : feedQuery
   const { fetchNextPage, hasNextPage, isFetchNextPageError, isFetchingNextPage } = query
-  const items = query.data?.pages.flatMap((page) => page.data) ?? []
+  const items = (query.data?.pages.flatMap((page) => page.data) ?? []) as EntryListItem[]
   const Heading = selectedId ? "h2" : "h1"
+  const snapshotKey = timelineScrollKey(view.slug, unreadOnly)
+  const { captureNow } = useTimelineScrollRestoration({
+    layoutReady: !query.isPending,
+    scrollerRef: scrollRef,
+    selectedId,
+    snapshotKey,
+  })
 
   useEffect(() => {
     const root = scrollRef.current
@@ -69,7 +124,7 @@ export function Timeline({ selectedId, view }: { selectedId?: string; view: Time
     )
     observer.observe(target)
     return () => observer.disconnect()
-  }, [fetchNextPage, hasNextPage, isFetchNextPageError, isFetchingNextPage, unreadOnly, view.view])
+  }, [fetchNextPage, hasNextPage, isFetchNextPageError, isFetchingNextPage, snapshotKey])
 
   return (
     <section
@@ -91,6 +146,7 @@ export function Timeline({ selectedId, view }: { selectedId?: string; view: Time
             className={`-my-1 inline-flex min-h-11 shrink-0 items-center gap-1.5 px-2 text-xs font-medium transition-colors focus-visible:rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent ${unreadOnly ? "text-accent" : "text-text-tertiary"}`}
             type="button"
             onClick={() => {
+              captureNow()
               const nextUnreadOnly = !unreadOnly
               localStorage.setItem(UNREAD_ONLY_STORAGE_KEY, String(nextUnreadOnly))
               setUnreadOnly(nextUnreadOnly)
@@ -100,14 +156,10 @@ export function Timeline({ selectedId, view }: { selectedId?: string; view: Time
             <span>Unread</span>
           </button>
         </div>
-        <TimelineViewNav current={view} />
+        <TimelineViewNav current={view} onNavigate={captureNow} />
       </header>
 
-      <div
-        className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
-        key={`${view.view}:${unreadOnly}`}
-        ref={scrollRef}
-      >
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" ref={scrollRef}>
         {query.isPending && <p className="p-5 text-sm text-text-secondary">Loading timeline…</p>}
         {query.isError && items.length === 0 && (
           <div className="p-5 text-sm">
@@ -119,34 +171,36 @@ export function Timeline({ selectedId, view }: { selectedId?: string; view: Time
         )}
         {!query.isPending && !query.isError && items.length === 0 && (
           <p className="p-5 text-sm text-text-secondary">
-            {unreadOnly ? "You're all caught up." : `No ${view.label.toLowerCase()} yet.`}
+            {unreadOnly
+              ? "You're all caught up."
+              : view.kind === "saved"
+                ? "No saved entries yet."
+                : `No ${view.label.toLowerCase()} yet.`}
           </p>
         )}
-        {view.view === FeedViewType.Pictures ? (
+        {isPicturesTimeline(view) ? (
           <ol className="columns-2 gap-2 p-2">
             {items.map((item) => (
-              <PictureEntryCard item={item} key={item.entries.id} view={view} />
+              <TimelineEntry
+                item={item}
+                key={item.entries.id}
+                selectedId={selectedId}
+                view={view}
+                onOpen={captureNow}
+              />
             ))}
           </ol>
         ) : (
           <ol>
-            {items.map((item) =>
-              view.view === FeedViewType.SocialMedia ? (
-                <SocialEntryCard
-                  item={item}
-                  key={item.entries.id}
-                  selectedId={selectedId}
-                  view={view}
-                />
-              ) : (
-                <ArticleEntryCard
-                  item={item}
-                  key={item.entries.id}
-                  selectedId={selectedId}
-                  view={view}
-                />
-              ),
-            )}
+            {items.map((item) => (
+              <TimelineEntry
+                item={item}
+                key={item.entries.id}
+                selectedId={selectedId}
+                view={view}
+                onOpen={captureNow}
+              />
+            ))}
           </ol>
         )}
         {hasNextPage && (

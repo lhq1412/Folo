@@ -26,6 +26,7 @@ describe("bundle report", () => {
     expect(classifyRouteChunk("src/features/auth/LoginPage.tsx")).toBe("login")
     expect(classifyRouteChunk("src/features/timeline/TimelinePage.tsx")).toBe("timeline")
     expect(classifyRouteChunk("src/features/reader/Reader.tsx")).toBe("timeline")
+    expect(classifyRouteChunk("src/features/reader/ReaderPage.tsx")).toBe("timeline")
     expect(classifyRouteChunk("src/features/subscriptions/SubscriptionsPage.tsx")).toBe(
       "subscriptions",
     )

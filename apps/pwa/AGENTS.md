@@ -11,17 +11,19 @@ Keep application complexity inside this app. Do not import desktop stores, navig
 ```text
 src/
   app/              router, shell, session, providers
-  domain/           query keys, entry types, sanitization, media helpers
+  domain/           query keys, entry types, cache helpers, sanitization, media helpers
   infrastructure/   API client, auth client, query client, PWA update prompt
   features/
-    timeline/       list queries, cards, infinite loading
-    reader/         entry detail rendering
+    timeline/       list queries, cards, infinite loading, read/save mutations, scroll restoration
+    reader/         entry detail rendering and the minimal action header
     auth/           login
     subscriptions/  list + add-by-URL
     settings/       session + sign out
 ```
 
-Query keys live in `src/domain/query-keys.ts`. Future read/unread (#34) and saved/starred (#35) mutations must update those keys instead of inventing new arrays.
+Query keys live in `src/domain/query-keys.ts`. Read/unread and save/unsave mutations must patch those keys (timeline pages, saved pages, and `entry-session`) instead of inventing new arrays.
+
+The timeline route is a pathless layout so list → reader → back does not remount the list. Scroll snapshots are in-memory (`view.slug` + unread filter) and store an item anchor plus offset, not the list payload.
 
 ## Commands
 
