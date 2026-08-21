@@ -271,10 +271,10 @@ describe("ReloadPrompt cross-tab updates", () => {
     const second = await renderReloadPrompt()
     roots.push(first.root, second.root)
 
-    await flushAsyncUpdates()
-
-    expect(getPwaStatusCalls().length).toBeGreaterThanOrEqual(2)
-    expect(localStorage.getItem("folo-pwa-active-update-id-v1")).toBe(sharedUpdateId)
+    await vi.waitFor(() => {
+      expect(getPwaStatusCalls().length).toBeGreaterThanOrEqual(2)
+    })
+    expect(localStorage.getItem(PWA_ACTIVE_UPDATE_ID_KEY)).toBe(sharedUpdateId)
   })
 
   it("persists deferred state when another tab clicks later", async () => {
