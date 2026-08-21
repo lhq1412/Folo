@@ -3,7 +3,12 @@ import { Link } from "react-router"
 import type { EntryListItem } from "../../domain/entry"
 import { entryIdOf } from "../../domain/entry"
 import { formatDate } from "../../domain/format"
-import { getPreviewMedia, getTimelineImageUrl } from "../../domain/media"
+import {
+  getFeedIconUrl,
+  getPreviewMedia,
+  getTimelineImageUrl,
+  IMAGE_PIXEL_SIZES,
+} from "../../domain/media"
 import type { TimelineView } from "./model"
 import { getEntryHref } from "./model"
 
@@ -24,7 +29,7 @@ export function PictureEntryCard({
   const firstMedia = media[0]
 
   return (
-    <li className="mb-2 break-inside-avoid" data-entry-id={entryIdOf(item)}>
+    <li className="timeline-picture mb-2 break-inside-avoid" data-entry-id={entryIdOf(item)}>
       <Link
         aria-current={selectedId === entry.id ? "page" : undefined}
         className="block overflow-hidden rounded-xl bg-fill-quinary transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
@@ -40,9 +45,10 @@ export function PictureEntryCard({
                   ? "h-auto w-full"
                   : "aspect-square w-full object-cover"
               }
+              decoding="async"
               height={firstMedia.media.height}
               loading="lazy"
-              src={getTimelineImageUrl(firstMedia.imageUrl, 600)}
+              src={getTimelineImageUrl(firstMedia.imageUrl, IMAGE_PIXEL_SIZES.pictures)}
               width={firstMedia.media.width}
             />
           ) : (
@@ -70,7 +76,13 @@ export function PictureEntryCard({
           </h3>
           <div className="mt-2 flex min-w-0 items-center gap-1.5 text-[11px] text-text-tertiary">
             {feed.image && (
-              <img alt="" className="size-4 rounded" loading="lazy" src={feed.image} />
+              <img
+                alt=""
+                className="size-4 rounded"
+                decoding="async"
+                loading="lazy"
+                src={getFeedIconUrl(feed.image)}
+              />
             )}
             <span className="min-w-0 flex-1 truncate">{feed.title || feed.url}</span>
             <time className="shrink-0" dateTime={entry.publishedAt}>

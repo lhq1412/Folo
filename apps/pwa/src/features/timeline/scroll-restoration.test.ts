@@ -94,4 +94,23 @@ describe("scroller capture and restore", () => {
 
     scroller.remove()
   })
+
+  test("falls back to the top when the anchored item was evicted and scrollTop no longer fits", () => {
+    const scroller = document.createElement("div")
+    const remaining = document.createElement("div")
+    remaining.dataset.entryId = "newer"
+    scroller.append(remaining)
+    document.body.append(scroller)
+    Object.defineProperty(scroller, "scrollTop", { configurable: true, value: 0, writable: true })
+    Object.defineProperty(scroller, "scrollHeight", { configurable: true, value: 200 })
+    Object.defineProperty(scroller, "clientHeight", { configurable: true, value: 100 })
+
+    restoreScroller(scroller, { anchorId: "evicted", anchorOffset: 12, scrollTop: 2400 })
+    expect(scroller.scrollTop).toBe(0)
+
+    restoreScroller(scroller, { anchorId: null, anchorOffset: 0, scrollTop: 40 })
+    expect(scroller.scrollTop).toBe(40)
+
+    scroller.remove()
+  })
 })

@@ -5,6 +5,7 @@ import { Link } from "react-router"
 
 import { formatDate } from "../../domain/format"
 import { sanitizeEntryContent } from "../../domain/sanitize"
+import { useOnlineStatus } from "../../infrastructure/online"
 import { useMarkEntryRead, useMarkEntryUnread } from "../timeline/read-mutations"
 import { useSaveEntry, useUnsaveEntry } from "../timeline/star-mutations"
 import { entryDetailQueryOptions, sessionView, useEntrySessionQuery } from "./queries"
@@ -16,6 +17,7 @@ export function Reader({ backTo, entryId }: { backTo: string; entryId: string })
   const markUnread = useMarkEntryUnread()
   const saveEntry = useSaveEntry()
   const unsaveEntry = useUnsaveEntry()
+  const online = useOnlineStatus()
   const autoMarkedRef = useRef<string | null>(null)
   const markReadRef = useRef(markRead.mutate)
   markReadRef.current = markRead.mutate
@@ -32,11 +34,11 @@ export function Reader({ backTo, entryId }: { backTo: string; entryId: string })
   )
 
   useLayoutEffect(() => {
-    if (!session) return
+    if (!online || !session) return
     if (autoMarkedRef.current === entryId) return
     autoMarkedRef.current = entryId
     if (!session.read) markReadRef.current({ entryId, isInbox: session.isInbox })
-  }, [entryId, session])
+  }, [entryId, online, session])
 
   const actionError =
     markRead.isError || markUnread.isError || saveEntry.isError || unsaveEntry.isError
@@ -62,9 +64,12 @@ export function Reader({ backTo, entryId }: { backTo: string; entryId: string })
         </Link>
         <div className="min-w-0 flex-1" />
         <button
+          aria-disabled={!online}
           aria-label={starred ? "Remove from saved" : "Save"}
           aria-pressed={starred}
-          className={`inline-flex min-h-11 min-w-11 items-center justify-center ${starred ? "text-orange" : "text-text-secondary"}`}
+          className={`inline-flex min-h-11 min-w-11 items-center justify-center disabled:opacity-40 ${starred ? "text-orange" : "text-text-secondary"}`}
+          disabled={!online}
+          title={online ? undefined : "Connect to save"}
           type="button"
           onClick={() => {
             if (starred) {
@@ -81,9 +86,12 @@ export function Reader({ backTo, entryId }: { backTo: string; entryId: string })
           <i aria-hidden className={`i-mgc-star-cute-${starred ? "fi" : "re"} size-5`} />
         </button>
         <button
+          aria-disabled={!online}
           aria-label={read ? "Mark unread" : "Mark read"}
           aria-pressed={read}
-          className={`inline-flex min-h-11 min-w-11 items-center justify-center ${read ? "text-text-tertiary" : "text-accent"}`}
+          className={`inline-flex min-h-11 min-w-11 items-center justify-center disabled:opacity-40 ${read ? "text-text-tertiary" : "text-accent"}`}
+          disabled={!online}
+          title={online ? undefined : "Connect to update read state"}
           type="button"
           onClick={() => {
             if (read) markUnread.mutate({ entryId, isInbox })
@@ -109,17 +117,19 @@ export function Reader({ backTo, entryId }: { backTo: string; entryId: string })
           {detailQuery.isPending && (
             <p className="py-8 text-sm text-text-secondary">Loading article…</p>
           )}
-          {detailQuery.isError && (
+          {detailQuery.isError && !entry && (
             <div className="py-8 text-sm">
               <h1 className="text-title2 font-semibold outline-none" tabIndex={-1}>
-                Unable to load this article
+                {online ? "Unable to load this article" : "This article isn't available offline"}
               </h1>
-              <button
-                className="mt-3 min-h-11 text-accent"
-                onClick={() => void detailQuery.refetch()}
-              >
-                Try again
-              </button>
+              {online && (
+                <button
+                  className="mt-3 min-h-11 text-accent"
+                  onClick={() => void detailQuery.refetch()}
+                >
+                  Try again
+                </button>
+              )}
             </div>
           )}
           {detailQuery.isSuccess && (!entry || !feed) && (

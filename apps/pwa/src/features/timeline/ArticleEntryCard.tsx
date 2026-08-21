@@ -3,6 +3,7 @@ import { Link } from "react-router"
 import type { EntryListItem } from "../../domain/entry"
 import { entryIdOf } from "../../domain/entry"
 import { formatDate } from "../../domain/format"
+import { getFeedIconUrl } from "../../domain/media"
 import type { TimelineView } from "./model"
 import { getEntryHref } from "./model"
 
@@ -22,7 +23,7 @@ export function ArticleEntryCard({
   const unread = !item.read
 
   return (
-    <li className="border-b border-fill-tertiary" data-entry-id={entryIdOf(item)}>
+    <li className="timeline-row border-b border-fill-tertiary" data-entry-id={entryIdOf(item)}>
       <Link
         aria-current={selectedId === entry.id ? "page" : undefined}
         className="relative block min-h-24 px-4 py-3 transition-colors hover:bg-fill-quinary focus-visible:bg-fill-quinary focus-visible:outline-none"
@@ -36,7 +37,13 @@ export function ArticleEntryCard({
         )}
         <div className="flex items-center gap-2 text-xs text-text-tertiary">
           {feed.image ? (
-            <img alt="" className="size-4 rounded" loading="lazy" src={feed.image} />
+            <img
+              alt=""
+              className="size-4 rounded"
+              decoding="async"
+              loading="lazy"
+              src={getFeedIconUrl(feed.image)}
+            />
           ) : (
             <span aria-hidden className="size-2 rounded-full bg-accent" />
           )}

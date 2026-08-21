@@ -61,14 +61,44 @@ Same measurement method. Reader is now its own lazy route (`ReaderPage`) so list
 | discover      | 70.5 KiB  | Unchanged.                                                                        |
 | settings      | 1.7 KiB   | Unchanged.                                                                        |
 
-Web Vitals, DOM-after-N-pages, and JS heap are not in this file. Capture those with the long-session scenario below; #37 should turn the memory/DOM part into a gate.
+## Recorded M2–M4 (2026-08-20)
+
+Production `vite build` on Node 22 after this change. Gzip via `zlib.gzipSync`. This environment cannot capture real-device JS heap or decoded-image memory; those numbers still belong on a phone (see the long-session scenario). The code policy below is the automated gate until that lab data exists.
+
+| Graph         | gzip      | Notes                                                                                  |
+| ------------- | --------- | -------------------------------------------------------------------------------------- |
+| Initial JS    | 109.8 KiB | App shell plus persistence/session hydrate. Under the 8 KiB / 5% regression allowance. |
+| Initial CSS   | 12.4 KiB  | `content-visibility` list rows. Still under the CSS cap.                               |
+| login         | 9.2 KiB   | Shared `env` chunk now attributed to login (sign-in still clears persisted data).      |
+| timeline      | 94.0 KiB  | List layout plus shared API client.                                                    |
+| reader        | 93.6 KiB  | Reader chunk plus shared API client / sanitizer.                                       |
+| subscriptions | 79.7 KiB  | Unchanged shape.                                                                       |
+| discover      | 77.4 KiB  | Unchanged shape.                                                                       |
+| settings      | 9.9 KiB   | Sign out now wipes IndexedDB + session snapshot.                                       |
+
+### Bounded retained work (#37)
+
+- Image proxy sizes are centralized in `src/domain/media.ts`: feed icon 64, avatar 96, social grid 400/800, pictures 600, reader body 960.
+- List rows use `content-visibility: auto`. Picture cards set `contain-intrinsic-size` so masonry columns do not collapse before paint.
+- Infinite queries keep `maxPages: 6` (120 items at `PAGE_SIZE` 20). Fetch-next evicts the oldest page. Scroll restoration still prefers the item anchor; if that id was evicted it uses `scrollTop`, then the top of the remaining list.
+- Virtualization is skipped: 120 DOM rows with `content-visibility` is enough for the current cards, Pictures masonry does not window cleanly, and a second hidden list would violate the “no duplicate list” rule. Revisit only if a device profile shows heap/DOM growth inside this 6-page window.
+
+### Runtime image caches (#38)
+
+`generateSW` stays in place. Workbox `runtimeCaching` adds three Lite-prefixed caches (80 / 120 / 100 entries, age-limited, `purgeOnQuotaError`). Matchers classify `https://img.folo.is?url=` by the proxied target and reject API, auth, signed, and unparseable URLs. `check:dist` allows those named `CacheFirst` / `StaleWhileRevalidate` caches and still fails on `NetworkFirst` or `api.folo.is` / `api.follow.is` in `sw.js`.
+
+### Selective offline persistence (#39)
+
+IndexedDB (`folo-lite-query-cache`, schema 1) stores dehydrated React Query state for timeline/saved pages, recently opened entry details, and entry-session metadata. Caps: 8 list queries, 24 details, 40 sessions, 7-day age. A localStorage session snapshot is `{ userId, name, email }` only. Logout, account change, and schema bumps wipe the store. Quota failures disable persistence and keep the session online-only. API responses are not stored in the service worker.
+
+Web Vitals, DOM-after-N-pages, and JS heap are not in this file. Capture those with the long-session scenario below on a real device.
 
 ## Measurement assumptions
 
 - Production `vite build` in `apps/pwa` (not `Folo#build:web`).
 - Node 22, pnpm workspace install, default gzip.
 - Lab Web Vitals: Chrome mobile emulation, mid-tier phone CPU (4x slowdown), Slow 4G. Record LCP / INP / CLS from a real device when possible; do not optimize solely for a Lighthouse score.
-- Timeline images should request proxy variants sized to the card (`400`/`800` wide for social grids, `600` wide for pictures).
+- Timeline images should request proxy variants sized to the card (`64` feed icon, `96` avatar, `400`/`800` social grid, `600` pictures, `960` reader).
 
 ## Expected request shape (code)
 
@@ -100,7 +130,9 @@ Repeat on a real phone or Chrome remote debugging. Do not treat a single Lightho
    - duplicate network requests
    - recovery after background/resume
 
-Record notes next to a PR when a change can affect long-session memory, images, or scrolling. Automated DOM/heap gates belong to #37 once this baseline exists.
+The retained-page cap (`MAX_RETAINED_PAGES`) and image sizes are the automated stand-in for a DOM/heap gate. When you have a device profile, record 1 / 5 / 6 loaded pages (the eviction boundary) next to the PR rather than every historically loaded page.
+
+Record notes next to a PR when a change can affect long-session memory, images, or scrolling.
 
 ## Updating a budget
 
