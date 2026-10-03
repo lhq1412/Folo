@@ -50,7 +50,7 @@ export const MarkAllReadButton = ({
   })
 
   useEffect(() => {
-    return EventBus.subscribe(COMMAND_ID.subscription.markAllAsRead, () => {
+    return EventBus.subscribe(COMMAND_ID.subscription.markAllAsRead, (routerParams) => {
       if (!ensureLogin()) {
         return
       }
@@ -60,7 +60,6 @@ export const MarkAllReadButton = ({
         if (cancel) return
         cancel = true
       }
-      const routerParams = getRouteParams()
       const id = toast.warning("", {
         description: <ConfirmMarkAllReadInfo undo={undo} />,
         duration: 3000,
@@ -104,8 +103,7 @@ export const MarkAllReadButton = ({
       className={className}
       ref={ref}
       onClick={() => {
-        if (!ensureLogin()) return
-        markAllByRoute(getRouteParams())
+        EventBus.dispatch(COMMAND_ID.subscription.markAllAsRead, getRouteParams())
       }}
     >
       <i className="i-mgc-check-circle-cute-re" />

@@ -1,7 +1,9 @@
+import { isMobile } from "@follow/components/hooks/useMobile.js"
 import { createElement, useCallback } from "react"
 
 import { PlainModal } from "~/components/ui/modal/stacked/custom-modal"
 import { useModalStack } from "~/components/ui/modal/stacked/hooks"
+import { closeSubscriptionSidebar } from "~/lib/mobile-sidebar"
 
 import { SettingModalContent } from "./SettingModalContent"
 
@@ -26,6 +28,10 @@ export const useSettingModal = () => {
   return useCallback(
     (options?: SettingModalOptions) => {
       const { tab, section } = normalizeOptions(options)
+
+      if (isMobile()) {
+        closeSubscriptionSidebar()
+      }
 
       return present({
         title: "Setting",

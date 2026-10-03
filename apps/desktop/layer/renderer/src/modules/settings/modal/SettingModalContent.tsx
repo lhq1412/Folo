@@ -1,3 +1,4 @@
+import { useMobile } from "@follow/components/hooks/useMobile.js"
 import { ScrollArea } from "@follow/components/ui/scroll-area/index.js"
 import { useIsLoggedIn } from "@follow/store/user/hooks"
 import { clsx, cn } from "@follow/utils"
@@ -50,7 +51,7 @@ export const SettingModalContent: FC<{
 
   return (
     <SettingTabProvider initialTab={resolvedInitialTab}>
-      <SettingModalLayout>
+      <SettingModalLayout initialShowCategories={!initialTab && !initialSection}>
         <Content initialSection={initialSection} />
       </SettingModalLayout>
     </SettingTabProvider>
@@ -60,6 +61,7 @@ export const SettingModalContent: FC<{
 const Content: FC<{
   initialSection?: string | null
 }> = ({ initialSection }) => {
+  const isMobile = useMobile()
   const availableSettings = useAvailableSettings()
   const tab = useSettingTab()
   const setTab = useSetSettingTab()
@@ -152,14 +154,16 @@ const Content: FC<{
   if (!tabAccessible) {
     return (
       <>
-        <SettingsTitle
-          loader={loader}
-          className={clsx(
-            "relative mb-0 border-b border-transparent px-8 transition-colors duration-200",
-            !scrollerAtTop ? "border-border" : "",
-          )}
-        />
-        <ModalClose />
+        {!isMobile && (
+          <SettingsTitle
+            loader={loader}
+            className={clsx(
+              "relative mb-0 border-b border-transparent px-8 transition-colors duration-200",
+              !scrollerAtTop ? "border-border" : "",
+            )}
+          />
+        )}
+        {!isMobile && <ModalClose />}
         <button
           type="button"
           className="flex flex-1 items-center justify-center px-12 text-center text-text-secondary"
@@ -173,20 +177,26 @@ const Content: FC<{
 
   return (
     <Suspense>
-      <SettingsTitle
-        loader={loader}
-        className={clsx(
-          "relative mb-0 border-b border-transparent px-8 transition-colors duration-200",
-          !scrollerAtTop ? "border-border" : "",
-        )}
-      />
-      <ModalClose />
+      {!isMobile && (
+        <SettingsTitle
+          loader={loader}
+          className={clsx(
+            "relative mb-0 border-b border-transparent px-8 transition-colors duration-200",
+            !scrollerAtTop ? "border-border" : "",
+          )}
+        />
+      )}
+      {!isMobile && <ModalClose />}
       <ScrollArea.ScrollArea
         mask={false}
         ref={setScroller}
-        rootClassName="h-full grow flex-1 shrink-0 overflow-auto"
+        rootClassName={
+          isMobile
+            ? "min-h-0 grow flex-1 overflow-hidden"
+            : "h-full grow flex-1 shrink-0 overflow-auto"
+        }
         viewportClassName={cn(
-          "px-1 min-h-full [&>div]:min-h-full [&>div]:relative pl-8 pr-7",
+          "px-1 min-h-full [&>div]:min-h-full [&>div]:relative pl-8 pr-7 max-lg:px-4 max-lg:!overflow-x-auto max-lg:[&>div]:!block",
           config.viewportClassName,
         )}
       >

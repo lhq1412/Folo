@@ -108,6 +108,13 @@ const fulfillMockApi = async (route: Route) => {
     return
   }
 
+  if (/\/settings\/?$/.test(new URL(route.request().url()).pathname)) {
+    await route.fulfill({
+      json: { code: 0, settings: { general: {}, appearance: {}, ai: {} }, updated: {} },
+    })
+    return
+  }
+
   await route.fulfill({
     status: 200,
     contentType: "application/json",

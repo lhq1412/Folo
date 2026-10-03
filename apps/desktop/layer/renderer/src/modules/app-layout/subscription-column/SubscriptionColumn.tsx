@@ -14,6 +14,7 @@ import * as React from "react"
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { Trans } from "react-i18next"
 import { useResizable } from "react-resizable-layout"
+import { useLocation } from "react-router"
 
 import { getUISettings, setUISetting } from "~/atoms/settings/ui"
 import {
@@ -120,6 +121,17 @@ const FeedResponsiveResizerContainer = ({
   )
   const drawerInteractive = isMobileViewport && mobileDrawerOpen && !drawerAccessibilityHidden
   const t = useI18n()
+  const { pathname } = useLocation()
+  const previousPathnameRef = useRef(pathname)
+
+  useEffect(() => {
+    const previousPathname = previousPathnameRef.current
+    previousPathnameRef.current = pathname
+
+    if (isMobileViewport && pathname !== previousPathname) {
+      closeSubscriptionSidebar()
+    }
+  }, [isMobileViewport, pathname])
 
   useLayoutEffect(() => {
     if (!isMobileViewport) {

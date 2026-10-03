@@ -171,6 +171,78 @@ test.describe("mobile subscription drawer a11y", () => {
     await expect(entryTrigger).toBeVisible()
   })
 
+  test("closes the drawer with its visible header toggle", async ({ page }) => {
+    const drawer = page.locator("#mobile-subscription-drawer")
+    const main = page.locator("main")
+    const closeToggle = drawer.getByTestId("mobile-subscription-drawer-header-trigger")
+
+    await openMobileSubscriptionDrawerFromEntry(page)
+    await expect(closeToggle).toBeVisible()
+    await expect(closeToggle).toHaveAttribute("aria-expanded", "true")
+
+    await closeToggle.click()
+
+    await expect(drawer).toHaveAttribute("aria-hidden", "true")
+    await expect(main).not.toHaveAttribute("inert", "")
+  })
+
+  test("closes the drawer when opening Discover", async ({ page }) => {
+    const drawer = page.locator("#mobile-subscription-drawer")
+    const main = page.locator("main")
+
+    await openMobileSubscriptionDrawerFromEntry(page)
+    await drawer.getByTestId("subscription-discover-trigger").click()
+
+    await expect(page).toHaveURL(/\/discover$/)
+    await expect(drawer).toHaveAttribute("aria-hidden", "true")
+    await expect(main).not.toHaveAttribute("inert", "")
+    await expect(main).not.toHaveAttribute("aria-hidden", "true")
+    await expect(page.getByTestId("discover-form-input")).toBeEditable()
+  })
+
+  test("closes the drawer when navigating from the profile menu", async ({ page }) => {
+    const drawer = page.locator("#mobile-subscription-drawer")
+    const main = page.locator("main")
+
+    await openMobileSubscriptionDrawerFromEntry(page)
+    await drawer.getByTestId("profile-menu-trigger").click()
+    await page.getByRole("menuitem", { name: "Actions", exact: true }).click()
+
+    await expect(page).toHaveURL(/\/action$/)
+    await expect(drawer).toHaveAttribute("aria-hidden", "true")
+    await expect(main).not.toHaveAttribute("inert", "")
+    await expect(main).not.toHaveAttribute("aria-hidden", "true")
+  })
+
+  test("releases the drawer focus trap when opening Preferences", async ({ page }) => {
+    const drawer = page.locator("#mobile-subscription-drawer")
+    const main = page.locator("main")
+    const entryTrigger = page.getByTestId("mobile-subscription-drawer-entry-trigger")
+    const settings = page.getByTestId("mobile-settings")
+
+    await openMobileSubscriptionDrawerFromEntry(page)
+    await drawer.getByTestId("profile-menu-trigger").click()
+    await page.getByTestId("profile-menu-preferences").click()
+
+    await expect(settings).toBeVisible()
+    await expect(drawer).toHaveAttribute("aria-hidden", "true")
+    await expect(main).not.toHaveAttribute("inert", "")
+    await settings.getByTestId("modal-close").focus()
+    await page.keyboard.press("Tab")
+    await expect(
+      settings.getByTestId("settings-categories").locator("button").first(),
+    ).toBeFocused()
+
+    await settings.getByTestId("modal-close").click()
+    await expect(settings).toHaveCount(0)
+    await expect(entryTrigger).toBeVisible()
+    await entryTrigger.focus()
+    await page.keyboard.press("Tab")
+    await expect
+      .poll(() => drawer.evaluate((element) => element.contains(document.activeElement)))
+      .toBe(false)
+  })
+
   test("isolates page content while the drawer is open", async ({ page }) => {
     const drawer = page.locator("#mobile-subscription-drawer")
     const main = page.locator("main")

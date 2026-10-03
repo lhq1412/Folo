@@ -1,4 +1,5 @@
 import { Spring } from "@follow/components/constants/spring.js"
+import { useMobile } from "@follow/components/hooks/useMobile.js"
 import { Folo } from "@follow/components/icons/folo.js"
 import { Logo } from "@follow/components/icons/logo.jsx"
 import { LetsIconsResizeDownRightLight } from "@follow/components/icons/resize.jsx"
@@ -10,12 +11,14 @@ import { atom, useAtomValue, useSetAtom } from "jotai"
 import type { BoundingBox } from "motion/react"
 import { Resizable } from "re-resizable"
 import type { PropsWithChildren } from "react"
-import { memo, Suspense, use, useCallback, useMemo, useRef } from "react"
+import { memo, Suspense, use, useCallback, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
+import { useTranslation } from "react-i18next"
 
 import { useUISettingSelector } from "~/atoms/settings/ui"
 import { m } from "~/components/common/Motion"
 import { resizableOnly } from "~/components/ui/modal"
+import { useCurrentModal } from "~/components/ui/modal/stacked/hooks"
 import { useModalResizeAndDrag } from "~/components/ui/modal/stacked/internal/use-drag"
 import { ElECTRON_CUSTOM_TITLEBAR_HEIGHT } from "~/constants"
 import { useRequireLogin } from "~/hooks/common/useRequireLogin"
@@ -31,8 +34,11 @@ import { DisableWhy } from "../utils"
 import { SettingModalContentPortalableContext, useSetSettingTab, useSettingTab } from "./context"
 import { defaultCtx, SettingContext } from "./hooks"
 
-export function SettingModalLayout(props: PropsWithChildren) {
-  const { children } = props
+export function SettingModalLayout({
+  children,
+  initialShowCategories = true,
+}: PropsWithChildren<{ initialShowCategories?: boolean }>) {
+  const isMobile = useMobile()
 
   const elementRef = useRef<HTMLDivElement>(null)
   const edgeElementRef = useRef<HTMLDivElement>(null)
@@ -68,6 +74,18 @@ export function SettingModalLayout(props: PropsWithChildren) {
   const portalableCtxValue = useMemo(() => {
     return atom(null as any)
   }, [])
+
+  if (isMobile) {
+    return (
+      <SettingContext.Provider value={defaultCtx}>
+        <SettingModalContentPortalableContext value={portalableCtxValue}>
+          <MobileSettingModalLayout initialShowCategories={initialShowCategories}>
+            {children}
+          </MobileSettingModalLayout>
+        </SettingModalContentPortalableContext>
+      </SettingContext.Provider>
+    )
+  }
 
   return (
     <div
@@ -145,6 +163,68 @@ export function SettingModalLayout(props: PropsWithChildren) {
           </Resizable>
         </SettingContext.Provider>
       </m.div>
+    </div>
+  )
+}
+
+const MobileSettingModalLayout = ({
+  children,
+  initialShowCategories,
+}: PropsWithChildren<{ initialShowCategories: boolean }>) => {
+  const [showCategories, setShowCategories] = useState(initialShowCategories)
+  const tab = useSettingTab()
+  const { dismiss } = useCurrentModal()
+  const { t } = useTranslation()
+  const { t: commonT } = useTranslation("common")
+
+  return (
+    <div
+      id={SETTING_MODAL_ID}
+      data-testid="mobile-settings"
+      className="app-shell app-safe-top app-safe-right app-safe-bottom app-safe-left flex w-full min-w-0 flex-col bg-background"
+    >
+      <header className="flex min-h-14 shrink-0 items-center gap-2 border-b border-border px-3">
+        {!showCategories && (
+          <button
+            type="button"
+            data-testid="settings-categories-back"
+            aria-label={commonT("words.back")}
+            className="center size-[44px] shrink-0 rounded-md text-text-secondary hover:bg-fill-secondary focus-visible:ring-2 focus-visible:ring-accent"
+            onClick={() => setShowCategories(true)}
+          >
+            <i className="i-mgc-arrow-left-cute-re size-5" />
+          </button>
+        )}
+        <div className="min-w-0 flex-1 text-lg font-semibold">
+          {showCategories ? t("user_button.preferences") : <SettingsSidebarTitle path={tab} />}
+        </div>
+        <button
+          type="button"
+          data-testid="modal-close"
+          aria-label={commonT("words.close")}
+          className="center size-[44px] shrink-0 rounded-md text-text-secondary hover:bg-fill-secondary focus-visible:ring-2 focus-visible:ring-accent"
+          onClick={() => dismiss()}
+        >
+          <i className="i-mgc-close-cute-re size-5" />
+        </button>
+      </header>
+      {showCategories ? (
+        <nav
+          data-testid="settings-categories"
+          className="min-h-0 flex-1 overflow-y-auto p-4 [&>button]:min-h-[44px]"
+        >
+          <SidebarItems onChange={() => setShowCategories(false)} />
+        </nav>
+      ) : (
+        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+          <Suspense>{children}</Suspense>
+          <SettingModalContentPortalable />
+        </div>
+      )}
+      <div className="flex shrink-0 items-center justify-end gap-3 border-t border-border px-4 py-2">
+        <EnhancedSettingsIndicator />
+        <SettingSyncIndicator />
+      </div>
     </div>
   )
 }

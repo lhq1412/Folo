@@ -86,10 +86,12 @@ const LayoutActionButton = () => {
   const isMobileViewport = useMobile()
   const subscriptionSidebarOpen = feedColumnShow || feedColumnTempShow
 
-  const [animation, setAnimation] = useState({ width: !subscriptionSidebarOpen ? "auto" : 0 })
+  const [animation, setAnimation] = useState({
+    width: isMobileViewport || !subscriptionSidebarOpen ? "auto" : 0,
+  })
   useEffect(() => {
-    setAnimation({ width: !subscriptionSidebarOpen ? "auto" : 0 })
-  }, [subscriptionSidebarOpen])
+    setAnimation({ width: isMobileViewport || !subscriptionSidebarOpen ? "auto" : 0 })
+  }, [isMobileViewport, subscriptionSidebarOpen])
 
   const t = useI18n()
 

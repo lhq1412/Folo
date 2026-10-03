@@ -182,7 +182,7 @@ const SubscriptionFeedsSection = () => {
       </div>
 
       {filteredFeeds.length > 0 && (
-        <div className="mt-6 space-y-0.5">
+        <div className="mt-6 space-y-0.5 max-lg:min-w-[600px]">
           {/* Header - Sticky */}
           <div
             className={clsx(

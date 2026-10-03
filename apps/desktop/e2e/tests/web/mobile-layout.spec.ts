@@ -1,7 +1,14 @@
+import { FeedViewType } from "@follow/constants"
 import { expect, test } from "@playwright/test"
 
 import { openWebApp } from "../../support/app"
 import { resolveDesktopE2EEnv } from "../../support/env"
+import {
+  ensureMobileDrawerClosed,
+  installMobileDrawerMockAuth,
+  installMobileDrawerTestInitScripts,
+  openMobileSubscriptionDrawerFromEntry,
+} from "../../support/mobile-drawer-fixture"
 
 const env = resolveDesktopE2EEnv()
 
@@ -239,6 +246,152 @@ test.describe("mobile shell geometry", () => {
         maxHeight: "none",
         overflow: "visible",
       })
+  })
+})
+
+test.describe("mobile settings layout", () => {
+  test.beforeEach(async ({ page }) => {
+    await installMobileDrawerTestInitScripts(page)
+    await installMobileDrawerMockAuth(page, env.apiURL)
+  })
+
+  for (const viewport of [
+    { width: 320, height: 568 },
+    { width: 390, height: 844 },
+    { width: 768, height: 1024 },
+  ]) {
+    test(`keeps settings usable at ${viewport.width}px`, async ({ page }) => {
+      await page.setViewportSize(viewport)
+      await openWebApp(page, env)
+      await ensureMobileDrawerClosed(page)
+      await openMobileSubscriptionDrawerFromEntry(page)
+      await page.getByTestId("profile-menu-trigger").click()
+      await page.getByTestId("profile-menu-preferences").click()
+
+      const settings = page.getByTestId("mobile-settings")
+      await expect(settings).toBeVisible()
+      await expect(page.getByTestId("settings-categories")).toBeVisible()
+      await page.getByTestId("settings-tab-general").click()
+      const languageSelect = page.getByTestId("settings-language-select")
+      await expect(languageSelect).toBeVisible()
+      const bounds = await languageSelect.boundingBox()
+      expect(bounds).not.toBeNull()
+      expect(bounds!.x).toBeGreaterThanOrEqual(0)
+      expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(viewport.width)
+      const nativeSelect = languageSelect.locator("select")
+      const language = await nativeSelect.inputValue()
+      await nativeSelect.selectOption(language)
+
+      await page.getByTestId("settings-categories-back").click()
+      await expect(page.getByTestId("settings-categories")).toBeVisible()
+      await page.getByTestId("settings-tab-appearance").click()
+      await expect(page.getByTestId("settings-categories")).toHaveCount(0)
+      await settings.getByTestId("modal-close").click()
+      await expect(settings).toHaveCount(0)
+    })
+  }
+
+  test("keeps the rightmost subscribed feed column reachable at 390px", async ({ page }) => {
+    const apiHost = new URL(env.apiURL).host
+    const feedId = "e2e-mobile-settings-feed"
+    await page.route(
+      (url) => url.host === apiHost && /\/subscriptions\/?$/.test(url.pathname),
+      (route) =>
+        route.fulfill({
+          json: {
+            code: 0,
+            data: [
+              {
+                feedId,
+                userId: "e2e-mobile-drawer-user",
+                view: FeedViewType.Articles,
+                category: null,
+                title: null,
+                isPrivate: false,
+                hideFromTimeline: false,
+                createdAt: "2026-01-01T00:00:00.000Z",
+                feeds: {
+                  id: feedId,
+                  type: "feed",
+                  title: "Folo mobile settings fixture",
+                  url: "https://example.com/folo-e2e.xml",
+                  siteUrl: "https://example.com",
+                  description: null,
+                  image: null,
+                  ownerUserId: null,
+                  errorAt: null,
+                  errorMessage: null,
+                },
+              },
+            ],
+          },
+        }),
+    )
+    await page.route(
+      (url) => url.host === apiHost && /\/feeds\/analytics\/?$/.test(url.pathname),
+      (route) =>
+        route.fulfill({
+          json: {
+            code: 0,
+            data: { analytics: { [feedId]: { subscriptionCount: 12, updatesPerWeek: 7 } } },
+          },
+        }),
+    )
+    await page.setViewportSize({ width: 390, height: 844 })
+    await openWebApp(page, env)
+    await ensureMobileDrawerClosed(page)
+    await openMobileSubscriptionDrawerFromEntry(page)
+    await page.getByTestId("profile-menu-trigger").click()
+    await page.getByTestId("profile-menu-preferences").click()
+    await page.getByTestId("settings-tab-feeds").click()
+
+    const settings = page.getByTestId("mobile-settings")
+    const row = settings.getByTestId(`settings-feed-row-${feedId}`)
+    await expect(row).toBeVisible()
+    await row.scrollIntoViewIfNeeded()
+    const header = settings.locator(".sticky.grid").first()
+    const rowBounds = await row.boundingBox()
+    const headerBounds = await header.boundingBox()
+    expect(rowBounds).not.toBeNull()
+    expect(headerBounds).not.toBeNull()
+    expect(rowBounds!.width).toBeCloseTo(headerBounds!.width, 1)
+
+    const viewport = settings.locator("[data-radix-scroll-area-viewport]").first()
+    const overflow = await viewport.evaluate((element) => element.scrollWidth > element.clientWidth)
+    expect(overflow).toBe(true)
+    await viewport.evaluate((element) => {
+      element.scrollLeft = element.scrollWidth
+    })
+    await expect.poll(() => viewport.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0)
+
+    const lastCell = row.locator(":scope > div").last()
+    await expect(lastCell).toContainText("7/w")
+    await expect
+      .poll(() =>
+        lastCell.evaluate((element) => {
+          const bounds = element.getBoundingClientRect()
+          const hit = document.elementFromPoint(
+            bounds.x + bounds.width / 2,
+            bounds.y + bounds.height / 2,
+          )
+          return hit !== null && element.contains(hit)
+        }),
+      )
+      .toBe(true)
+  })
+
+  test("preserves the desktop settings sidebar and controls", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 })
+    await openWebApp(page, env)
+    await page.getByTestId("profile-menu-trigger").click()
+    await page.getByTestId("profile-menu-preferences").click()
+
+    await expect(page.getByTestId("mobile-settings")).toHaveCount(0)
+    await expect(page.getByTestId("settings-tab-general")).toBeVisible()
+    await expect(page.getByTestId("settings-language-select")).toBeVisible()
+    await page.getByTestId("settings-tab-appearance").click()
+    await page.getByTestId("modal-close").click()
+    await expect(page.locator("#setting-modal")).toHaveCount(0)
   })
 })
 
