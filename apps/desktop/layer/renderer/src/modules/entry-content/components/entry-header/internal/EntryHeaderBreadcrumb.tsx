@@ -227,6 +227,7 @@ export function EntryHeaderBreadcrumb() {
   const { entryId } = useEntryHeaderContext()
 
   const { t } = useTranslation()
+  const { t: commonT } = useTranslation("common")
   const view = useRouteParamsSelector((s) => s.view)
   const viewName = getView(view)?.name
   const showEntryDetailsColumn = useShowEntryDetailsColumn()
@@ -249,8 +250,9 @@ export function EntryHeaderBreadcrumb() {
           {/* Return Back Button  */}
           <button
             type="button"
-            className="no-drag-region inline-flex shrink-0 items-center rounded-full bg-transparent p-2 text-text-secondary hover:bg-fill/50 hover:text-text focus-visible:bg-fill/60"
+            className="no-drag-region inline-flex shrink-0 items-center rounded-full bg-transparent p-2 text-text-secondary hover:bg-fill/50 hover:text-text focus-visible:bg-fill/60 max-lg:min-h-[44px] max-lg:min-w-[44px]"
             onClick={() => navigate({ entryId: null, view })}
+            aria-label={commonT("words.back")}
           >
             <i className="i-mingcute-close-line size-5" />
           </button>

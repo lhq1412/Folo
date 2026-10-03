@@ -39,12 +39,12 @@ export function FeedCardActions<T extends TrendingFeedItem | DiscoveryItem>({
   const location = useLocation()
 
   return (
-    <div className="flex items-center justify-between gap-2">
+    <div className="flex items-center justify-between gap-2" data-testid="discover-feed-actions">
       {!isSubscribed && (
         <Button
           variant="ghost"
           disabled={!item.feed?.id}
-          buttonClassName="rounded-lg px-3 font-medium text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800/80 dark:hover:text-white"
+          buttonClassName="rounded-lg px-3 font-medium text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 max-lg:min-h-[44px] dark:text-zinc-400 dark:hover:bg-zinc-800/80 dark:hover:text-white"
           onClick={() => {
             if (!item.feed?.id) return
             navigateEntry({
@@ -70,7 +70,7 @@ export function FeedCardActions<T extends TrendingFeedItem | DiscoveryItem>({
           })
         }}
         buttonClassName={cn(
-          "relative overflow-hidden rounded-lg font-medium transition-all duration-300",
+          "relative overflow-hidden rounded-lg font-medium transition-all duration-300 max-lg:min-h-[44px]",
           isSubscribed ? "border-zinc-200/80 px-3 text-zinc-400 dark:border-zinc-700/80" : "",
           isSubscribed ? followedButtonClassName : followButtonClassName,
         )}
@@ -126,8 +126,11 @@ export const DiscoverFeedCard: FC<DiscoverFeedCardProps> = memo(
                   </div>
                 </div>
               )}
-              <div className="mt-4 flex justify-between gap-4">
-                <div className="flex items-center gap-3 text-sm text-text-secondary">
+              <div className="mt-4 flex justify-between gap-4 max-lg:flex-col max-lg:gap-3">
+                <div
+                  className="flex items-center gap-3 text-sm text-text-secondary max-lg:flex-wrap max-lg:gap-y-2"
+                  data-testid="discover-feed-metadata"
+                >
                   {!!item.analytics?.subscriptionCount && (
                     <div className="flex items-center gap-1.5">
                       <i className="i-mgc-user-3-cute-re" />

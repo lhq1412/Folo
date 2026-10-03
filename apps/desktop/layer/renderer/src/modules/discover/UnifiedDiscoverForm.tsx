@@ -87,13 +87,13 @@ function ToolLink({ icon, label, onClick }: ToolLinkProps) {
       type="button"
       onClick={onClick}
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-md px-2 py-1 transition-colors",
+        "inline-flex items-center gap-1.5 rounded-md px-2 py-1 transition-colors max-lg:min-h-[44px] max-lg:min-w-0 max-lg:justify-start",
         "text-text-secondary hover:bg-fill-secondary hover:text-text",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1",
       )}
     >
       <i className={cn(icon, "size-3.5 shrink-0")} />
-      <span>{label}</span>
+      <span className="max-lg:break-words max-lg:text-left">{label}</span>
     </button>
   )
 }
@@ -301,7 +301,7 @@ export function UnifiedDiscoverForm() {
           className="w-full max-w-2xl"
           data-testid="discover-form"
         >
-          <div className="rounded-2xl border border-fill-secondary bg-background/70 p-4 shadow-sm">
+          <div className="rounded-2xl border border-fill-secondary bg-background/70 p-4 shadow-sm max-lg:px-3">
             <FormField
               control={form.control}
               name="keyword"
@@ -406,6 +406,7 @@ export function UnifiedDiscoverForm() {
             <div className="center flex flex-col gap-3" data-testid="discover-form-actions">
               <Button
                 data-testid="discover-form-submit"
+                buttonClassName="max-lg:min-h-[44px]"
                 disabled={!form.formState.isValid}
                 type="submit"
                 isLoading={mutation.isPending}
@@ -414,7 +415,10 @@ export function UnifiedDiscoverForm() {
               </Button>
 
               {/* Compact Tools */}
-              <div className="mt-5 flex items-center justify-center gap-3 text-xs">
+              <div
+                className="mt-5 flex items-center justify-center gap-3 text-xs max-lg:grid max-lg:w-full max-lg:grid-cols-2 max-lg:gap-2"
+                data-testid="discover-form-tools"
+              >
                 <ToolLink
                   icon="i-mgc-file-upload-cute-re"
                   label={t("discover.tools.import")}

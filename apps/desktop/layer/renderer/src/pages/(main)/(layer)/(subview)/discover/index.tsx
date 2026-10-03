@@ -33,9 +33,9 @@ export function Component() {
   const hasSearchData = useHasDiscoverSearchData()
 
   return (
-    <div className="flex size-full flex-col p-6">
+    <div className="flex size-full flex-col p-6 max-lg:px-3">
       <Section className="mb-8">
-        <div className="rounded-[28px] border border-fill-secondary bg-material-ultra-thin px-6 py-8 shadow-sm">
+        <div className="rounded-[28px] border border-fill-secondary bg-material-ultra-thin px-6 py-8 shadow-sm max-lg:px-3">
           <div className="text-center">
             <h1 className="mb-2 text-3xl font-bold text-text">{t("words.discover")}</h1>
             <p className="text-sm text-text-secondary">{t("discover.tips.search_keyword")}</p>

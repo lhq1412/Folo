@@ -112,6 +112,7 @@ export const ActionButton = ({
         shouldHighlightMotion &&
           "relative after:absolute after:inset-0 after:animate-[radialPulse_3s_ease-in-out_infinite] after:rounded-md after:bg-center after:bg-no-repeat after:content-['']",
         actionButtonStyleVariant.size[size],
+        "max-lg:min-h-[44px] max-lg:min-w-[44px]",
         className,
       )}
       style={{

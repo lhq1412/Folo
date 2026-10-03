@@ -49,6 +49,7 @@ export const EntryListHeader: FC<{
 }> = ({ refetch, isRefreshing, onBeforeRefresh }) => {
   const routerParams = useRouteParams()
   const { t } = useTranslation()
+  const { t: commonT } = useTranslation("common")
 
   const unreadOnly = useGeneralSettingKey("unreadOnly")
   const [aiTimelineEnabled, setAiTimelineEnabled] = useAtom(aiTimelineEnabledAtom)
@@ -68,14 +69,21 @@ export const EntryListHeader: FC<{
   const titleInfo = !!headerTitle && (
     <div
       className={clsx(
-        "flex min-w-0 items-center break-all text-lg font-bold leading-tight",
-        isMobileViewport ? "gap-2" : "-ml-3",
+        "flex items-center break-all text-lg font-bold leading-tight",
+        isMobileViewport ? "min-w-[88px] flex-1 gap-1" : "-ml-3 min-w-0",
       )}
     >
       {isMobileViewport && !subscriptionSidebarOpen && (
         <MobileSubscriptionDrawerEntryTrigger label={t("app.toggle_sidebar")} />
       )}
-      {feedIcon && <FeedIcon target={feedIcon} fallback size={20} className="mr-4" />}
+      {feedIcon && (
+        <FeedIcon
+          target={feedIcon}
+          fallback
+          size={20}
+          className="mr-4 max-lg:mr-0 max-lg:shrink-0"
+        />
+      )}
       <EllipsisHorizontalTextWithTooltip className="inline-block !w-auto max-w-full">
         {headerTitle}
       </EllipsisHorizontalTextWithTooltip>
@@ -155,10 +163,16 @@ export const EntryListHeader: FC<{
           : "h-top-header-with-border-b",
         view === FeedViewType.All &&
           "border-b border-transparent data-[scrolled-beyond-threshold=true]:border-b-border",
+        isMobileViewport && !isPreview && "h-auto min-h-[56px] shrink-0 px-2 py-1.5",
       )}
+      data-testid="entry-list-header"
       data-scrolled-beyond-threshold={isScrolledBeyondThresholdValue}
     >
-      <div className={"flex w-full justify-between"}>
+      <div
+        className={
+          "flex w-full justify-between max-lg:flex-wrap max-lg:items-center max-lg:gap-y-1"
+        }
+      >
         {isPreview ? <PreviewHeaderInfoWrapper>{titleInfo}</PreviewHeaderInfoWrapper> : titleInfo}
         {!isPreview && (
           <div
@@ -167,6 +181,7 @@ export const EntryListHeader: FC<{
               !headerTitle && "opacity-0 [&_*]:!pointer-events-none",
 
               "translate-x-[6px]",
+              "max-lg:ml-auto max-lg:max-w-full max-lg:shrink-0 max-lg:translate-x-0 max-lg:flex-wrap max-lg:gap-0 max-lg:self-center",
             )}
             onClick={stopPropagation}
           >
@@ -186,9 +201,22 @@ export const EntryListHeader: FC<{
 
             {!isWideMode && aiTimelineEnabled && renderAiTimelineButton()}
 
-            <AppendTaildingDivider>
-              {view === FeedViewType.Pictures && <SwitchToMasonryButton />}
-            </AppendTaildingDivider>
+            {isMobileViewport && (
+              <ActionButton
+                data-testid="mobile-local-search-trigger"
+                aria-label={commonT("words.search")}
+                tooltip={commonT("words.search")}
+                onClick={runCmdFn(COMMAND_ID.global.quickSearch, [])}
+              >
+                <i className="i-mgc-search-cute-re" />
+              </ActionButton>
+            )}
+
+            {view === FeedViewType.Pictures && !isMobileViewport && (
+              <AppendTaildingDivider>
+                <SwitchToMasonryButton />
+              </AppendTaildingDivider>
+            )}
 
             {isOnline &&
               (feed?.ownerUserId === user?.id &&

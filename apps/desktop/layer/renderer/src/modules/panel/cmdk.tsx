@@ -1,5 +1,6 @@
 import { EmptyIcon } from "@follow/components/icons/empty.jsx"
 import { Logo } from "@follow/components/icons/logo.jsx"
+import { ActionButton } from "@follow/components/ui/button/index.js"
 import { ScrollArea } from "@follow/components/ui/scroll-area/index.js"
 import {
   Select,
@@ -38,6 +39,7 @@ import styles from "./cmdk.module.css"
 const SearchCmdKContext = React.createContext<Promise<SearchInstance> | null>(null)
 export const SearchCmdK: React.FC = () => {
   const { t } = useTranslation()
+  const { t: commonT } = useTranslation("common")
   const open = useAppSearchOpen()
 
   const [searchInstance, setSearchInstance] = React.useState(() =>
@@ -129,6 +131,8 @@ export const SearchCmdK: React.FC = () => {
     <SearchCmdKContext value={searchInstance}>
       <Command.Dialog
         ref={dialogRef}
+        data-testid="local-search-dialog"
+        label={commonT("words.search")}
         shouldFilter={false}
         open={open}
         onKeyDown={handleKeyDownToFocusInput}
@@ -140,14 +144,27 @@ export const SearchCmdK: React.FC = () => {
           "absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2",
         )}
       >
-        <Command.Input
-          className="w-full shrink-0 border-b border-border bg-transparent p-4 px-5 text-lg leading-4"
-          ref={inputRef}
-          placeholder={searchActions.getCurrentKeyword() || t("search.placeholder")}
-          onValueChange={handleSearch}
-          onCompositionStart={onCompositionStart}
-          onCompositionEnd={onCompositionEnd}
-        />
+        <div className="flex shrink-0 items-center border-b border-border">
+          <Command.Input
+            data-testid="local-search-input"
+            aria-label={commonT("words.search")}
+            className="min-w-0 flex-1 bg-transparent p-4 px-5 text-lg leading-4"
+            ref={inputRef}
+            placeholder={searchActions.getCurrentKeyword() || t("search.placeholder")}
+            onValueChange={handleSearch}
+            onCompositionStart={onCompositionStart}
+            onCompositionEnd={onCompositionEnd}
+          />
+          <ActionButton
+            data-testid="mobile-local-search-close"
+            aria-label={commonT("words.close")}
+            tooltip={commonT("words.close")}
+            className="mr-1 shrink-0 lg:hidden"
+            onClick={() => setAppSearchOpen(false)}
+          >
+            <i className="i-mgc-close-cute-re" />
+          </ActionButton>
+        </div>
         <div className={cn(styles["status-bar"], isPending && styles["loading"])} />
 
         <div className="flex flex-1 flex-col overflow-y-hidden">
@@ -215,7 +232,7 @@ export const SearchCmdK: React.FC = () => {
             </Command.List>
           </ScrollArea.ScrollArea>
 
-          <div className="relative flex items-center justify-between px-3 py-2">
+          <div className="relative flex items-center justify-between px-3 py-2 max-lg:flex-wrap max-lg:gap-2">
             <SearchOptions />
             <SearchResultCount count={totalCount} />
           </div>
@@ -261,6 +278,7 @@ const SearchItem = memo(function Item({
       key={`${id}-${feedId}-${entryId}`}
       value={`${id}-${feedId}-${entryId}`}
       onSelect={() => {
+        setAppSearchOpen(false)
         navigateEntry({
           feedId: feedId!,
           entryId,
@@ -268,10 +286,10 @@ const SearchItem = memo(function Item({
         })
       }}
     >
-      <div className="relative flex w-full items-center justify-between px-1 py-2">
+      <div className="relative flex w-full items-center justify-between px-1 py-2 max-lg:min-h-[44px]">
         {feed && <FeedIcon className="mr-2 size-5 shrink-0 rounded" target={feed} />}
         <span className="block min-w-0 flex-1 shrink-0 truncate">{title}</span>
-        <span className="block min-w-0 shrink-0 grow-0 text-xs font-medium text-zinc-800 opacity-60 dark:text-slate-200/80">
+        <span className="block min-w-0 shrink-0 grow-0 text-xs font-medium text-zinc-800 opacity-60 dark:text-slate-200/80 max-lg:max-w-[40%] max-lg:truncate">
           {subtitle}
         </span>
       </div>
@@ -359,7 +377,7 @@ const SearchOptions: Component = memo(({ children }) => {
         }}
         value={`${searchType}`}
       >
-        <SelectTrigger size="sm">
+        <SelectTrigger size="sm" data-testid="local-search-type" className="max-lg:min-h-[44px]">
           <SelectValue />
         </SelectTrigger>
         <SelectContent position="item-aligned">

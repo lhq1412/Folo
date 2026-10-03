@@ -66,6 +66,7 @@ const DropdownMenuSubTrigger = ({
       "flex cursor-menu select-none items-center rounded-[5px] px-2.5 py-1.5 outline-none focus:bg-accent/30 data-[state=open]:bg-accent/30",
       inset && "pl-8",
       "center gap-2",
+      "max-lg:min-h-[44px]",
       className,
       props.disabled && "cursor-not-allowed opacity-30",
     )}
@@ -95,6 +96,7 @@ const DropdownMenuSubContent = ({
         "z-[61]",
         "relative",
         "dark:border dark:border-border/50",
+        "max-lg:max-h-[var(--radix-dropdown-menu-content-available-height)] max-lg:overflow-y-auto",
         className,
       )}
       style={styles.content}
@@ -131,6 +133,7 @@ const DropdownMenuContent = ({
           "text-body motion-scale-in-75 motion-duration-150 lg:animate-none",
           "relative",
           "dark:border dark:border-border/50",
+          "max-lg:max-h-[var(--radix-dropdown-menu-content-available-height)] max-lg:overflow-y-auto",
           className,
         )}
         style={styles.content}
@@ -172,7 +175,7 @@ const DropdownMenuItem = ({
     className={cn(
       "relative flex cursor-menu select-none items-center rounded-[5px] px-2.5 py-1 outline-none focus:bg-accent/30 data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
       "focus-within:outline-transparent data-[highlighted]:text-accent data-[highlighted]:bg-mix-background-accent-9-1",
-      "h-[28px]",
+      "h-[28px] max-lg:min-h-[44px]",
       inset && "pl-8",
       className,
     )}
@@ -221,7 +224,7 @@ const DropdownMenuCheckboxItem = ({
     className={cn(
       "relative flex cursor-checkbox select-none items-center rounded-[5px] px-8 py-1.5 outline-none focus:bg-accent/30 data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
       "focus-within:outline-transparent",
-      "h-[28px]",
+      "h-[28px] max-lg:min-h-[44px]",
       className,
     )}
     checked={checked}

@@ -322,13 +322,15 @@ function FeedCategoryImpl({
               type="button"
               onClick={handleCollapseButtonClick}
               data-state={open ? "open" : "close"}
+              aria-label={`${t("command.subscription.toggle_folder_collapse.title", { ns: "shortcuts" })}: ${folderName}`}
+              aria-expanded={open}
               className={cn(
-                "flex h-8 items-center data-[state=open]:[&_.i-mgc-right-cute-fi]:rotate-90",
+                "flex h-8 items-center max-lg:min-h-[44px] max-lg:min-w-[44px] max-lg:justify-center data-[state=open]:[&_.i-mgc-right-cute-fi]:rotate-90",
               )}
               tabIndex={-1}
             >
               {isCategoryIsWaiting ? (
-                <LoadingCircle size="small" className="mr-2 size-[16px]" />
+                <LoadingCircle size="small" className="mr-2 size-[16px] max-lg:mr-0" />
               ) : isCategoryEditing ? (
                 <MotionButtonBase
                   onClick={() => {
@@ -339,7 +341,7 @@ function FeedCategoryImpl({
                   <i className="i-mgc-close-cute-re text-red" />
                 </MotionButtonBase>
               ) : (
-                <div className="center mr-2 size-[16px]">
+                <div className="center mr-2 size-[16px] max-lg:mr-0">
                   <i className="i-mgc-right-cute-fi transition-transform" />
                 </div>
               )}

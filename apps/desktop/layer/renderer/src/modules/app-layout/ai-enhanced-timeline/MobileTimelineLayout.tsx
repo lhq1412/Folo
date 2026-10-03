@@ -1,6 +1,7 @@
 import { Spring } from "@follow/components/constants/spring.js"
 import { AnimatePresence } from "motion/react"
 import { memo, useEffect, useState } from "react"
+import { useTranslation } from "react-i18next"
 
 import { m } from "~/components/common/Motion"
 import { useNavigateEntry } from "~/hooks/biz/useNavigateEntry"
@@ -22,6 +23,7 @@ export const MobileTimelineLayout = memo(function MobileTimelineLayout({
   hasSelectedEntry,
 }: MobileTimelineLayoutProps) {
   const [mobileView, setMobileView] = useState<MobileView>("list")
+  const { t: commonT } = useTranslation("common")
   const navigate = useNavigateEntry()
   const { view } = useRouteParamsSelector((state) => ({
     view: state.view,
@@ -68,9 +70,9 @@ export const MobileTimelineLayout = memo(function MobileTimelineLayout({
                   <div className="flex items-center">
                     <button
                       type="button"
-                      className="no-drag-region mx-2 inline-flex shrink-0 items-center rounded-full bg-transparent p-2 text-text-secondary hover:bg-fill/50 hover:text-text focus-visible:bg-fill/60"
+                      className="no-drag-region mx-2 inline-flex size-[44px] shrink-0 items-center justify-center rounded-full bg-transparent p-2 text-text-secondary hover:bg-fill/50 hover:text-text focus-visible:bg-fill/60"
                       onClick={() => navigate({ entryId: null, view })}
-                      aria-label="Back to list"
+                      aria-label={commonT("words.back")}
                     >
                       <i className="i-mingcute-left-line size-5" />
                     </button>

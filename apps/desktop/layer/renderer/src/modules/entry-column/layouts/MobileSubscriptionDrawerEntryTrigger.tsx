@@ -37,7 +37,7 @@ export const MobileSubscriptionDrawerEntryTrigger: FC<{
       aria-label={label}
       aria-expanded={false}
       aria-controls={MOBILE_SUBSCRIPTION_DRAWER_ID}
-      className="no-drag-region pointer-events-auto inline-flex size-8 shrink-0 items-center justify-center rounded-md text-xl duration-200 hover:bg-theme-item-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border focus-visible:ring-offset-2"
+      className="no-drag-region pointer-events-auto inline-flex size-8 shrink-0 items-center justify-center rounded-md text-xl duration-200 hover:bg-theme-item-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border focus-visible:ring-offset-2 max-lg:min-h-[44px] max-lg:min-w-[44px]"
     >
       <i className="i-mgc-layout-leftbar-open-cute-re pointer-events-none text-text-secondary" />
     </button>

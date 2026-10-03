@@ -8,6 +8,8 @@ import { MOBILE_PWA_PROD_AUTH_FILE } from "./support/pwa-production-mobile-fixtu
 const env = resolveDesktopE2EEnv()
 const prodWebServerURL = resolveProdWebServerURL()
 const useProdWebServer = process.env.FOLO_E2E_USE_PROD_WEB_SERVER === "1"
+const mobileLayoutTestMatch =
+  /tests\/web\/mobile-(?:layout|discover-layout|touch-targets|local-search)\.spec\.ts/
 
 const prodPwaUse = {
   baseURL: prodWebServerURL,
@@ -87,7 +89,7 @@ export default defineConfig({
     },
     {
       name: "web-mobile-layout",
-      testMatch: /tests\/web\/mobile-layout\.spec\.ts/,
+      testMatch: mobileLayoutTestMatch,
       use: {
         ...devices["Pixel 7"],
         channel: "chromium",
@@ -99,7 +101,7 @@ export default defineConfig({
     },
     {
       name: "web-mobile-layout-webkit",
-      testMatch: /tests\/web\/mobile-layout\.spec\.ts/,
+      testMatch: mobileLayoutTestMatch,
       use: {
         ...devices["iPhone 14"],
         browserName: "webkit",
@@ -112,7 +114,7 @@ export default defineConfig({
       testMatch: /tests\/web\/.*\.spec\.ts/,
       testIgnore: [
         /tests\/web\/mobile-drawer-a11y\.spec\.ts/,
-        /tests\/web\/mobile-layout\.spec\.ts/,
+        mobileLayoutTestMatch,
         /tests\/web\/pwa-production.*\.spec\.ts/,
         /tests\/web\/pwa-production.*\.setup\.ts/,
         /tests\/web\/pwa-update-coordination\.spec\.ts/,
