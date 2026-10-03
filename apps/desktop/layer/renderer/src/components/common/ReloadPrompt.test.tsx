@@ -271,9 +271,12 @@ describe("ReloadPrompt cross-tab updates", () => {
     const second = await renderReloadPrompt()
     roots.push(first.root, second.root)
 
-    await flushAsyncUpdates()
+    await act(async () => {
+      await vi.waitFor(() => {
+        expect(getPwaStatusCalls().length).toBeGreaterThanOrEqual(2)
+      })
+    })
 
-    expect(getPwaStatusCalls().length).toBeGreaterThanOrEqual(2)
     expect(localStorage.getItem("folo-pwa-active-update-id-v1")).toBe(sharedUpdateId)
   })
 
