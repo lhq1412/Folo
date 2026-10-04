@@ -1,3 +1,4 @@
+import { useIsLoggedIn } from "@follow/store/user/hooks"
 import type { TransactionQuery } from "@follow-app/client-sdk"
 import { useMutation } from "@tanstack/react-query"
 import { toast } from "sonner"
@@ -39,6 +40,7 @@ export const wallet = {
 
 export const useWallet = () =>
   useAuthQuery(wallet.get(), {
+    enabled: useIsLoggedIn(),
     refetchOnMount: true,
   })
 

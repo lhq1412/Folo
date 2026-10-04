@@ -2,6 +2,7 @@ import { FeedViewType, getViewList } from "@follow/constants"
 import { useQuery } from "@tanstack/react-query"
 import { useCallback, useMemo, useRef } from "react"
 
+import { useIsLoggedIn } from "../user/hooks"
 import {
   getAllFeedSubscriptionIdsSelector,
   getAllFeedSubscriptionSelector,
@@ -38,10 +39,12 @@ import { subscriptionSyncService, useSubscriptionStore } from "./store"
 import { getDefaultCategory } from "./utils"
 
 export const usePrefetchSubscription = (view?: FeedViewType) => {
+  const isLoggedIn = useIsLoggedIn()
   return useQuery({
     queryKey: ["subscription", view],
     queryFn: () => subscriptionSyncService.fetch(view),
     staleTime: 30 * 1000 * 60, // 30 minutes
+    enabled: isLoggedIn,
   })
 }
 

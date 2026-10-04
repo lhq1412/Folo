@@ -20,7 +20,10 @@ export const usePrefetchUnread = () => {
 }
 
 export const useSyncUnreadWhenUnMatch = (entryIds: string[]) => {
+  const isLoggedIn = useIsLoggedIn()
   useEffect(() => {
+    if (!isLoggedIn) return
+
     const entries = entryIds.map((id) => getEntry(id))
     const unreadCountMap = entries.reduce(
       (acc, entry) => {
@@ -42,7 +45,7 @@ export const useSyncUnreadWhenUnMatch = (entryIds: string[]) => {
     if (hasUnreadMismatch) {
       unreadSyncService.resetFromRemote()
     }
-  }, [entryIds.toString()])
+  }, [entryIds.toString(), isLoggedIn])
 }
 
 export const useAutoMarkAsRead = (entryId: string, enabled: boolean) => {

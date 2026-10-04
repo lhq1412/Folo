@@ -1,5 +1,6 @@
 import { getView } from "@follow/constants"
 import { unreadSyncService } from "@follow/store/unread/store"
+import { useIsLoggedIn } from "@follow/store/user/hooks"
 import type { Range } from "@tanstack/react-virtual"
 import { useMemo } from "react"
 import { useEventCallback } from "usehooks-ts"
@@ -13,13 +14,14 @@ export const useEntryMarkReadHandler = (
   entriesIds: string[],
   { pauseScrollMarkRead = false }: { pauseScrollMarkRead?: boolean } = {},
 ) => {
+  const isLoggedIn = useIsLoggedIn()
   const renderAsRead = useGeneralSettingKey("renderMarkUnread")
   const scrollMarkUnread = useGeneralSettingKey("scrollMarkUnread")
   const feedView = useRouteParamsSelector((params) => params.view)
 
   const handleRangeMarkRead = useEventCallback(
     ({ startIndex, endIndex }: Range, enabled?: boolean) => {
-      if (!enabled) return
+      if (!enabled || !isLoggedIn) return
       const idSlice = entriesIds?.slice(startIndex, endIndex)
       if (!idSlice?.length) return
 

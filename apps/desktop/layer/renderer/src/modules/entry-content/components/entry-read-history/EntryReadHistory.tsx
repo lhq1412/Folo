@@ -28,7 +28,7 @@ const getLimit = (width: number): number => {
 
 export const EntryReadHistory: Component<{ entryId: string }> = ({ entryId }) => {
   const me = useWhoami()
-  const data = useEntryReadHistory(entryId)
+  const data = useEntryReadHistory(entryId, 20, !!me)
   const entryHistory = data?.entryReadHistories
 
   const totalCount = data?.total || 0

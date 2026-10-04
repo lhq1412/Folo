@@ -92,9 +92,19 @@ followClient.addRequestInterceptor(async (ctx) => {
   return ctx
 })
 
-followClient.addResponseInterceptor(async ({ response }) => {
+followClient.addResponseInterceptor(async ({ response, url, options }) => {
   if (response.status === 401) {
     const authSessionToken = isElectronRuntime() ? getAuthSessionToken() : null
+    const pathname = new URL(url, env.VITE_API_URL).pathname.replace(/\/$/, "")
+    const method = options.method?.toUpperCase() ?? "GET"
+    const isPublicFeedRead =
+      (pathname === "/entries" && (method === "GET" || method === "POST")) ||
+      (pathname === "/entries/stream" && method === "POST") ||
+      (pathname === "/feeds" && method === "GET")
+
+    // Public feed failures must not interrupt anonymous browsing with a login modal.
+    if (isPublicFeedRead && !whoami() && !authSessionToken) return response
+
     const shouldPromptForLogin =
       response.url.includes("/better-auth/get-session") || (!whoami() && !authSessionToken)
 

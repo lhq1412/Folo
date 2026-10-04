@@ -280,6 +280,7 @@
   "feed_item.error_since": "エラー発生時刻",
   "feed_item.not_publicly_visible": "プロフィールページに公開されていません",
   "feed_item.onboarding_feed": "これはオンボーディングフィードです",
+  "guest_feed_list.description": "おすすめの情報源を閲覧できます。ログインすると自分のフィードを購読できます。",
   "login.agree_to": " 続行することで、あなたは私たちの",
   "login.back": "戻る",
   "login.confirm_password.label": "パスワードの確認",

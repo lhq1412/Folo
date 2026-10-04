@@ -280,6 +280,7 @@
   "feed_item.error_since": "Error since",
   "feed_item.not_publicly_visible": "Not publicly visible on your profile page",
   "feed_item.onboarding_feed": "This is an onboarding feed",
+  "guest_feed_list.description": "Browse a few recommended sources. Sign in to follow your own feeds.",
   "login.agree_to": "By continuing, you agree to our",
   "login.back": "Back",
   "login.confirm_password.label": "Confirm Password",

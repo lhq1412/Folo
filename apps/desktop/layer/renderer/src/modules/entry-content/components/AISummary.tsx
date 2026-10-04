@@ -1,5 +1,6 @@
 import { useEntry } from "@follow/store/entry/hooks"
 import { usePrefetchSummary } from "@follow/store/summary/hooks"
+import { useIsLoggedIn } from "@follow/store/user/hooks"
 import { useTranslation } from "react-i18next"
 
 import { useShowAISummary } from "~/atoms/ai-summary"
@@ -18,6 +19,7 @@ export function AISummary({ entryId }: { entryId: string }) {
   const summarySetting = useEntry(entryId, (state) => state.settings?.summary)
   const isInReadabilitySuccess = useEntryIsInReadabilitySuccess(entryId)
   const showAISummary = useShowAISummary(summarySetting)
+  const isLoggedIn = useIsLoggedIn()
 
   const actionLanguage = useActionLanguage()
 
@@ -29,7 +31,7 @@ export function AISummary({ entryId }: { entryId: string }) {
     actionLanguage,
     entryId,
     target: isInReadabilitySuccess ? "readabilityContent" : "content",
-    enabled: showAISummary,
+    enabled: showAISummary && isLoggedIn,
   })
 
   // Show Ask AI button when:
@@ -43,7 +45,7 @@ export function AISummary({ entryId }: { entryId: string }) {
     setAIPanelVisibility(true)
   }
 
-  if (!showAISummary) {
+  if (!showAISummary || !isLoggedIn) {
     return null
   }
 

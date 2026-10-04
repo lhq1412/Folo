@@ -14,6 +14,7 @@ import type { UseEntriesReturn } from "@follow/store/entry/types"
 import { fallbackReturn } from "@follow/store/entry/utils"
 import { useFolderFeedsByFeedId } from "@follow/store/subscription/hooks"
 import { unreadSyncService } from "@follow/store/unread/store"
+import { useIsLoggedIn } from "@follow/store/user/hooks"
 import { nextFrame } from "@follow/utils"
 import { isBizId } from "@follow/utils/utils"
 import { useMutation } from "@tanstack/react-query"
@@ -23,6 +24,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import { useGeneralSettingKey } from "~/atoms/settings/general"
 import { ROUTE_FEED_PENDING } from "~/constants/app"
+import { GUEST_FEED_IDS } from "~/constants/guest-feeds"
 import { useFeature } from "~/hooks/biz/useFeature"
 import { useRouteParams } from "~/hooks/biz/useRouteParams"
 
@@ -33,6 +35,7 @@ import { useIsPreviewFeed } from "./useIsPreviewFeed"
 const useRemoteEntries = (): UseEntriesReturn => {
   const { feedId, view, inboxId, listId } = useRouteParams()
   const isPreview = useIsPreviewFeed()
+  const isLoggedIn = useIsLoggedIn()
 
   const unreadOnly = useGeneralSettingKey("unreadOnly")
   const hidePrivateSubscriptionsInTimeline = useGeneralSettingKey(
@@ -52,12 +55,20 @@ const useRemoteEntries = (): UseEntriesReturn => {
       inboxId,
       listId,
       view,
-      ...(unreadOnly === true && !isPreview && { unreadOnly: true }),
-      ...(hidePrivateSubscriptionsInTimeline === true && {
-        hidePrivateSubscriptionsInTimeline: true,
-      }),
+      ...(!isLoggedIn &&
+        (!feedId || feedId === ROUTE_FEED_PENDING) &&
+        !inboxId &&
+        !listId &&
+        (view === FeedViewType.Articles || view === FeedViewType.All) && {
+          feedIdList: GUEST_FEED_IDS,
+        }),
+      ...(isLoggedIn && unreadOnly === true && !isPreview && { unreadOnly: true }),
+      ...(isLoggedIn &&
+        hidePrivateSubscriptionsInTimeline === true && {
+          hidePrivateSubscriptionsInTimeline: true,
+        }),
       ...(view === FeedViewType.All && { limit: 40 }),
-      ...(aiTimelineEnabled && aiEnabled && { aiSort: true }),
+      ...(isLoggedIn && aiTimelineEnabled && aiEnabled && { aiSort: true }),
     }
 
     if (feedId && listId && isBizId(feedId)) {
@@ -72,6 +83,7 @@ const useRemoteEntries = (): UseEntriesReturn => {
     listId,
     unreadOnly,
     isPreview,
+    isLoggedIn,
     view,
     hidePrivateSubscriptionsInTimeline,
     aiTimelineEnabled,
@@ -90,7 +102,15 @@ const useRemoteEntries = (): UseEntriesReturn => {
   const fetchNextPage = useCallback(async () => void query.fetchNextPage(), [query])
 
   if (!query.data || query.isLoading) {
-    return fallbackReturn
+    if (isLoggedIn) return fallbackReturn
+    return {
+      ...fallbackReturn,
+      refetch,
+      isLoading: query.isLoading,
+      isFetching: query.isFetching,
+      error: query.isError ? query.error : null,
+      queryKey: query.queryKey,
+    }
   }
   return {
     entriesIds: query.entriesIds,
@@ -246,6 +266,7 @@ const useLocalEntries = (): UseEntriesReturn => {
 
 export const useEntriesByView = ({ onReset }: { onReset?: () => void }) => {
   const { view, listId } = useRouteParams()
+  const isLoggedIn = useIsLoggedIn()
 
   const remoteQuery = useRemoteEntries()
   const localQuery = useLocalEntries()
@@ -310,10 +331,10 @@ export const useEntriesByView = ({ onReset }: { onReset?: () => void }) => {
 
     type: remoteQuery.isReady ? ("remote" as const) : ("local" as const),
     refetch: useCallback(() => {
-      const promise = query.refetch()
-      unreadSyncService.resetFromRemote()
+      const promise = isLoggedIn ? query.refetch() : remoteQuery.refetch()
+      if (isLoggedIn) void unreadSyncService.resetFromRemote()
       return promise
-    }, [query]),
+    }, [query, remoteQuery, isLoggedIn]),
     entriesIds: entryIds,
     groupedCounts,
     isFetching: remoteQuery.isFetching,

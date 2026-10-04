@@ -5,6 +5,7 @@ import { ActionButton } from "@follow/components/ui/button/action-button.js"
 import { FeedViewType } from "@follow/constants"
 import { useEntry } from "@follow/store/entry/hooks"
 import { unreadSyncService } from "@follow/store/unread/store"
+import { useIsLoggedIn } from "@follow/store/user/hooks"
 import { cn } from "@follow/utils/utils"
 import { AnimatePresence } from "motion/react"
 import type { FC, MouseEvent, PropsWithChildren, TouchEvent } from "react"
@@ -47,6 +48,7 @@ export const EntryItemWrapper: FC<
   })
   const actionConfigs = useEntryActions({ entryId, view })
   const isMobile = useMobile()
+  const isLoggedIn = useIsLoggedIn()
 
   const isActive = useRouteParamsSelector(({ entryId }) => entryId === entry?.id, [entry?.id])
   const when = useGlobalFocusableScopeSelector(FocusablePresets.isTimeline)
@@ -59,6 +61,7 @@ export const EntryItemWrapper: FC<
   const [showAction, setShowAction] = useState(false)
   const handleMouseEnterMarkRead = useDebounceCallback(
     () => {
+      if (!isLoggedIn) return
       if (!hoverMarkUnread) return
       if (!document.hasFocus()) return
       if (asRead) return
@@ -133,7 +136,7 @@ export const EntryItemWrapper: FC<
 
       if (!shouldNavigate) return
       if (!entry?.feedId) return
-      if (!asRead) {
+      if (isLoggedIn && !asRead) {
         unreadSyncService.markEntryAsRead(entry.id)
       }
 
@@ -142,7 +145,7 @@ export const EntryItemWrapper: FC<
         entryId: entry.id,
       })
     },
-    [asRead, entry?.id, entry?.feedId, navigate, view],
+    [asRead, entry?.id, entry?.feedId, isLoggedIn, navigate, view],
   )
   const { contextMenuProps, isContextMenuOpen, openContextMenuAt } = useEntryContextMenu({
     entryId,

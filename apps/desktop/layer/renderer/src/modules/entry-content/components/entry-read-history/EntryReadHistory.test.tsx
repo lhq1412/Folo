@@ -107,7 +107,20 @@ describe("EntryReadHistory", () => {
     })
     ;({ container, root } = await renderComponent(<EntryReadHistory entryId="entry-1" />))
 
+    expect(useEntryReadHistoryMock).toHaveBeenCalledWith("entry-1", 20, true)
     expect(container?.querySelector('[data-testid="avatar-group"]')).not.toBeNull()
     expect(container?.querySelector('[data-testid="entry-user"]')?.textContent).toBe("reader-1")
+  })
+
+  test("disables read history requests for guests even when cached readers exist", async () => {
+    useWhoamiMock.mockReturnValue(null)
+    useEntryReadHistoryMock.mockReturnValue({
+      entryReadHistories: { userIds: ["reader-1"] },
+      total: 1,
+    })
+    ;({ container, root } = await renderComponent(<EntryReadHistory entryId="entry-1" />))
+
+    expect(useEntryReadHistoryMock).toHaveBeenCalledWith("entry-1", 20, false)
+    expect(container?.innerHTML).toBe("")
   })
 })

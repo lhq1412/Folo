@@ -13,7 +13,7 @@ export type AppTipDismissChangeDetail = {
 
 export const useNewUserGuideState = () => {
   const user = useWhoami()
-  const { data: remoteSettings, isLoading } = useAuthQuery(settings.get(), {})
+  const { data: remoteSettings, isLoading } = useAuthQuery(settings.get(), { enabled: !!user })
 
   const dismissKey = useMemo(() => (user ? `${APP_TIP_STORAGE_PREFIX}:${user.id}` : null), [user])
   const [hasDismissed, setHasDismissed] = useState(() => readDismissed(dismissKey))

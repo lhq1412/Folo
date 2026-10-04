@@ -280,6 +280,7 @@
   "feed_item.error_since": "源失效：",
   "feed_item.not_publicly_visible": "在个人页面上隐藏",
   "feed_item.onboarding_feed": "这是一个入门引导订阅源",
+  "guest_feed_list.description": "先浏览几个固定推荐来源，登录后可订阅自己的信息源。",
   "login.agree_to": "继续即表示您同意我们的",
   "login.back": "返回",
   "login.confirm_password.label": "确认密码",
