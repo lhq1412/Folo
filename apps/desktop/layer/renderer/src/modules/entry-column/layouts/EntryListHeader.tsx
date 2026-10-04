@@ -226,10 +226,13 @@ export const EntryListHeader: FC<{
                   tooltip="Refresh"
                   onClick={() => {
                     onBeforeRefresh?.()
-                    void refreshFeed()
+                    void refreshFeed().then(() => {
+                      const currentRoute = getRouteParams()
+                      if (currentRoute.feedId === feedId && currentRoute.view === view) refetch()
+                    })
                   }}
                 >
-                  <RotatingRefreshIcon isRefreshing={isPending} />
+                  <RotatingRefreshIcon isRefreshing={isPending || isRefreshing} />
                 </ActionButton>
               ) : (
                 <ActionButton

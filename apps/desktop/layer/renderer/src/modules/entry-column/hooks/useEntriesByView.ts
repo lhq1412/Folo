@@ -22,6 +22,7 @@ import { debounce } from "es-toolkit/compat"
 import { useAtomValue } from "jotai"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
+import { getGuestReadEntryIds } from "~/atoms/guest-read"
 import { useGeneralSettingKey } from "~/atoms/settings/general"
 import { ROUTE_FEED_PENDING } from "~/constants/app"
 import { GUEST_FEED_IDS } from "~/constants/guest-feeds"
@@ -31,8 +32,9 @@ import { useRouteParams } from "~/hooks/biz/useRouteParams"
 import { aiTimelineEnabledAtom } from "../atoms/ai-timeline"
 import { getVisibleLocalEntryIds } from "./filter-local-entry-ids"
 import { useIsPreviewFeed } from "./useIsPreviewFeed"
+import { useReadEntriesSnapshot } from "./useReadEntriesSnapshot"
 
-const useRemoteEntries = (): UseEntriesReturn => {
+const useRemoteEntries = (onRefetchSuccess: () => void): UseEntriesReturn => {
   const { feedId, view, inboxId, listId } = useRouteParams()
   const isPreview = useIsPreviewFeed()
   const isLoggedIn = useIsLoggedIn()
@@ -90,6 +92,15 @@ const useRemoteEntries = (): UseEntriesReturn => {
     aiEnabled,
   ])
   const query = useEntriesQuery(entriesOptions)
+  const entriesIds = useMemo(() => {
+    if (!query.isError) return query.entriesIds
+    // A failed refresh must keep the last successful page, including public feeds without subscriptions.
+    return (
+      query.data?.pages
+        .flatMap((page) => page.data?.map((entry) => entry.entries.id))
+        .filter((id) => typeof id === "string") ?? []
+    )
+  }, [query.data, query.entriesIds, query.isError])
 
   const [fetchedTime, setFetchedTime] = useState<number>()
   useEffect(() => {
@@ -98,11 +109,13 @@ const useRemoteEntries = (): UseEntriesReturn => {
     }
   }, [query.isFetching])
 
-  const refetch = useCallback(async () => void query.refetch(), [query])
+  const refetch = useCallback(async () => {
+    const result = await query.refetch()
+    if (result.isSuccess && !result.isFetching) onRefetchSuccess()
+  }, [query, onRefetchSuccess])
   const fetchNextPage = useCallback(async () => void query.fetchNextPage(), [query])
 
   if (!query.data || query.isLoading) {
-    if (isLoggedIn) return fallbackReturn
     return {
       ...fallbackReturn,
       refetch,
@@ -113,14 +126,14 @@ const useRemoteEntries = (): UseEntriesReturn => {
     }
   }
   return {
-    entriesIds: query.entriesIds,
+    entriesIds,
     hasNext: query.hasNextPage,
     refetch,
 
     fetchNextPage,
     isLoading: query.isFetching,
     isRefetching: query.isRefetching,
-    isReady: query.isSuccess,
+    isReady: query.isSuccess || !!query.data,
     isFetchingNextPage: query.isFetchingNextPage,
     isFetching: query.isFetching,
     hasNextPage: query.hasNextPage,
@@ -134,9 +147,11 @@ function getEntryIdsFromMultiplePlace(...entryIds: Array<string[] | undefined | 
   return entryIds.find((ids) => ids?.length) ?? []
 }
 
-const useLocalEntries = (): UseEntriesReturn => {
+const useLocalEntries = (
+  unreadOnly: boolean,
+  excludedReadIds: ReadonlySet<string>,
+): UseEntriesReturn => {
   const { feedId, view, inboxId, listId, isCollection } = useRouteParams()
-  const unreadOnly = useGeneralSettingKey("unreadOnly")
   const hidePrivateSubscriptionsInTimeline = useGeneralSettingKey(
     "hidePrivateSubscriptionsInTimeline",
   )
@@ -194,6 +209,7 @@ const useLocalEntries = (): UseEntriesReturn => {
           sourceIds: ids,
           entries: state.data,
           stickyVisibleIds,
+          excludedReadIds,
           unreadOnly,
         })
       },
@@ -204,6 +220,7 @@ const useLocalEntries = (): UseEntriesReturn => {
         entryIdsByInboxId,
         entryIdsByListId,
         entryIdsByView,
+        excludedReadIds,
         isCollection,
         localQueryKey,
         showEntriesByView,
@@ -265,11 +282,37 @@ const useLocalEntries = (): UseEntriesReturn => {
 }
 
 export const useEntriesByView = ({ onReset }: { onReset?: () => void }) => {
-  const { view, listId } = useRouteParams()
+  const { feedId, view, inboxId, listId, isCollection } = useRouteParams()
   const isLoggedIn = useIsLoggedIn()
+  const unreadOnly = useGeneralSettingKey("unreadOnly")
+  const isPreview = useIsPreviewFeed()
+  const filterRead = isLoggedIn && unreadOnly && !isPreview && !isCollection
+  const timelineKey = JSON.stringify([
+    feedId,
+    view,
+    inboxId,
+    listId,
+    isCollection,
+    isLoggedIn,
+    filterRead,
+  ])
+  const getReadEntryIds = useCallback((): ReadonlySet<string> => {
+    if (!isLoggedIn) return getGuestReadEntryIds()
+    if (!filterRead) return new Set<string>()
+    return new Set(
+      Object.values(entryActions.getFlattenMapEntries())
+        .filter((entry) => entry.read)
+        .map((entry) => entry.id),
+    )
+  }, [filterRead, isLoggedIn])
+  const { readEntryIds, refreshReadEntryIds } = useReadEntriesSnapshot(timelineKey, getReadEntryIds)
 
-  const remoteQuery = useRemoteEntries()
-  const localQuery = useLocalEntries()
+  const localQuery = useLocalEntries(filterRead, readEntryIds)
+  const { refetch: refetchLocalEntries } = localQuery
+  const onRefetchSuccess = useCallback(() => {
+    if (refreshReadEntryIds()) void refetchLocalEntries()
+  }, [refreshReadEntryIds, refetchLocalEntries])
+  const remoteQuery = useRemoteEntries(onRefetchSuccess)
 
   useFetchEntryContentByStream(remoteQuery.entriesIds)
 
@@ -281,7 +324,16 @@ export const useEntriesByView = ({ onReset }: { onReset?: () => void }) => {
   // We need to add an interface to incrementally update the data based on the version hash.
 
   const query = remoteQuery.isReady ? remoteQuery : localQuery
-  const entryIds: string[] = query.entriesIds
+  const entryIds = useMemo(
+    () => query.entriesIds.filter((id) => !readEntryIds.has(id)),
+    [query.entriesIds, readEntryIds],
+  )
+
+  useEffect(() => {
+    if (query.entriesIds.length && !entryIds.length && query.hasNextPage && !query.isFetching) {
+      void query.fetchNextPage()
+    }
+  }, [entryIds.length, query])
 
   const isFetchingFirstPage = remoteQuery.isFetching && !remoteQuery.isFetchingNextPage
 
@@ -331,10 +383,10 @@ export const useEntriesByView = ({ onReset }: { onReset?: () => void }) => {
 
     type: remoteQuery.isReady ? ("remote" as const) : ("local" as const),
     refetch: useCallback(() => {
-      const promise = isLoggedIn ? query.refetch() : remoteQuery.refetch()
+      const promise = remoteQuery.refetch()
       if (isLoggedIn) void unreadSyncService.resetFromRemote()
       return promise
-    }, [query, remoteQuery, isLoggedIn]),
+    }, [remoteQuery, isLoggedIn]),
     entriesIds: entryIds,
     groupedCounts,
     isFetching: remoteQuery.isFetching,

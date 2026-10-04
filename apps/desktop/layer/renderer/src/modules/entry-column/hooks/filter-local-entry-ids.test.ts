@@ -44,4 +44,34 @@ describe("getVisibleLocalEntryIds", () => {
       }),
     ).toEqual(["entry-2"])
   })
+
+  it("removes previously visible read entries using the refreshed read snapshot", () => {
+    expect(
+      getVisibleLocalEntryIds({
+        sourceIds: ["entry-1", "entry-2", "entry-3"],
+        entries: {
+          "entry-1": { id: "entry-1", read: true },
+          "entry-2": { id: "entry-2", read: true },
+          "entry-3": { id: "entry-3", read: false },
+        },
+        stickyVisibleIds: new Set(["entry-1", "entry-2", "entry-3"]),
+        excludedReadIds: new Set(["entry-1"]),
+        unreadOnly: true,
+      }),
+    ).toEqual(["entry-2", "entry-3"])
+  })
+
+  it("uses the guest snapshot independently of account read flags", () => {
+    expect(
+      getVisibleLocalEntryIds({
+        sourceIds: ["entry-1", "entry-2"],
+        entries: {
+          "entry-1": { id: "entry-1", read: false },
+          "entry-2": { id: "entry-2", read: true },
+        },
+        excludedReadIds: new Set(["entry-1"]),
+        unreadOnly: false,
+      }),
+    ).toEqual(["entry-2"])
+  })
 })

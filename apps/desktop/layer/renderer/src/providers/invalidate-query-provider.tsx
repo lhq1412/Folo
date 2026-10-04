@@ -95,8 +95,10 @@ const InvalidateQueryProviderWebApp = () => {
     currentTimeRef.current = now
     currentVisibilityRef.current = pageVisibility
     if (pageVisibility) {
-      appLog("Window switch to visible, invalidate all queries")
-      queryClient.invalidateQueries()
+      appLog("Window switch to visible, invalidate all queries except entries")
+      queryClient.invalidateQueries({
+        predicate: (query) => query.queryKey[0] !== "entries",
+      })
     }
   }, [pageVisibility, queryClient])
   return null

@@ -61,13 +61,17 @@ const createEntries = (guest: boolean) =>
     },
   }))
 
-const installTimelineApi = async (page: Page, guest: boolean) => {
+const installTimelineApi = async (page: Page, guest: boolean, pageSize = 60) => {
   const apiHost = new URL(env.apiURL).host
   const entries = createEntries(guest)
   const entriesRequests: EntriesRequest[] = []
   const accountRequests: string[] = []
   const readRequests: ReadRequest[] = []
+  const serverReadIds = new Set(entries.filter((item) => item.read).map((item) => item.entries.id))
   let sessionRequests = 0
+  let rejectEntries = false
+  let failedEntriesRequests = 0
+  let heldNextEntries: Promise<void> | null = null
 
   if (!guest) await installMobileDrawerMockAuth(page, env.apiURL)
 
@@ -97,16 +101,30 @@ const installTimelineApi = async (page: Page, guest: boolean) => {
       if (path.endsWith("/entries") && request.method() === "POST") {
         const body = request.postDataJSON() as EntriesRequest
         entriesRequests.push(body)
+        const heldResponse = heldNextEntries
+        heldNextEntries = null
+        if (heldResponse) await heldResponse
+        if (rejectEntries) {
+          await route.fulfill({
+            status: 503,
+            json: { code: 503, message: "Temporary timeline failure" },
+          })
+          failedEntriesRequests++
+          return
+        }
         await route.fulfill({
           json: {
             code: 0,
-            data: body.publishedAfter
-              ? []
-              : entries.filter(
-                  (item) =>
-                    (!body.feedId || body.feedId === item.feeds.id) &&
-                    (!body.feedIdList || body.feedIdList.includes(item.feeds.id)),
-                ),
+            data: entries
+              .filter(
+                (item) =>
+                  (!body.feedId || body.feedId === item.feeds.id) &&
+                  (!body.feedIdList || body.feedIdList.includes(item.feeds.id)) &&
+                  (!body.publishedAfter || item.entries.publishedAt < body.publishedAfter) &&
+                  (body.read !== false || !serverReadIds.has(item.entries.id)),
+              )
+              .slice(0, pageSize)
+              .map((item) => ({ ...item, read: serverReadIds.has(item.entries.id) })),
           },
         })
         return
@@ -119,11 +137,17 @@ const installTimelineApi = async (page: Page, guest: boolean) => {
 
       if (!guest && path.endsWith("/reads")) {
         if (request.method() === "POST") {
-          readRequests.push(request.postDataJSON() as ReadRequest)
+          const body = request.postDataJSON() as ReadRequest
+          readRequests.push(body)
+          for (const id of body.entryIds) serverReadIds.add(id)
           await route.fulfill({ json: { code: 0, data: null } })
         } else {
+          const unreadCounts = Object.fromEntries(feedIds.map((id) => [id, 0]))
+          for (const item of entries) {
+            if (!serverReadIds.has(item.entries.id)) unreadCounts[item.feeds.id]++
+          }
           await route.fulfill({
-            json: { code: 0, data: Object.fromEntries(feedIds.map((id) => [id, 20])) },
+            json: { code: 0, data: unreadCounts },
           })
         }
         return
@@ -137,34 +161,58 @@ const installTimelineApi = async (page: Page, guest: boolean) => {
     },
   )
 
-  return { entriesRequests, accountRequests, readRequests, sessionRequests: () => sessionRequests }
+  return {
+    entriesRequests,
+    accountRequests,
+    readRequests,
+    sessionRequests: () => sessionRequests,
+    rejectEntries: (value: boolean) => {
+      rejectEntries = value
+    },
+    failedEntriesRequests: () => failedEntriesRequests,
+    holdNextEntries: () => {
+      let release!: () => void
+      heldNextEntries = new Promise<void>((resolve) => {
+        release = resolve
+      })
+      return release
+    },
+  }
 }
 
-const installSettings = async (page: Page, scrollMarkUnread: boolean) => {
-  await page.addInitScript((enabled) => {
-    localStorage.setItem(
-      "follow:general",
-      JSON.stringify({
-        language: "en",
-        scrollMarkUnread: enabled,
-        renderMarkUnread: false,
-        hoverMarkUnread: false,
-        unreadOnly: false,
-        groupByDate: false,
-        dimRead: false,
-      }),
-    )
-    localStorage.setItem("follow:ai-onboarding:dismissed:e2e-mobile-drawer-user", "1")
-  }, scrollMarkUnread)
+const installSettings = async (page: Page, scrollMarkUnread: boolean, unreadOnly = false) => {
+  await page.addInitScript(
+    ({ scrollMarkUnread, unreadOnly }) => {
+      localStorage.setItem(
+        "follow:general",
+        JSON.stringify({
+          language: "en",
+          scrollMarkUnread,
+          renderMarkUnread: false,
+          hoverMarkUnread: false,
+          unreadOnly,
+          groupByDate: false,
+          dimRead: false,
+        }),
+      )
+      localStorage.setItem("follow:ai-onboarding:dismissed:e2e-mobile-drawer-user", "1")
+    },
+    { scrollMarkUnread, unreadOnly },
+  )
 }
 
 const entryRow = (page: Page, index: number) => page.locator(`[data-entry-id="${entryIds[index]}"]`)
 const scrollViewport = (row: Locator) =>
-  row.locator("xpath=ancestor::*[@data-radix-scroll-area-viewport][1]")
+  row
+    .page()
+    .locator("[data-radix-scroll-area-viewport]")
+    .filter({
+      has: row.page().locator("[data-entry-id]"),
+    })
 
-const waitForTimeline = async (page: Page) => {
-  await expect(entryRow(page, 0)).toBeVisible({ timeout: 60_000 })
-  await expect(entryRow(page, 1)).toBeVisible()
+const waitForTimeline = async (page: Page, firstIndex = 0) => {
+  await expect(entryRow(page, firstIndex)).toBeVisible({ timeout: 60_000 })
+  await expect(entryRow(page, firstIndex + 1)).toBeVisible()
   await expect(page.getByTestId("entry-list-header")).toBeVisible()
   // The product pauses scroll marking for one second after a fetch completes.
   await page.waitForTimeout(1200)
@@ -231,7 +279,7 @@ const hasUnreadMarker = (row: Locator) =>
 
 test.describe("timeline read state", () => {
   for (const view of ["Articles", "All"]) {
-    test(`marks only fully exited guest ${view} rows and retains local read visuals after refetch at 390px`, async ({
+    test(`keeps newly read guest ${view} rows until a successful refresh at 390px`, async ({
       page,
     }) => {
       await page.setViewportSize({ width: 390, height: 844 })
@@ -265,12 +313,18 @@ test.describe("timeline read state", () => {
       expect(await titleColor(second)).toBe(unreadColor)
 
       const requestCount = api.entriesRequests.length
-      await page.getByRole("button", { name: "Refetch", exact: true }).click()
-      await expect.poll(() => api.entriesRequests.length).toBeGreaterThan(requestCount)
-      await waitForTimeline(page)
-      await expect(first).toHaveAttribute("data-read", "true")
+      const releaseRefresh = api.holdNextEntries()
+      try {
+        await page.getByRole("button", { name: "Refetch", exact: true }).click()
+        await expect.poll(() => api.entriesRequests.length).toBeGreaterThan(requestCount)
+        await expect(first).toBeVisible()
+        await expect(first).toHaveAttribute("data-read", "true")
+      } finally {
+        releaseRefresh()
+      }
+      await expect(first).toHaveCount(0)
+      await waitForTimeline(page, 1)
       await expect(second).toHaveAttribute("data-read", "false")
-      expect(await hasUnreadMarker(first)).toBe(false)
       expect(await hasUnreadMarker(second)).toBe(true)
       expect(api.sessionRequests()).toBeGreaterThan(0)
       expect(api.entriesRequests.every((request) => request.read !== false)).toBe(true)
@@ -279,7 +333,7 @@ test.describe("timeline read state", () => {
     })
   }
 
-  test("preserves server read states and posts only newly exited authenticated rows at 1280px", async ({
+  test("preserves server read states and keeps Show All rows after refresh at 1280px", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1280, height: 900 })
@@ -311,7 +365,83 @@ test.describe("timeline read state", () => {
     expect(await hasUnreadMarker(unread)).toBe(false)
     expect(await hasUnreadMarker(nextUnread)).toBe(true)
     expect(await titleColor(unread)).toBe(await titleColor(alreadyRead))
+
+    const requestCount = api.entriesRequests.length
+    await page.getByRole("button", { name: "Refetch", exact: true }).click()
+    await expect.poll(() => api.entriesRequests.length).toBeGreaterThan(requestCount)
+    await waitForTimeline(page)
+    await expect(unread).toHaveAttribute("data-read", "true")
+    await expect(alreadyRead).toBeVisible()
+    expect(api.entriesRequests.every((request) => request.read !== false)).toBe(true)
   })
+
+  for (const guest of [true, false]) {
+    test(`keeps read ${guest ? "guest" : "unread-only authenticated"} rows through pagination and failed refresh`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: guest ? 390 : 1280, height: 844 })
+      await installSettings(page, true, !guest)
+      const api = await installTimelineApi(page, guest, 40)
+      await openWebApp(page, env, timelineRoute)
+      const firstIndex = guest ? 0 : 1
+      await waitForTimeline(page, firstIndex)
+      if (!guest) await expect(entryRow(page, 0)).toHaveCount(0)
+      const first = entryRow(page, firstIndex)
+      const viewport = scrollViewport(first)
+      await expect(first).toHaveAttribute("data-read", "false")
+      await scrollRowPastTop(page, first, -1)
+      await expect(first).toHaveAttribute("data-read", "true")
+      await returnToTop(page, viewport)
+      await expect(first).toBeVisible()
+      if (!guest) {
+        await expect
+          .poll(() => api.readRequests.flatMap((request) => request.entryIds))
+          .toContain(entryIds[firstIndex])
+      }
+
+      const bounds = await viewport.boundingBox()
+      if (!bounds) throw new Error("Timeline viewport has no bounds")
+      await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2)
+      await page.mouse.wheel(0, 10_000)
+      await expect
+        .poll(() => api.entriesRequests.some((request) => request.publishedAfter))
+        .toBe(true)
+      await expect(entryRow(page, firstIndex + 40)).toBeVisible()
+      await returnToTop(page, viewport)
+      await expect(first).toBeVisible()
+      await expect(first).toHaveAttribute("data-read", "true")
+      expect(await hasUnreadMarker(first)).toBe(false)
+
+      api.rejectEntries(true)
+      const requestCount = api.entriesRequests.length
+      const releaseRefresh = api.holdNextEntries()
+      try {
+        await page.getByRole("button", { name: "Refetch", exact: true }).click()
+        await expect.poll(() => api.entriesRequests.length).toBeGreaterThan(requestCount)
+        await expect(first).toBeVisible()
+        await expect(first).toHaveAttribute("data-read", "true")
+      } finally {
+        releaseRefresh()
+      }
+      await expect.poll(api.failedEntriesRequests).toBe(4)
+      await expect(
+        page.getByRole("button", { name: "Refetch", exact: true }).locator("i"),
+      ).toHaveCSS("transform", "matrix(1, 0, 0, 1, 0, 0)")
+      await expect(first).toBeVisible()
+      await expect(first).toHaveAttribute("data-read", "true")
+
+      api.rejectEntries(false)
+      await page.getByRole("button", { name: "Refetch", exact: true }).click()
+      await expect(first).toHaveCount(0)
+      await expect(page.locator('[data-entry-id][data-read="false"]').first()).toBeVisible()
+      if (guest) {
+        expect(api.accountRequests).toEqual([])
+        await expect(page.getByTestId("login-modal")).toBeHidden()
+      } else {
+        expect(api.entriesRequests.every((request) => request.read === false)).toBe(true)
+      }
+    })
+  }
 
   test("marks guest rows scrolled out immediately after a refresh once the grace period ends", async ({
     page,

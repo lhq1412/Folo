@@ -3,9 +3,10 @@ import { atom } from "jotai"
 import { createAtomHooks } from "~/lib/jotai"
 
 // Guest read state belongs to this page session and never changes account data.
-const [, , , , , setGuestReadEntryIds, useGuestReadEntryIdsSelector] = createAtomHooks(
-  atom<ReadonlySet<string>>(new Set<string>()),
-)
+const [, , , , getGuestReadEntryIds, setGuestReadEntryIds, useGuestReadEntryIdsSelector] =
+  createAtomHooks(atom<ReadonlySet<string>>(new Set<string>()))
+
+export { getGuestReadEntryIds }
 
 export const useGuestEntryIsRead = (entryId?: string) =>
   useGuestReadEntryIdsSelector((ids) => !!entryId && ids.has(entryId), [entryId])

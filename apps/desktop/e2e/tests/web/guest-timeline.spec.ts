@@ -197,16 +197,19 @@ test.describe("public guest timeline", () => {
     await expect(page).toHaveURL(new RegExp(`${guestEntryIds[0]}$`))
     await page.getByRole("button", { name: "Back", exact: true }).tap()
     await expect(page.getByTestId("entry-list-header")).toBeVisible()
+    for (const id of guestEntryIds.slice(0, 2)) {
+      await expect(page.locator(`[data-entry-id="${id}"]`)).toHaveAttribute("data-read", "true")
+    }
 
     await openMobileSubscriptionDrawerFromEntry(page)
     const drawer = page.locator("#mobile-subscription-drawer")
     await expect(drawer.locator("button[data-feed-id]")).toHaveCount(3)
-    await drawer.locator(`button[data-feed-id="${guestFeedIds[1]}"]`).tap()
-    await expect(page).toHaveURL(new RegExp(`/articles/${guestFeedIds[1]}/pending$`))
+    await drawer.locator(`button[data-feed-id="${guestFeedIds[2]}"]`).tap()
+    await expect(page).toHaveURL(new RegExp(`/articles/${guestFeedIds[2]}/pending$`))
     await expect(drawer).toHaveAttribute("aria-hidden", "true")
-    await expect(page.locator(`[data-entry-id="${guestEntryIds[1]}"]`)).toBeVisible()
+    await expect(page.locator(`[data-entry-id="${guestEntryIds[2]}"]`)).toBeVisible()
     await expect(page.locator(`[data-entry-id="${guestEntryIds[0]}"]`)).toHaveCount(0)
-    expect(api.requests.some((request) => request.feedId === guestFeedIds[1])).toBe(true)
+    expect(api.requests.some((request) => request.feedId === guestFeedIds[2])).toBe(true)
     expect(api.accountRequests).toEqual([])
   })
 
