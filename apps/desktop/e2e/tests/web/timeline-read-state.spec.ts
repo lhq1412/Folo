@@ -98,6 +98,22 @@ const installTimelineApi = async (page: Page, guest: boolean, pageSize = 60) => 
         return
       }
 
+      if (path.endsWith("/entries") && request.method() === "GET") {
+        const item = entries.find((item) => item.entries.id === url.searchParams.get("id"))
+        if (item) {
+          await route.fulfill({
+            json: {
+              code: 0,
+              data: {
+                feeds: item.feeds,
+                entries: { ...item.entries, content: "<p>A readable timeline article.</p>" },
+              },
+            },
+          })
+          return
+        }
+      }
+
       if (path.endsWith("/entries") && request.method() === "POST") {
         const body = request.postDataJSON() as EntriesRequest
         entriesRequests.push(body)
@@ -373,6 +389,58 @@ test.describe("timeline read state", () => {
     await expect(unread).toHaveAttribute("data-read", "true")
     await expect(alreadyRead).toBeVisible()
     expect(api.entriesRequests.every((request) => request.read !== false)).toBe(true)
+  })
+
+  test("keeps an article read while enabling unread-only until an explicit successful refresh", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 900 })
+    await installSettings(page, false)
+    const api = await installTimelineApi(page, false)
+    await openWebApp(page, env, "/timeline/all/all/pending")
+    await waitForTimeline(page)
+    const target = entryRow(page, 1)
+    await expect(target).toHaveAttribute("data-read", "false")
+
+    const unreadResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        /\/entries\/?$/.test(new URL(response.url()).pathname) &&
+        (response.request().postDataJSON() as EntriesRequest).read === false,
+    )
+    const releaseUnreadResponse = api.holdNextEntries()
+    try {
+      await page.getByRole("button", { name: "Show unread Only", exact: true }).click()
+      await expect
+        .poll(() => api.entriesRequests.some((request) => request.read === false))
+        .toBe(true)
+      await expect(entryRow(page, 0)).toHaveCount(0)
+      await expect(target).toBeVisible()
+      await target.locator("a").first().click()
+      await expect(page).toHaveURL(new RegExp(`${entryIds[1]}$`))
+      await expect(page.getByTestId("entry-render")).toContainText(/Timeline read article 2/i)
+      await expect(target).toHaveAttribute("data-read", "true")
+      await expect
+        .poll(() => api.readRequests.flatMap((request) => request.entryIds))
+        .toContain(entryIds[1])
+    } finally {
+      releaseUnreadResponse()
+    }
+    const response = await unreadResponse
+    await response.finished()
+    const responseBody = (await response.json()) as { data: { entries: { id: string } }[] }
+    expect(responseBody.data.map((item) => item.entries.id)).not.toContain(entryIds[1])
+
+    await page.getByRole("button", { name: "All", exact: true }).click()
+    await expect(page).toHaveURL(/\/timeline\/all\/all\/pending$/)
+    await expect(target).toBeVisible()
+    await expect(target).toHaveAttribute("data-read", "true")
+    expect(await hasUnreadMarker(target)).toBe(false)
+    await expect(entryRow(page, 2)).toHaveAttribute("data-read", "false")
+
+    await page.getByRole("button", { name: "Refetch", exact: true }).click()
+    await expect(target).toHaveCount(0)
+    await expect(page.locator('[data-entry-id][data-read="false"]').first()).toBeVisible()
   })
 
   for (const guest of [true, false]) {

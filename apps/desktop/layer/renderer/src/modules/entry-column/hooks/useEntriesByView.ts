@@ -12,7 +12,9 @@ import {
 import { entryActions, entrySyncServices, useEntryStore } from "@follow/store/entry/store"
 import type { UseEntriesReturn } from "@follow/store/entry/types"
 import { fallbackReturn } from "@follow/store/entry/utils"
+import { getSubscriptionByEntryId } from "@follow/store/subscription/getter"
 import { useFolderFeedsByFeedId } from "@follow/store/subscription/hooks"
+import { useSubscriptionStore } from "@follow/store/subscription/store"
 import { unreadSyncService } from "@follow/store/unread/store"
 import { useIsLoggedIn } from "@follow/store/user/hooks"
 import { nextFrame } from "@follow/utils"
@@ -31,6 +33,7 @@ import { useRouteParams } from "~/hooks/biz/useRouteParams"
 
 import { aiTimelineEnabledAtom } from "../atoms/ai-timeline"
 import { getVisibleLocalEntryIds } from "./filter-local-entry-ids"
+import { retainVisibleReadEntryIds } from "./retain-visible-read-entry-ids"
 import { useIsPreviewFeed } from "./useIsPreviewFeed"
 import { useReadEntriesSnapshot } from "./useReadEntriesSnapshot"
 
@@ -150,7 +153,7 @@ function getEntryIdsFromMultiplePlace(...entryIds: Array<string[] | undefined | 
 const useLocalEntries = (
   unreadOnly: boolean,
   excludedReadIds: ReadonlySet<string>,
-): UseEntriesReturn => {
+): UseEntriesReturn & { allEntriesIds: string[] } => {
   const { feedId, view, inboxId, listId, isCollection } = useRouteParams()
   const hidePrivateSubscriptionsInTimeline = useGeneralSettingKey(
     "hidePrivateSubscriptionsInTimeline",
@@ -267,6 +270,7 @@ const useLocalEntries = (
   }, [view, feedId])
 
   return {
+    allEntriesIds: allEntries,
     entriesIds: entries,
     hasNext,
     refetch,
@@ -285,6 +289,10 @@ export const useEntriesByView = ({ onReset }: { onReset?: () => void }) => {
   const { feedId, view, inboxId, listId, isCollection } = useRouteParams()
   const isLoggedIn = useIsLoggedIn()
   const unreadOnly = useGeneralSettingKey("unreadOnly")
+  const subscriptions = useSubscriptionStore((state) => state.data)
+  const hidePrivateSubscriptionsInTimeline = useGeneralSettingKey(
+    "hidePrivateSubscriptionsInTimeline",
+  )
   const isPreview = useIsPreviewFeed()
   const filterRead = isLoggedIn && unreadOnly && !isPreview && !isCollection
   const timelineKey = JSON.stringify([
@@ -308,7 +316,7 @@ export const useEntriesByView = ({ onReset }: { onReset?: () => void }) => {
   const { readEntryIds, refreshReadEntryIds } = useReadEntriesSnapshot(timelineKey, getReadEntryIds)
 
   const localQuery = useLocalEntries(filterRead, readEntryIds)
-  const { refetch: refetchLocalEntries } = localQuery
+  const { refetch: refetchLocalEntries, allEntriesIds } = localQuery
   const onRefetchSuccess = useCallback(() => {
     if (refreshReadEntryIds()) void refetchLocalEntries()
   }, [refreshReadEntryIds, refetchLocalEntries])
@@ -324,10 +332,62 @@ export const useEntriesByView = ({ onReset }: { onReset?: () => void }) => {
   // We need to add an interface to incrementally update the data based on the version hash.
 
   const query = remoteQuery.isReady ? remoteQuery : localQuery
-  const entryIds = useMemo(
-    () => query.entriesIds.filter((id) => !readEntryIds.has(id)),
-    [query.entriesIds, readEntryIds],
-  )
+  const remoteQueryKey = JSON.stringify(remoteQuery.queryKey)
+  const visibleEntriesRef = useRef<{
+    readEntryIds: ReadonlySet<string>
+    queryKey: string | undefined
+    ids: string[]
+  } | null>(null)
+  const entryIds = useMemo(() => {
+    const sourceIds = query.entriesIds.filter((id) => !readEntryIds.has(id))
+    const previous = visibleEntriesRef.current
+    if (
+      !filterRead ||
+      previous?.readEntryIds !== readEntryIds ||
+      previous.queryKey !== remoteQueryKey
+    ) {
+      return sourceIds
+    }
+
+    const entries = entryActions.getFlattenMapEntries()
+    const localVisibleIds = new Set(allEntriesIds)
+    const isAggregateTimeline = (!feedId || feedId === ROUTE_FEED_PENDING) && !inboxId && !listId
+    const hiddenSubscriptions = new Set(
+      Object.values(subscriptions).filter(
+        (subscription) =>
+          subscription.hideFromTimeline ||
+          (hidePrivateSubscriptionsInTimeline && subscription.isPrivate),
+      ),
+    )
+    const retainIds = new Set(
+      previous.ids.filter((id) => {
+        if (!entries[id]?.read || readEntryIds.has(id) || !localVisibleIds.has(id)) return false
+        if (isAggregateTimeline) {
+          const subscription = getSubscriptionByEntryId(id)
+          if (subscription && hiddenSubscriptions.has(subscription)) {
+            return false
+          }
+        }
+        return true
+      }),
+    )
+    return retainVisibleReadEntryIds({ sourceIds, previousIds: previous.ids, retainIds })
+  }, [
+    query.entriesIds,
+    readEntryIds,
+    filterRead,
+    remoteQueryKey,
+    allEntriesIds,
+    feedId,
+    inboxId,
+    listId,
+    hidePrivateSubscriptionsInTimeline,
+    subscriptions,
+  ])
+
+  useEffect(() => {
+    visibleEntriesRef.current = { readEntryIds, queryKey: remoteQueryKey, ids: entryIds }
+  }, [readEntryIds, remoteQueryKey, entryIds])
 
   useEffect(() => {
     if (query.entriesIds.length && !entryIds.length && query.hasNextPage && !query.isFetching) {
