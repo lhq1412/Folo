@@ -13,6 +13,7 @@ import { useAuthQuery } from "~/hooks/common"
 import { followClient } from "~/lib/api-client"
 import { defineQuery } from "~/lib/defineQuery"
 import { getFetchErrorInfo } from "~/lib/error-parser"
+import { closeSubscriptionSidebar } from "~/lib/mobile-sidebar"
 
 import { TOTPForm, TwoFactorForm } from "./two-factor"
 
@@ -60,6 +61,7 @@ export const usePresentUserProfileModal = (variant: Variant = "dialog") => {
       const finalVariant = overrideVariant || variant
 
       if (isMobile()) {
+        closeSubscriptionSidebar()
         const useDataFetcher = () => {
           const user = usePrefetchUser(userId)
           const subscriptions = useUserSubscriptionsQuery(user?.data?.id)

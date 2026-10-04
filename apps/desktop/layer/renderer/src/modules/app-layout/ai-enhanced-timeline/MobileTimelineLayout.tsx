@@ -1,4 +1,5 @@
 import { Spring } from "@follow/components/constants/spring.js"
+import { cn } from "@follow/utils/utils"
 import { AnimatePresence } from "motion/react"
 import { memo, useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
@@ -42,20 +43,21 @@ export const MobileTimelineLayout = memo(function MobileTimelineLayout({
       <AppLayoutGridContainerProvider>
         <div className="relative flex size-full flex-col">
           {/* List View */}
-          <AnimatePresence mode="wait">
-            {mobileView === "list" && (
-              <m.div
-                key="mobile-list"
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                transition={Spring.smooth(0.2)}
-                className="absolute inset-0 flex size-full flex-col overflow-hidden"
-              >
-                <EntryColumn />
-              </m.div>
+          <m.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: mobileView === "list" ? 1 : 0, x: mobileView === "list" ? 0 : -20 }}
+            transition={Spring.smooth(0.2)}
+            className={cn(
+              "absolute inset-0 flex size-full flex-col overflow-hidden",
+              mobileView !== "list" && "invisible",
             )}
+            aria-hidden={mobileView !== "list"}
+            inert={mobileView !== "list"}
+          >
+            <EntryColumn />
+          </m.div>
 
+          <AnimatePresence>
             {/* Entry View */}
             {mobileView === "entry" && entryId && (
               <m.div

@@ -26,6 +26,7 @@ import { ReloadPrompt, resetPwaUpdateSessionForTests } from "./ReloadPrompt"
 
 const mockUseRegisterSW = vi.fn()
 const mockUpdateServiceWorker = vi.fn(async () => {})
+const mockSetNeedRefresh = vi.fn()
 
 const WAITING_SW_URL = "https://example.com/sw.js"
 const WAITING_SW_BUILD_REVISION = "mock-build-revision-v2"
@@ -54,6 +55,7 @@ const mockRegistration = {
 
 vi.mock("virtual:pwa-register/react", () => ({
   useRegisterSW: (options: {
+    onNeedReload?: () => void
     onRegisterError?: (error: Error) => void
     onRegisteredSW?: (swUrl: string, registration: ServiceWorkerRegistration | undefined) => void
   }) => mockUseRegisterSW(options),
@@ -130,6 +132,7 @@ const flushAsyncUpdates = async () => {
       await new Promise((resolve) => {
         setTimeout(resolve, 0)
       })
+      await updateCoordinator.refreshPwaUpdateState()
     })
   }
 }
@@ -175,21 +178,22 @@ describe("ReloadPrompt cross-tab updates", () => {
     mockUseRegisterSW.mockImplementation((options) => {
       options?.onRegisteredSW?.(WAITING_SW_URL, mockRegistration)
       return {
-        needRefresh: [false],
+        needRefresh: [false, mockSetNeedRefresh],
         updateServiceWorker: mockUpdateServiceWorker,
       }
     })
   })
 
   afterEach(async () => {
-    resetPwaUpdateSessionForTests()
-    await resetPwaUpdateCoordinatorForTests()
-
     for (const root of roots.splice(0)) {
       await act(async () => {
         root.unmount()
       })
     }
+
+    await flushAsyncUpdates()
+    resetPwaUpdateSessionForTests()
+    await resetPwaUpdateCoordinatorForTests()
 
     reloadSpy?.mockRestore()
     reloadSpy = null
@@ -202,7 +206,7 @@ describe("ReloadPrompt cross-tab updates", () => {
     mockUseRegisterSW.mockImplementation((options) => {
       options?.onRegisteredSW?.(WAITING_SW_URL, mockRegistration)
       return {
-        needRefresh: [true],
+        needRefresh: [true, mockSetNeedRefresh],
         updateServiceWorker: mockUpdateServiceWorker,
       }
     })
@@ -214,7 +218,7 @@ describe("ReloadPrompt cross-tab updates", () => {
     mockUseRegisterSW.mockImplementation((options) => {
       options?.onRegisteredSW?.(WAITING_SW_URL, mockRegistration)
       return {
-        needRefresh: [false],
+        needRefresh: [false, mockSetNeedRefresh],
         updateServiceWorker: mockUpdateServiceWorker,
       }
     })
@@ -262,7 +266,7 @@ describe("ReloadPrompt cross-tab updates", () => {
     mockUseRegisterSW.mockImplementation((options) => {
       options?.onRegisteredSW?.(WAITING_SW_URL, mockRegistration)
       return {
-        needRefresh: [true],
+        needRefresh: [true, mockSetNeedRefresh],
         updateServiceWorker: mockUpdateServiceWorker,
       }
     })
@@ -284,7 +288,7 @@ describe("ReloadPrompt cross-tab updates", () => {
     mockUseRegisterSW.mockImplementation((options) => {
       options?.onRegisteredSW?.(WAITING_SW_URL, mockRegistration)
       return {
-        needRefresh: [true],
+        needRefresh: [true, mockSetNeedRefresh],
         updateServiceWorker: mockUpdateServiceWorker,
       }
     })
@@ -310,7 +314,7 @@ describe("ReloadPrompt cross-tab updates", () => {
     mockUseRegisterSW.mockImplementation((options) => {
       options?.onRegisteredSW?.(WAITING_SW_URL, mockRegistration)
       return {
-        needRefresh: [true],
+        needRefresh: [true, mockSetNeedRefresh],
         updateServiceWorker: mockUpdateServiceWorker,
       }
     })
@@ -362,13 +366,122 @@ describe("ReloadPrompt cross-tab updates", () => {
     chatInput.remove()
   })
 
+  it("keeps a draft when the service worker requests a reload and allows a later retry", async () => {
+    const { root } = await renderReloadPrompt()
+    roots.push(root)
+    await updateCoordinator.hydratePwaUpdateState()
+    const onNeedReload = mockUseRegisterSW.mock.calls.at(-1)![0].onNeedReload
+    expect(onNeedReload).toBeTypeOf("function")
+
+    const searchInput = document.createElement("input")
+    searchInput.setAttribute("cmdk-input", "")
+    searchInput.value = "unfinished search"
+    document.body.append(searchInput)
+    const confirmMock = vi.fn().mockReturnValue(false)
+    vi.stubGlobal("confirm", confirmMock)
+
+    try {
+      await act(async () => {
+        onNeedReload()
+      })
+
+      expect(mockSetNeedRefresh).toHaveBeenCalledWith(false)
+      expect(reloadSpy).not.toHaveBeenCalled()
+      expect(confirmMock).not.toHaveBeenCalled()
+      const status = getPwaStatusCalls().at(-1)
+      expect(status).toMatchObject({ status: "ready", reloadOnly: true })
+
+      await status?.finishUpdate?.()
+      expect(confirmMock).toHaveBeenCalledTimes(1)
+      expect(reloadSpy).not.toHaveBeenCalled()
+
+      confirmMock.mockReturnValue(true)
+      await status?.finishUpdate?.()
+      expect(reloadSpy).toHaveBeenCalledTimes(1)
+      expect(mockUpdateServiceWorker).not.toHaveBeenCalled()
+    } finally {
+      searchInput.remove()
+    }
+  })
+
+  it.each(["worker-first", "completion-first"])(
+    "reloads only once when worker and cross-tab completion arrive %s",
+    async (order) => {
+      const { root } = await renderReloadPrompt()
+      roots.push(root)
+      await updateCoordinator.hydratePwaUpdateState()
+      const onNeedReload = mockUseRegisterSW.mock.calls.at(-1)![0].onNeedReload
+      const receiver = new MockBroadcastChannel("folo-pwa-update-v1")
+      const completeUpdate = async () => {
+        receiver.postMessage({
+          type: "update-completed",
+          updateId: sharedUpdateId,
+          nonce: "worker-completion-nonce",
+          completedAt: Date.now(),
+        })
+        await flushAsyncUpdates()
+        await vi.waitFor(() =>
+          expect(hasProcessedLifecycleCompletion("worker-completion-nonce")).toBe(true),
+        )
+      }
+
+      if (order === "worker-first") {
+        await act(async () => onNeedReload())
+        await completeUpdate()
+      } else {
+        await completeUpdate()
+        await act(async () => onNeedReload())
+      }
+
+      expect(reloadSpy).toHaveBeenCalledTimes(1)
+      receiver.close()
+    },
+  )
+
+  it("does not confirm an initiating tab's draft a second time when its worker takes control", async () => {
+    mockUseRegisterSW.mockImplementation((options) => {
+      options?.onRegisteredSW?.(WAITING_SW_URL, mockRegistration)
+      return {
+        needRefresh: [true, mockSetNeedRefresh],
+        updateServiceWorker: mockUpdateServiceWorker,
+      }
+    })
+    const { root } = await renderReloadPrompt()
+    roots.push(root)
+    await flushAsyncUpdates()
+    await vi.waitFor(() => expect(getPwaStatusCalls().at(-1)?.status).toBe("ready"))
+    const status = getPwaStatusCalls().at(-1)
+    expect(status?.status).toBe("ready")
+    const onNeedReload = mockUseRegisterSW.mock.calls.at(-1)![0].onNeedReload
+    const searchInput = document.createElement("input")
+    searchInput.setAttribute("cmdk-input", "")
+    searchInput.value = "unfinished search"
+    document.body.append(searchInput)
+    const confirmMock = vi.fn().mockReturnValue(true)
+    vi.stubGlobal("confirm", confirmMock)
+
+    try {
+      await status?.finishUpdate?.()
+      expect(mockUpdateServiceWorker).toHaveBeenCalledTimes(1)
+      expect(confirmMock).toHaveBeenCalledTimes(1)
+      await act(async () => {
+        onNeedReload()
+        onNeedReload()
+      })
+      expect(confirmMock).toHaveBeenCalledTimes(1)
+      expect(reloadSpy).toHaveBeenCalledTimes(1)
+    } finally {
+      searchInput.remove()
+    }
+  })
+
   it("syncs deferred state from localStorage when BroadcastChannel is unavailable", async () => {
     vi.stubGlobal("BroadcastChannel", undefined)
 
     mockUseRegisterSW.mockImplementation((options) => {
       options?.onRegisteredSW?.(WAITING_SW_URL, mockRegistration)
       return {
-        needRefresh: [true],
+        needRefresh: [true, mockSetNeedRefresh],
         updateServiceWorker: mockUpdateServiceWorker,
       }
     })
@@ -394,7 +507,7 @@ describe("ReloadPrompt cross-tab updates", () => {
     mockUseRegisterSW.mockImplementation((options) => {
       options?.onRegisteredSW?.(WAITING_SW_URL, mockRegistration)
       return {
-        needRefresh: [true],
+        needRefresh: [true, mockSetNeedRefresh],
         updateServiceWorker: mockUpdateServiceWorker,
       }
     })
@@ -423,7 +536,7 @@ describe("ReloadPrompt cross-tab updates", () => {
     mockUseRegisterSW.mockImplementation((options) => {
       options?.onRegisteredSW?.(WAITING_SW_URL, mockRegistration)
       return {
-        needRefresh: [true],
+        needRefresh: [true, mockSetNeedRefresh],
         updateServiceWorker: mockUpdateServiceWorker,
       }
     })
@@ -471,7 +584,7 @@ describe("ReloadPrompt cross-tab updates", () => {
     mockUseRegisterSW.mockImplementation((options) => {
       options?.onRegisteredSW?.(WAITING_SW_URL, mockRegistration)
       return {
-        needRefresh: [true],
+        needRefresh: [true, mockSetNeedRefresh],
         updateServiceWorker: mockUpdateServiceWorker,
       }
     })
@@ -540,7 +653,7 @@ describe("ReloadPrompt cross-tab updates", () => {
     mockUseRegisterSW.mockImplementation((options) => {
       options?.onRegisteredSW?.(WAITING_SW_URL, mockRegistration)
       return {
-        needRefresh: [true],
+        needRefresh: [true, mockSetNeedRefresh],
         updateServiceWorker: mockUpdateServiceWorker,
       }
     })
@@ -585,7 +698,7 @@ describe("ReloadPrompt cross-tab updates", () => {
     mockUseRegisterSW.mockImplementation((options) => {
       options?.onRegisteredSW?.(WAITING_SW_URL, mockRegistration)
       return {
-        needRefresh: [true],
+        needRefresh: [true, mockSetNeedRefresh],
         updateServiceWorker: mockUpdateServiceWorker,
       }
     })
@@ -636,7 +749,7 @@ describe("ReloadPrompt cross-tab updates", () => {
     mockUseRegisterSW.mockImplementation((options) => {
       options?.onRegisteredSW?.(WAITING_SW_URL, mockRegistration)
       return {
-        needRefresh: [true],
+        needRefresh: [true, mockSetNeedRefresh],
         updateServiceWorker: mockUpdateServiceWorker,
       }
     })
@@ -709,7 +822,7 @@ describe("ReloadPrompt cross-tab updates", () => {
     mockUseRegisterSW.mockImplementation((options) => {
       options?.onRegisteredSW?.(WAITING_SW_URL, mockRegistration)
       return {
-        needRefresh: [true],
+        needRefresh: [true, mockSetNeedRefresh],
         updateServiceWorker: mockUpdateServiceWorker,
       }
     })
@@ -741,7 +854,7 @@ describe("ReloadPrompt cross-tab updates", () => {
     mockUseRegisterSW.mockImplementation((options) => {
       options?.onRegisteredSW?.(WAITING_SW_URL, mockRegistration)
       return {
-        needRefresh: [true],
+        needRefresh: [true, mockSetNeedRefresh],
         updateServiceWorker: mockUpdateServiceWorker,
       }
     })
@@ -784,7 +897,7 @@ describe("ReloadPrompt cross-tab updates", () => {
     mockUseRegisterSW.mockImplementation((options) => {
       options?.onRegisteredSW?.(WAITING_SW_URL, mockRegistration)
       return {
-        needRefresh: [true],
+        needRefresh: [true, mockSetNeedRefresh],
         updateServiceWorker: mockUpdateServiceWorker,
       }
     })
@@ -829,7 +942,7 @@ describe("ReloadPrompt cross-tab updates", () => {
     mockUseRegisterSW.mockImplementation((options) => {
       options?.onRegisteredSW?.(WAITING_SW_URL, mockRegistration)
       return {
-        needRefresh: [true],
+        needRefresh: [true, mockSetNeedRefresh],
         updateServiceWorker: mockUpdateServiceWorker,
       }
     })
@@ -886,7 +999,7 @@ describe("ReloadPrompt cross-tab updates", () => {
     mockUseRegisterSW.mockImplementation((options) => {
       options?.onRegisteredSW?.(WAITING_SW_URL, mockRegistration)
       return {
-        needRefresh: [true],
+        needRefresh: [true, mockSetNeedRefresh],
         updateServiceWorker: mockUpdateServiceWorker,
       }
     })
@@ -939,7 +1052,7 @@ describe("ReloadPrompt cross-tab updates", () => {
     mockUseRegisterSW.mockImplementation((options) => {
       options?.onRegisteredSW?.(WAITING_SW_URL, mockRegistration)
       return {
-        needRefresh: [true],
+        needRefresh: [true, mockSetNeedRefresh],
         updateServiceWorker: mockUpdateServiceWorker,
       }
     })
@@ -1010,7 +1123,7 @@ describe("ReloadPrompt cross-tab updates", () => {
     mockUseRegisterSW.mockImplementation((options) => {
       options?.onRegisteredSW?.(WAITING_SW_URL, mockRegistration)
       return {
-        needRefresh: [true],
+        needRefresh: [true, mockSetNeedRefresh],
         updateServiceWorker: mockUpdateServiceWorker,
       }
     })

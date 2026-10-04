@@ -36,20 +36,15 @@ describe("pwa-updater", () => {
       status.deferUpdate?.()
     }
 
-    await new Promise((resolve) => {
-      setTimeout(resolve, 0)
-    })
-    await new Promise((resolve) => {
-      setTimeout(resolve, 0)
-    })
-
-    expect(isPwaUpdateDeferredForSession(updateId)).toBe(true)
     expect(setUpdaterStatus).toHaveBeenCalledWith(
       expect.objectContaining({
         type: "pwa",
         status: "deferred",
       }),
     )
+    await vi.waitFor(() => {
+      expect(isPwaUpdateDeferredForSession(updateId)).toBe(true)
+    })
   })
 
   it("defers locally when BroadcastChannel is unavailable", async () => {
@@ -63,19 +58,14 @@ describe("pwa-updater", () => {
       status.deferUpdate?.()
     }
 
-    await new Promise((resolve) => {
-      setTimeout(resolve, 0)
-    })
-    await new Promise((resolve) => {
-      setTimeout(resolve, 0)
-    })
-
-    expect(isPwaUpdateDeferredForSession(updateId)).toBe(true)
     expect(setUpdaterStatus).toHaveBeenCalledWith(
       expect.objectContaining({
         type: "pwa",
         status: "deferred",
       }),
     )
+    await vi.waitFor(() => {
+      expect(isPwaUpdateDeferredForSession(updateId)).toBe(true)
+    })
   })
 })

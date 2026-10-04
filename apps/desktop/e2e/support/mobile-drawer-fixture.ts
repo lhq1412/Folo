@@ -122,27 +122,37 @@ const fulfillMockApi = async (route: Route) => {
   })
 }
 
-const fulfillMockEntries = async (route: Route) => {
+const fulfillMockEntries = async (route: Route, additionalEntryIds: readonly string[] = []) => {
   const request = route.request()
+  const entries = [
+    mockEntry,
+    ...additionalEntryIds.map((id, index) => ({
+      ...mockEntry,
+      id,
+      guid: id,
+      title: `${mockEntry.title} ${index + 2}`,
+      publishedAt: new Date(Date.parse(mockEntry.publishedAt) - (index + 1) * 60_000).toISOString(),
+    })),
+  ]
+  const selectedEntry =
+    entries.find((entry) => entry.id === new URL(request.url()).searchParams.get("id")) ?? mockEntry
   const requestBody =
     request.method() === "POST" ? (request.postDataJSON() as { publishedAfter?: string }) : null
   const data =
     request.method() === "GET"
       ? {
           feeds: mockFeed,
-          entries: { ...mockEntry, content: "<p>Folo mobile navigation fixture.</p>" },
+          entries: { ...selectedEntry, content: "<p>Folo mobile navigation fixture.</p>" },
         }
       : requestBody?.publishedAfter
         ? []
-        : [
-            {
-              read: false,
-              view: FeedViewType.Articles,
-              from: [],
-              feeds: mockFeed,
-              entries: mockEntry,
-            },
-          ]
+        : entries.map((entry) => ({
+            read: false,
+            view: FeedViewType.Articles,
+            from: [],
+            feeds: mockFeed,
+            entries: entry,
+          }))
 
   await route.fulfill({
     status: 200,
@@ -160,11 +170,15 @@ export const installMobileDrawerMockAuth = async (page: Page, apiURL: string) =>
   await page.route(`**://${apiHost}/**`, fulfillMockApi)
 }
 
-export const installMobileDrawerMockEntry = async (page: Page, apiURL: string) => {
+export const installMobileDrawerMockEntry = async (
+  page: Page,
+  apiURL: string,
+  additionalEntryIds: readonly string[] = [],
+) => {
   const apiHost = new URL(apiURL).host
   await page.route(
     (url) => url.host === apiHost && /\/entries\/?$/.test(url.pathname),
-    fulfillMockEntries,
+    (route) => fulfillMockEntries(route, additionalEntryIds),
   )
 }
 

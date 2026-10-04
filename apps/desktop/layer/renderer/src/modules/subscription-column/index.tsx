@@ -247,7 +247,7 @@ const TabsRow: FC = () => {
   const timelineList = useTimelineList({ withAll: true, visible: true })
 
   return (
-    <div className="flex h-11 items-center px-1 text-xl text-text-secondary">
+    <div className="flex h-11 items-center px-1 text-xl text-text-secondary max-lg:min-h-[44px] max-lg:overflow-x-auto max-lg:scrollbar-none">
       {timelineList.map((timelineId, index) => (
         <SubscriptionTabButton key={timelineId} timelineId={timelineId} shortcut={`${index + 1}`} />
       ))}

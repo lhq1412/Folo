@@ -54,11 +54,53 @@ export function ReloadPrompt() {
   const reconcileLoopRef = useRef<Promise<void> | null>(null)
   const reconcilePendingRef = useRef(false)
   const reconcilePwaUpdateRef = useRef<(() => Promise<void>) | null>(null)
+  const reloadRequestedRef = useRef(false)
+
+  const reloadPageOnce = () => {
+    if (reloadRequestedRef.current) {
+      return
+    }
+
+    reloadRequestedRef.current = true
+    window.location.reload()
+  }
+
+  const handleRemoteUpdateCompleted = (updateId: string | null) => {
+    if (reloadRequestedRef.current) {
+      return
+    }
+
+    const reloadPage = createReloadPageHandler(reloadPageOnce)
+
+    if (detectUnsavedWork().hasUnsavedWork) {
+      setUpdaterStatus(
+        createPwaUpdaterStatus("ready", reloadPage, {
+          updateId,
+          reloadOnly: true,
+        }),
+      )
+      return
+    }
+
+    void reloadPage()
+  }
 
   const {
-    needRefresh: [needRefresh],
+    needRefresh: [needRefresh, setNeedRefresh],
     updateServiceWorker,
   } = useRegisterSW({
+    onNeedReload() {
+      needRefreshRef.current = false
+      setNeedRefresh(false)
+
+      if (pwaUpdateStarted) {
+        // This tab already confirmed unsaved work before activating the update.
+        reloadPageOnce()
+        return
+      }
+
+      handleRemoteUpdateCompleted(currentUpdateIdRef.current ?? getCurrentPwaUpdateId())
+    },
     onRegisterError(error) {
       console.error("[PWA] Service worker registration failed:", error)
       setUpdaterStatus({
@@ -135,7 +177,7 @@ export function ReloadPrompt() {
           try {
             const updateId = await resolvePwaUpdateId(registration)
 
-            if (pwaUpdateStarted) {
+            if (pwaUpdateStarted || !needRefreshRef.current) {
               return
             }
 
@@ -161,7 +203,7 @@ export function ReloadPrompt() {
             )
           } catch (error) {
             if (error instanceof PwaUpdateIdentityUnavailableError) {
-              if (pwaUpdateStarted) {
+              if (pwaUpdateStarted || !needRefreshRef.current) {
                 return
               }
 
@@ -192,22 +234,6 @@ export function ReloadPrompt() {
     if (reconcilePendingRef.current) {
       await reconcilePwaUpdateRef.current?.()
     }
-  }
-
-  const handleRemoteUpdateCompleted = (updateId: string) => {
-    const reloadPage = createReloadPageHandler()
-
-    if (detectUnsavedWork().hasUnsavedWork) {
-      setUpdaterStatus(
-        createPwaUpdaterStatus("ready", reloadPage, {
-          updateId,
-          reloadOnly: true,
-        }),
-      )
-      return
-    }
-
-    void reloadPage()
   }
 
   const handleLifecycleCompletion = async (record: PwaUpdateLifecycleRecord | null) => {
@@ -433,7 +459,7 @@ function createFinishUpdateHandler(
   }
 }
 
-function createReloadPageHandler(): () => Promise<void> {
+function createReloadPageHandler(reloadPage: () => void): () => Promise<void> {
   return async () => {
     const unsavedWork = detectUnsavedWork()
     if (unsavedWork.hasUnsavedWork) {
@@ -443,7 +469,7 @@ function createReloadPageHandler(): () => Promise<void> {
       }
     }
 
-    window.location.reload()
+    reloadPage()
   }
 }
 

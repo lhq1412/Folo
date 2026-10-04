@@ -9,7 +9,7 @@ const env = resolveDesktopE2EEnv()
 const prodWebServerURL = resolveProdWebServerURL()
 const useProdWebServer = process.env.FOLO_E2E_USE_PROD_WEB_SERVER === "1"
 const mobileLayoutTestMatch =
-  /tests\/web\/mobile-(?:layout|discover-layout|touch-targets|local-search)\.spec\.ts/
+  /tests\/web\/mobile-(?:layout|discover-layout|touch-targets|local-search|reading-navigation|settings-dialogs)\.spec\.ts/
 
 const prodPwaUse = {
   baseURL: prodWebServerURL,

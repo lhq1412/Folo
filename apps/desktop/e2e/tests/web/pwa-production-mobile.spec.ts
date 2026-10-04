@@ -79,7 +79,7 @@ test.describe("production PWA mobile navigation", () => {
     await entry.locator("a[href]").click()
 
     await expect(page.getByTestId("entry-render")).toBeVisible()
-    await page.getByRole("button", { name: "Back to list" }).click()
+    await page.getByRole("button", { name: "Back", exact: true }).first().click()
     await expect(entry).toBeVisible()
 
     await expect

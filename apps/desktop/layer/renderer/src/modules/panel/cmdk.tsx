@@ -37,6 +37,11 @@ import type { SearchInstance } from "~/store/search/types"
 import styles from "./cmdk.module.css"
 
 const SearchCmdKContext = React.createContext<Promise<SearchInstance> | null>(null)
+const handleSearchControlKeyDown = (event: React.KeyboardEvent) => {
+  if (event.key !== "Escape" && event.key !== "Tab") {
+    event.stopPropagation()
+  }
+}
 export const SearchCmdK: React.FC = () => {
   const { t } = useTranslation()
   const { t: commonT } = useTranslation("common")
@@ -73,6 +78,12 @@ export const SearchCmdK: React.FC = () => {
     useInputComposition<HTMLInputElement>({})
   const handleKeyDownToFocusInput: React.EventHandler<React.KeyboardEvent> = React.useCallback(
     (e) => {
+      if (e.key === "Tab") {
+        // Preserve Radix focus traversal without triggering the app's global Tab shortcut.
+        e.nativeEvent.stopPropagation()
+        return
+      }
+      if (e.defaultPrevented) return
       const $input = inputRef.current
 
       if (e.key === "Escape" && !isCompositionRef.current && !getTopModalStack()) {
@@ -81,6 +92,7 @@ export const SearchCmdK: React.FC = () => {
       }
 
       if (e.key === "ArrowDown" || e.key === "ArrowUp") return
+      if (e.target !== $input && e.target !== e.currentTarget) return
 
       if (!e.ctrlKey && !e.metaKey && !e.altKey) {
         $input?.focus()
@@ -160,6 +172,7 @@ export const SearchCmdK: React.FC = () => {
             aria-label={commonT("words.close")}
             tooltip={commonT("words.close")}
             className="mr-1 shrink-0 lg:hidden"
+            onKeyDown={handleSearchControlKeyDown}
             onClick={() => setAppSearchOpen(false)}
           >
             <i className="i-mgc-close-cute-re" />
@@ -322,9 +335,6 @@ const SearchResultCount: FC<{
     if (searchType & SearchType.Feed) {
       count += counts.feeds || 0
     }
-    if (searchType & SearchType.Subscription) {
-      count += counts.subscriptions || 0
-    }
     return count
   }, [searchInstance, searchType])
 
@@ -363,7 +373,10 @@ const SearchOptions: Component = memo(({ children }) => {
   const searchInstance = React.use(SearchCmdKContext)
 
   return (
-    <div className="flex items-center gap-2 text-sm text-text">
+    <div
+      className="flex items-center gap-2 text-sm text-text"
+      onKeyDown={handleSearchControlKeyDown}
+    >
       <span className="shrink-0">{t("search.options.search_type")}</span>
 
       <Select

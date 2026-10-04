@@ -104,6 +104,92 @@ test.describe("responsive touch targets", () => {
     })
   }
 
+  test("keeps all seven timeline tabs reachable by touch at 320px", async ({ page }) => {
+    const apiHost = new URL(env.apiURL).host
+    await page.route(
+      (url) => url.host === apiHost && /\/subscriptions\/?$/.test(url.pathname),
+      (route) =>
+        route.fulfill({
+          json: {
+            code: 0,
+            data: [FeedViewType.Audios, FeedViewType.Notifications].map((view) => ({
+              feedId: `e2e-mobile-timeline-${view}`,
+              userId: "e2e-mobile-drawer-user",
+              view,
+              category: null,
+              title: null,
+              isPrivate: false,
+              hideFromTimeline: false,
+              createdAt: "2026-01-01T00:00:00.000Z",
+              feeds: {
+                id: `e2e-mobile-timeline-${view}`,
+                type: "feed",
+                title: `Folo E2E ${view}`,
+                url: `https://example.com/folo-e2e-${view}.xml`,
+                siteUrl: "https://example.com",
+                description: null,
+                image: null,
+                ownerUserId: null,
+                errorAt: null,
+                errorMessage: null,
+              },
+            })),
+          },
+        }),
+    )
+    await page.setViewportSize({ width: 320, height: 844 })
+    await openWebApp(page, env, MOBILE_DRAWER_TIMELINE_ROUTE)
+    await ensureMobileDrawerClosed(page)
+    await openMobileSubscriptionDrawerFromEntry(page)
+
+    const drawer = page.locator("#mobile-subscription-drawer")
+    await expect(drawer.locator('[data-testid^="timeline-tab-"]')).toHaveCount(7)
+    const notifications = drawer.getByTestId("timeline-tab-notifications")
+    const tabsRow = notifications.locator("..")
+    await expect(tabsRow).toHaveCSS("overflow-x", "auto")
+    await expect
+      .poll(() => tabsRow.evaluate((element) => element.scrollWidth > element.clientWidth))
+      .toBe(true)
+    await expect
+      .poll(() =>
+        notifications.evaluate((element) => {
+          const rect = element.getBoundingClientRect()
+          const drawerRect = element.closest("#mobile-subscription-drawer")!.getBoundingClientRect()
+          return rect.left > drawerRect.right
+        }),
+      )
+      .toBe(true)
+
+    // Scroll the visible tab row explicitly; locator.tap() would scroll hidden ancestors for us.
+    await tabsRow.evaluate((element) => {
+      element.scrollLeft = element.scrollWidth
+    })
+    await expect.poll(() => tabsRow.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0)
+    await expectTouchTarget(notifications)
+    await expect
+      .poll(() =>
+        notifications.evaluate((element) => {
+          const rect = element.getBoundingClientRect()
+          const drawerRect = element.closest("#mobile-subscription-drawer")!.getBoundingClientRect()
+          const rowRect = element.parentElement!.getBoundingClientRect()
+          const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2)
+          return (
+            rect.left >= drawerRect.left &&
+            rect.right <= drawerRect.right &&
+            rect.top >= rowRect.top &&
+            rect.bottom <= rowRect.bottom &&
+            element.contains(hit)
+          )
+        }),
+      )
+      .toBe(true)
+    const bounds = await notifications.boundingBox()
+    expect(bounds).not.toBeNull()
+    await page.touchscreen.tap(bounds!.x + bounds!.width / 2, bounds!.y + bounds!.height / 2)
+    await expect(page).toHaveURL(/\/timeline\/notifications\/all\/pending$/)
+    await expect(drawer).toHaveAttribute("aria-hidden", "true")
+  })
+
   test("keeps an AI-enabled picture feed toolbar usable at 320px", async ({ page }) => {
     const apiHost = new URL(env.apiURL).host
     await page.route(

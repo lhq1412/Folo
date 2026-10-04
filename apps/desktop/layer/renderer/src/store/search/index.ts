@@ -2,6 +2,7 @@ import { EntryService } from "@follow/database/services/entry"
 import { FeedService } from "@follow/database/services/feed"
 import { SubscriptionService } from "@follow/database/services/subscription"
 import type { EntryModel } from "@follow/store/entry/types"
+import type { FeedModel } from "@follow/store/feed/types"
 import type { SubscriptionModel } from "@follow/store/subscription/types"
 import { getStorageNS } from "@follow/utils/ns"
 import type { IFuseOptions } from "fuse.js"
@@ -56,6 +57,9 @@ class SearchActions {
     ])
 
     const feedsMap = new Map(feeds.map((feed) => [feed.id, feed]))
+    const subscriptionsMap = new Map(
+      subscriptions.map((subscription) => [subscription.feedId, subscription]),
+    )
 
     const entriesFuse = this.createFuse(entries, ["title", "content", "description", "id"])
     const feedsFuse = this.createFuse(feeds, ["title", "description", "id", "siteUrl", "url"])
@@ -73,7 +77,9 @@ class SearchActions {
         const feeds = type & SearchType.Feed ? feedsFuse.search(keyword) : []
 
         const subscriptions =
-          type & SearchType.Subscription ? subscriptionsFuse.search(keyword) : []
+          type & (SearchType.Feed | SearchType.Subscription)
+            ? subscriptionsFuse.search(keyword)
+            : []
 
         const processedEntries = [] as SearchResult<EntryModel, { feedId: string }>[]
         for (const entry of entries) {
@@ -84,17 +90,28 @@ class SearchActions {
         }
 
         const processedSubscriptions = [] as SearchResult<SubscriptionModel, { feedId: string }>[]
+        const processedFeeds = new Map<string, SearchResult<FeedModel>>()
+        for (const feed of feeds) {
+          const title = subscriptionsMap.get(feed.item.id)?.title || feed.item.title
+          processedFeeds.set(feed.item.id, { ...feed, item: { ...feed.item, title } })
+        }
         for (const subscription of subscriptions) {
           const { feedId } = subscription.item
           if (feedId) {
             processedSubscriptions.push({ item: subscription.item, feedId })
+            const feed = feedsMap.get(feedId)
+            if (type & SearchType.Feed && feed && !processedFeeds.has(feedId)) {
+              processedFeeds.set(feedId, {
+                item: { ...feed, title: subscription.item.title || feed.title },
+              })
+            }
           }
         }
 
         set({
           keyword,
           entries: processedEntries,
-          feeds,
+          feeds: [...processedFeeds.values()],
           subscriptions: processedSubscriptions,
         })
 

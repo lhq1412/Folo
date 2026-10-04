@@ -49,13 +49,16 @@ const ConfirmDestroyModalContent = ({ listId }: { listId: string }) => {
   })
 
   return (
-    <div className="w-[540px]">
+    <div className="w-[540px] max-lg:w-full" data-testid="list-delete-confirmation">
       <div className="mb-4">
         <i className="i-mingcute-warning-fill -mb-1 mr-1 size-5 text-red-500" />
         {t.settings("lists.delete.warning")}
       </div>
       <div className="flex justify-end">
-        <Button buttonClassName="bg-red-600" onClick={() => deleteFeedList.mutate({ listId })}>
+        <Button
+          buttonClassName="bg-red-600 max-lg:min-h-[44px]"
+          onClick={() => deleteFeedList.mutate({ listId })}
+        >
           {t("words.confirm")}
         </Button>
       </div>

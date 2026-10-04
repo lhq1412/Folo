@@ -9,10 +9,7 @@ export function initializeMobileLayout() {
     return
   }
 
-  if (localStorage.getItem(MOBILE_LAYOUT_INIT_KEY)) {
-    return
-  }
-
+  // Sidebar visibility is recreated in memory on every page load.
   setTimelineColumnShow(false)
   localStorage.setItem(MOBILE_LAYOUT_INIT_KEY, "1")
 }
