@@ -10,10 +10,12 @@ import { cn } from "@follow/utils/utils"
 import { AnimatePresence } from "motion/react"
 import type { FC, MouseEvent, PropsWithChildren, TouchEvent } from "react"
 import { useCallback, useEffect, useMemo, useState } from "react"
+import { useTranslation } from "react-i18next"
 import { NavLink } from "react-router"
 import { useDebounceCallback } from "usehooks-ts"
 
 import { useGeneralSettingKey } from "~/atoms/settings/general"
+import { useUISettingKey } from "~/atoms/settings/ui"
 import { FocusablePresets } from "~/components/common/Focusable"
 import { CommandActionButton } from "~/components/ui/button/CommandActionButton"
 import { useEntryIsRead } from "~/hooks/biz/useAsRead"
@@ -47,6 +49,7 @@ export const EntryItemWrapper: FC<
     return { feedId, id, inboxId: inboxHandle, url }
   })
   const actionConfigs = useEntryActions({ entryId, view })
+  const { t } = useTranslation()
   const isMobile = useMobile()
   const isLoggedIn = useIsLoggedIn()
 
@@ -56,6 +59,7 @@ export const EntryItemWrapper: FC<
   const showEntryDetailsColumn = useShowEntryDetailsColumn()
 
   const asRead = useEntryIsRead(entryId)
+  const pictureViewImageOnly = useUISettingKey("pictureViewImageOnly")
   const hoverMarkUnread = useGeneralSettingKey("hoverMarkUnread")
 
   const [showAction, setShowAction] = useState(false)
@@ -162,6 +166,9 @@ export const EntryItemWrapper: FC<
       data-entry-id={entry?.id}
       data-read={asRead ? "true" : "false"}
       data-active={isActive ? "true" : "false"}
+      className={cn(
+        asRead && "[&_[data-entry-title]]:font-normal [&_[data-entry-title]]:text-text-secondary",
+      )}
       style={style}
     >
       <Link
@@ -180,6 +187,13 @@ export const EntryItemWrapper: FC<
         {...contextMenuProps}
         {...(!isMobile ? { onTouchStart: handleClick } : {})}
       >
+        <span className="sr-only">{t(asRead ? "words.read" : "words.unread")}</span>
+        {view === FeedViewType.Pictures && pictureViewImageOnly && !asRead && (
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute left-3 top-3 z-[4] size-2 rounded-full bg-accent ring-2 ring-material-opaque"
+          />
+        )}
         {children}
         <AnimatePresence>
           {showAction && isWide && (

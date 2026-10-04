@@ -97,6 +97,7 @@ export const GridItemFooter = ({
           )}
         />
         <div
+          data-entry-title
           className={cn(
             "relative mb-1 mt-1.5 flex w-full items-center gap-1 truncate font-medium",
             titleClassName,

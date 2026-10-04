@@ -200,6 +200,7 @@ export function ListItem({
           <span className="shrink-0">{!!displayTime && <RelativeTime date={displayTime} />}</span>
         </div>
         <div
+          data-entry-title
           className={cn(
             "relative my-0.5 break-words",
             "text-text",
@@ -210,7 +211,7 @@ export function ListItem({
         >
           {entry?.title ? (
             <EntryTranslation
-              className={cn("autospace-normal hyphens-auto font-medium", lineClamp.title)}
+              className={cn("autospace-normal hyphens-auto", lineClamp.title)}
               source={titleCase(entry?.title ?? "")}
               target={titleCase(translation?.title ?? "")}
             />
@@ -225,6 +226,7 @@ export function ListItem({
         </div>
         {!simple && (
           <div
+            data-entry-description
             className={cn(
               "text-[13px]",
               "text-text-secondary",

@@ -1,10 +1,11 @@
 import { getView } from "@follow/constants"
 import { unreadSyncService } from "@follow/store/unread/store"
-import { useIsLoggedIn } from "@follow/store/user/hooks"
+import { whoami } from "@follow/store/user/getters"
 import type { Range } from "@tanstack/react-virtual"
 import { useMemo } from "react"
 import { useEventCallback } from "usehooks-ts"
 
+import { markGuestEntriesAsRead } from "~/atoms/guest-read"
 import { useGeneralSettingKey } from "~/atoms/settings/general"
 import { useRouteParamsSelector } from "~/hooks/biz/useRouteParams"
 
@@ -14,14 +15,13 @@ export const useEntryMarkReadHandler = (
   entriesIds: string[],
   { pauseScrollMarkRead = false }: { pauseScrollMarkRead?: boolean } = {},
 ) => {
-  const isLoggedIn = useIsLoggedIn()
   const renderAsRead = useGeneralSettingKey("renderMarkUnread")
   const scrollMarkUnread = useGeneralSettingKey("scrollMarkUnread")
   const feedView = useRouteParamsSelector((params) => params.view)
 
   const handleRangeMarkRead = useEventCallback(
     ({ startIndex, endIndex }: Range, enabled?: boolean) => {
-      if (!enabled || !isLoggedIn) return
+      if (!enabled) return
       const idSlice = entriesIds?.slice(startIndex, endIndex)
       if (!idSlice?.length) return
 
@@ -60,5 +60,9 @@ export const useEntryMarkReadHandler = (
 
 export function batchMarkRead(ids: string[]) {
   if (ids.length === 0) return
+  if (!whoami()) {
+    markGuestEntriesAsRead(ids)
+    return
+  }
   void unreadSyncService.queueEntriesAsRead(ids)
 }

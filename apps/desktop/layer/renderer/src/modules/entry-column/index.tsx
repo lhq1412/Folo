@@ -11,6 +11,7 @@ import type { Range, Virtualizer } from "@tanstack/react-virtual"
 import { atom, useAtomValue } from "jotai"
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
+import { useEventCallback } from "usehooks-ts"
 
 import { useGeneralSettingKey } from "~/atoms/settings/general"
 import { Focusable } from "~/components/common/Focusable"
@@ -30,7 +31,7 @@ import { EntryItemSkeleton } from "./EntryItemSkeleton"
 import { EntryColumnGrid } from "./grid"
 import { useAttachScrollBeyond } from "./hooks/useAttachScrollBeyond"
 import { useSnapEntryIdList } from "./hooks/useEntryIdListSnap"
-import { useEntryMarkReadHandler } from "./hooks/useEntryMarkReadHandler"
+import { batchMarkRead, useEntryMarkReadHandler } from "./hooks/useEntryMarkReadHandler"
 import { useNavigateFirstEntry } from "./hooks/useNavigateFirstEntry"
 import { EntryListHeader } from "./layouts/EntryListHeader"
 import { EntryEmptyList, EntryList } from "./list"
@@ -70,6 +71,8 @@ function EntryColumnContent() {
   }, [])
   const scrollTimelineToTop = useCallback(() => {
     resetScrollInteractionState()
+    // A virtualizer already at the top may not emit another range after a reset.
+    scrollMarkReadAnchorIndexRef.current = 0
     setResetScrollSignal((signal) => (signal ?? 0) + 1)
 
     const runScrollToTop = () => {
@@ -118,7 +121,10 @@ function EntryColumnContent() {
     if (isCollection || isPendingEntry) return
     if (!entry?.feedId) return
 
-    if (!isLoggedIn) return
+    if (!isLoggedIn) {
+      batchMarkRead([activeEntryId])
+      return
+    }
     unreadSyncService.markEntryAsRead(activeEntryId)
   }, [activeEntryId, entry?.feedId, isCollection, isPendingEntry, isLoggedIn])
 
@@ -166,22 +172,20 @@ function EntryColumnContent() {
     pauseScrollMarkRead,
   })
 
-  const flushScrollMarkRead = useCallback(
-    (currentStartIndex: number) => {
-      if (!routeFeedId) return
+  const flushScrollMarkRead = useEventCallback((currentStartIndex: number) => {
+    if (!routeFeedId) return
+    if (pauseScrollMarkRead) return
 
-      const { nextAnchorIndex, range } = getScrollMarkReadRangeState({
-        anchorIndex: scrollMarkReadAnchorIndexRef.current,
-        currentStartIndex,
-      })
-      scrollMarkReadAnchorIndexRef.current = nextAnchorIndex
+    const { nextAnchorIndex, range } = getScrollMarkReadRangeState({
+      anchorIndex: scrollMarkReadAnchorIndexRef.current,
+      currentStartIndex,
+    })
+    scrollMarkReadAnchorIndexRef.current = nextAnchorIndex
 
-      if (range) {
-        handleScrollMarkRead?.(range as Range, isInteracted.current)
-      }
-    },
-    [handleScrollMarkRead, routeFeedId],
-  )
+    if (range) {
+      handleScrollMarkRead?.(range as Range, isInteracted.current)
+    }
+  })
 
   const handleScroll = useCallback(() => {
     if (isScrollResetPending) {
@@ -197,6 +201,12 @@ function EntryColumnContent() {
     }
   }, [flushScrollMarkRead, isScrollResetPending])
 
+  useEffect(() => {
+    if (pauseScrollMarkRead || isScrollResetPending || !isInteracted.current) return
+    if (latestRangeStartIndexRef.current === null) return
+    flushScrollMarkRead(latestRangeStartIndexRef.current)
+  }, [flushScrollMarkRead, isScrollResetPending, pauseScrollMarkRead])
+
   const { handleScroll: handleScrollBeyond } = useAttachScrollBeyond()
   const handleCombinedScroll = useCallback(
     (e: React.UIEvent<HTMLDivElement>) => {
@@ -211,32 +221,29 @@ function EntryColumnContent() {
   const aiTimelineEnabled = useAtomValue(aiTimelineEnabledAtom)
   const showAiTimelineLoading = aiTimelineEnabled && state.isLoading && !state.isFetchingNextPage
   const renderAsRead = useGeneralSettingKey("renderMarkUnread")
-  const handleRangeChange = useCallback(
-    (e: Range) => {
-      if (latestRangeStartIndexRef.current === e.startIndex) {
-        return
-      }
+  const handleRangeChange = useEventCallback((e: Range) => {
+    if (latestRangeStartIndexRef.current === e.startIndex) {
+      return
+    }
 
-      latestRangeStartIndexRef.current = e.startIndex
-      if (isScrollResetPending) {
-        return
-      }
+    latestRangeStartIndexRef.current = e.startIndex
+    if (isScrollResetPending) {
+      return
+    }
 
-      if (scrollMarkReadAnchorIndexRef.current === null) {
-        scrollMarkReadAnchorIndexRef.current = e.startIndex
-      } else if (isInteracted.current) {
-        flushScrollMarkRead(e.startIndex)
-      }
+    if (scrollMarkReadAnchorIndexRef.current === null) {
+      scrollMarkReadAnchorIndexRef.current = e.startIndex
+    } else if (isInteracted.current) {
+      flushScrollMarkRead(e.startIndex)
+    }
 
-      if (!renderAsRead) return
-      if (!getView(view)?.wideMode) {
-        return
-      }
-      // For gird, render as mark read logic
-      handleRenderMarkRead?.(e, isInteracted.current)
-    },
-    [flushScrollMarkRead, handleRenderMarkRead, isScrollResetPending, renderAsRead, view],
-  )
+    if (!renderAsRead) return
+    if (!getView(view)?.wideMode) {
+      return
+    }
+    // For gird, render as mark read logic
+    handleRenderMarkRead?.(e, isInteracted.current)
+  })
 
   const fetchNextPage = useCallback(() => {
     if (state.hasNextPage && !state.isFetchingNextPage) {

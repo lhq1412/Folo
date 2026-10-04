@@ -157,6 +157,7 @@ export function AllItem({ entryId, translation, currentFeedTitle }: UniversalIte
         {entry.firstAudio && <AudioIcon entryId={entryId} src={entry.firstAudio.url} />}
         {entry.video && <VideoIcon src={entry.video} />}
         <div
+          data-entry-title
           className={cn(
             "relative flex items-center",
             "text-text",
@@ -168,10 +169,7 @@ export function AllItem({ entryId, translation, currentFeedTitle }: UniversalIte
           <EllipsisHorizontalTextWithTooltip>
             {entry?.title ? (
               <EntryTranslation
-                className={cn(
-                  "inline-flex min-w-0 items-center hyphens-auto font-medium",
-                  lineClamp.title,
-                )}
+                className={cn("inline-flex min-w-0 items-center hyphens-auto", lineClamp.title)}
                 source={titleCase(entry?.title ?? "")}
                 target={titleCase(translation?.title ?? "")}
               />
@@ -186,6 +184,7 @@ export function AllItem({ entryId, translation, currentFeedTitle }: UniversalIte
           {!!isInCollection && <StarIcon className="absolute right-0 top-0" />}
         </div>
         <div
+          data-entry-description
           className={cn(
             "ml-4 truncate text-[13px]",
             "text-text-secondary",
